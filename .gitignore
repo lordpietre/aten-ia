@@ -1,0 +1,9 @@
+target/
+memvid_data/
+*.tmp
+*.swp
+*.swo
+.DS_Store
+.idea/
+.vscode/
+*.gguf
