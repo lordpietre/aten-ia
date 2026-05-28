@@ -64,19 +64,25 @@ fn config_validate_rejects_invalid() {
 fn config_env_overrides_model_path() {
     let dir = tempfile::tempdir().unwrap();
     let config_path = dir.path().join("config.json");
-    unsafe { std::env::set_var("MODEL_PATH", "/env/custom.gguf"); }
+    unsafe {
+        std::env::set_var("MODEL_PATH", "/env/custom.gguf");
+    }
 
     let cfg = memvid_agent_core::config::Config::load_or_create_with_path(&config_path).unwrap();
     assert_eq!(cfg.model.path, "/env/custom.gguf");
 
-    unsafe { std::env::remove_var("MODEL_PATH"); }
+    unsafe {
+        std::env::remove_var("MODEL_PATH");
+    }
 }
 
 #[test]
 fn config_languages_mark_installed() {
     use memvid_agent_core::config::LanguagesConfig;
 
-    let mut lang = LanguagesConfig { installed: Vec::new() };
+    let mut lang = LanguagesConfig {
+        installed: Vec::new(),
+    };
     lang.mark_installed("rust");
     assert_eq!(lang.installed, vec!["rust"]);
     lang.mark_installed("rust");
@@ -99,9 +105,18 @@ fn knowledge_index_full_lifecycle() {
     let mut index = KnowledgeIndex::load(dir.path()).unwrap();
     assert!(index.is_empty());
 
-    index.add_entry(knowledge_entry("src1", "Rust is a systems programming language")).unwrap();
-    index.add_entry(knowledge_entry("src2", "Python is great for data science")).unwrap();
-    index.add_entry(knowledge_entry("src3", "JavaScript runs in the browser")).unwrap();
+    index
+        .add_entry(knowledge_entry(
+            "src1",
+            "Rust is a systems programming language",
+        ))
+        .unwrap();
+    index
+        .add_entry(knowledge_entry("src2", "Python is great for data science"))
+        .unwrap();
+    index
+        .add_entry(knowledge_entry("src3", "JavaScript runs in the browser"))
+        .unwrap();
     assert_eq!(index.len(), 3);
 
     let results = index.search("python", 5);
@@ -123,7 +138,9 @@ fn knowledge_index_search_scored_by_relevance() {
     use memvid_agent_core::retrieval::KnowledgeIndex;
 
     let mut index = KnowledgeIndex::load(dir.path()).unwrap();
-    index.add_entry(knowledge_entry("a", "python python python python")).unwrap();
+    index
+        .add_entry(knowledge_entry("a", "python python python python"))
+        .unwrap();
     index.add_entry(knowledge_entry("b", "python")).unwrap();
 
     let results = index.search("python", 5);
@@ -137,7 +154,9 @@ fn knowledge_index_search_empty_and_whitespace() {
     use memvid_agent_core::retrieval::KnowledgeIndex;
 
     let mut index = KnowledgeIndex::load(dir.path()).unwrap();
-    index.add_entry(knowledge_entry("test", "hello world")).unwrap();
+    index
+        .add_entry(knowledge_entry("test", "hello world"))
+        .unwrap();
 
     assert!(index.search("", 5).is_empty());
     assert!(index.search("   ", 5).is_empty());
@@ -149,7 +168,9 @@ fn knowledge_index_search_unicode() {
     use memvid_agent_core::retrieval::KnowledgeIndex;
 
     let mut index = KnowledgeIndex::load(dir.path()).unwrap();
-    index.add_entry(knowledge_entry("es", "cafe y nino y nihongo")).unwrap();
+    index
+        .add_entry(knowledge_entry("es", "cafe y nino y nihongo"))
+        .unwrap();
 
     assert_eq!(index.search("cafe", 5).len(), 1);
     assert_eq!(index.search("nino", 5).len(), 1);
@@ -193,7 +214,9 @@ fn knowledge_index_search_special_chars() {
     use memvid_agent_core::retrieval::KnowledgeIndex;
 
     let mut index = KnowledgeIndex::load(dir.path()).unwrap();
-    index.add_entry(knowledge_entry("test", "hello (world) [test] {foo} &bar$")).unwrap();
+    index
+        .add_entry(knowledge_entry("test", "hello (world) [test] {foo} &bar$"))
+        .unwrap();
 
     assert_eq!(index.search("world", 5).len(), 1);
 }
@@ -214,7 +237,10 @@ fn knowledge_index_chunk_text_sizes() {
     use memvid_agent_core::retrieval::KnowledgeIndex;
 
     assert_eq!(KnowledgeIndex::chunk_text("").len(), 1);
-    assert_eq!(KnowledgeIndex::chunk_text("a".repeat(100).as_str()).len(), 1);
+    assert_eq!(
+        KnowledgeIndex::chunk_text("a".repeat(100).as_str()).len(),
+        1
+    );
 
     let chunks = KnowledgeIndex::chunk_text("word ".repeat(5000).as_str());
     assert!(chunks.len() >= 2);
@@ -242,7 +268,9 @@ fn knowledge_index_no_match_returns_empty() {
     use memvid_agent_core::retrieval::KnowledgeIndex;
 
     let mut index = KnowledgeIndex::load(dir.path()).unwrap();
-    index.add_entry(knowledge_entry("python", "Python is fun")).unwrap();
+    index
+        .add_entry(knowledge_entry("python", "Python is fun"))
+        .unwrap();
     assert!(index.search("rust", 5).is_empty());
 }
 
@@ -255,7 +283,9 @@ fn agent_store_and_search_roundtrip() {
     let dir = tempfile::tempdir().unwrap();
     let mut agent = test_agent(dir.path());
 
-    agent.store_knowledge_direct("test-source", "unique searchable content").unwrap();
+    agent
+        .store_knowledge_direct("test-source", "unique searchable content")
+        .unwrap();
     assert_eq!(agent.knowledge_count(), 1);
 
     let results = agent.search_knowledge("unique", 10);
@@ -269,8 +299,14 @@ fn agent_store_knowledge_chunked() {
     let mut agent = test_agent(dir.path());
 
     use memvid_agent_core::types::{ChunkOptions, ChunkStrategy};
-    let opts = ChunkOptions { max_size: 20, overlap: 5, strategy: ChunkStrategy::Fixed };
-    let ids = agent.store_knowledge_chunked("src", &"word ".repeat(100), &opts).unwrap();
+    let opts = ChunkOptions {
+        max_size: 20,
+        overlap: 5,
+        strategy: ChunkStrategy::Fixed,
+    };
+    let ids = agent
+        .store_knowledge_chunked("src", &"word ".repeat(100), &opts)
+        .unwrap();
     assert!(ids.len() > 1);
     assert!(agent.knowledge_count() > 1);
 }
@@ -330,7 +366,9 @@ fn agent_search_knowledge_honors_limit() {
     let dir = tempfile::tempdir().unwrap();
     let mut agent = test_agent(dir.path());
     for i in 0..10 {
-        agent.store_knowledge_direct("src", &format!("content number {}", i)).unwrap();
+        agent
+            .store_knowledge_direct("src", &format!("content number {}", i))
+            .unwrap();
     }
     let results = agent.search_knowledge("content", 3);
     assert_eq!(results.len(), 3);
@@ -340,7 +378,9 @@ fn agent_search_knowledge_honors_limit() {
 fn agent_search_knowledge_special_chars() {
     let dir = tempfile::tempdir().unwrap();
     let mut agent = test_agent(dir.path());
-    agent.store_knowledge_direct("test", "hello (world) [test]").unwrap();
+    agent
+        .store_knowledge_direct("test", "hello (world) [test]")
+        .unwrap();
     let res = agent.search_knowledge("(world)", 10);
     assert_eq!(res.len(), 1);
 }
@@ -357,7 +397,9 @@ fn agent_search_knowledge_empty_query() {
 fn agent_search_knowledge_no_match() {
     let dir = tempfile::tempdir().unwrap();
     let mut agent = test_agent(dir.path());
-    agent.store_knowledge_direct("src", "unique content").unwrap();
+    agent
+        .store_knowledge_direct("src", "unique content")
+        .unwrap();
     let results = agent.search_knowledge("nonexistent", 10);
     assert!(results.is_empty());
 }
@@ -381,13 +423,23 @@ fn agent_batch_result_construction() {
 
 #[test]
 fn session_push_and_take_batch() {
+    use chrono::Utc;
     use memvid_agent_core::session::Session;
     use memvid_agent_core::types::{Message, MessageRole};
-    use chrono::Utc;
 
     let mut session = Session::new();
-    session.push_message(Message { role: MessageRole::User, content: "hello".into(), timestamp: Utc::now(), tokens: None });
-    session.push_message(Message { role: MessageRole::Assistant, content: "world".into(), timestamp: Utc::now(), tokens: None });
+    session.push_message(Message {
+        role: MessageRole::User,
+        content: "hello".into(),
+        timestamp: Utc::now(),
+        tokens: None,
+    });
+    session.push_message(Message {
+        role: MessageRole::Assistant,
+        content: "world".into(),
+        timestamp: Utc::now(),
+        tokens: None,
+    });
     assert_eq!(session.messages().len(), 2);
 
     let taken = session.take_batch();
@@ -409,7 +461,9 @@ fn session_increment_interactions() {
     assert_eq!(session.interaction_count(), 0);
     session.increment_interactions();
     assert_eq!(session.interaction_count(), 1);
-    for _ in 0..99 { session.increment_interactions(); }
+    for _ in 0..99 {
+        session.increment_interactions();
+    }
     assert_eq!(session.interaction_count(), 100);
 }
 
@@ -424,14 +478,29 @@ fn session_estimate_tokens_accuracy() {
 
 #[test]
 fn session_push_message_special_chars() {
+    use chrono::Utc;
     use memvid_agent_core::session::Session;
     use memvid_agent_core::types::{Message, MessageRole};
-    use chrono::Utc;
 
     let mut session = Session::new();
-    session.push_message(Message { role: MessageRole::User, content: "hello\nworld\t\r\n".into(), timestamp: Utc::now(), tokens: None });
-    session.push_message(Message { role: MessageRole::Assistant, content: "cafe nino nihongo".into(), timestamp: Utc::now(), tokens: None });
-    session.push_message(Message { role: MessageRole::System, content: "".into(), timestamp: Utc::now(), tokens: None });
+    session.push_message(Message {
+        role: MessageRole::User,
+        content: "hello\nworld\t\r\n".into(),
+        timestamp: Utc::now(),
+        tokens: None,
+    });
+    session.push_message(Message {
+        role: MessageRole::Assistant,
+        content: "cafe nino nihongo".into(),
+        timestamp: Utc::now(),
+        tokens: None,
+    });
+    session.push_message(Message {
+        role: MessageRole::System,
+        content: "".into(),
+        timestamp: Utc::now(),
+        tokens: None,
+    });
     assert_eq!(session.messages().len(), 3);
     assert_eq!(session.messages()[0].content, "hello\nworld\t\r\n");
     assert_eq!(session.messages()[2].content, "");
@@ -439,27 +508,47 @@ fn session_push_message_special_chars() {
 
 #[test]
 fn session_push_very_long_message() {
+    use chrono::Utc;
     use memvid_agent_core::session::Session;
     use memvid_agent_core::types::{Message, MessageRole};
-    use chrono::Utc;
 
     let mut session = Session::new();
     let long = "a".repeat(100_000);
-    session.push_message(Message { role: MessageRole::User, content: long.clone(), timestamp: Utc::now(), tokens: None });
+    session.push_message(Message {
+        role: MessageRole::User,
+        content: long.clone(),
+        timestamp: Utc::now(),
+        tokens: None,
+    });
     assert_eq!(session.messages().len(), 1);
     assert_eq!(session.messages()[0].content.len(), 100_000);
 }
 
 #[test]
 fn session_take_batch_all_roles() {
+    use chrono::Utc;
     use memvid_agent_core::session::Session;
     use memvid_agent_core::types::{Message, MessageRole};
-    use chrono::Utc;
 
     let mut session = Session::new();
-    session.push_message(Message { role: MessageRole::User, content: "a".into(), timestamp: Utc::now(), tokens: None });
-    session.push_message(Message { role: MessageRole::Assistant, content: "b".into(), timestamp: Utc::now(), tokens: None });
-    session.push_message(Message { role: MessageRole::System, content: "c".into(), timestamp: Utc::now(), tokens: None });
+    session.push_message(Message {
+        role: MessageRole::User,
+        content: "a".into(),
+        timestamp: Utc::now(),
+        tokens: None,
+    });
+    session.push_message(Message {
+        role: MessageRole::Assistant,
+        content: "b".into(),
+        timestamp: Utc::now(),
+        tokens: None,
+    });
+    session.push_message(Message {
+        role: MessageRole::System,
+        content: "c".into(),
+        timestamp: Utc::now(),
+        tokens: None,
+    });
     let taken = session.take_batch();
     assert_eq!(taken.len(), 3);
     assert!(session.messages().is_empty());
@@ -488,14 +577,24 @@ fn context_policy_trim_messages_empty() {
 
 #[test]
 fn context_policy_trim_messages_only_system() {
+    use chrono::Utc;
     use memvid_agent_core::context_policy::ContextPolicy;
     use memvid_agent_core::types::{Message, MessageRole};
-    use chrono::Utc;
 
     let policy = ContextPolicy::new(256, 128);
     let msgs = vec![
-        Message { role: MessageRole::System, content: "sys1".into(), timestamp: Utc::now(), tokens: None },
-        Message { role: MessageRole::System, content: "sys2".into(), timestamp: Utc::now(), tokens: None },
+        Message {
+            role: MessageRole::System,
+            content: "sys1".into(),
+            timestamp: Utc::now(),
+            tokens: None,
+        },
+        Message {
+            role: MessageRole::System,
+            content: "sys2".into(),
+            timestamp: Utc::now(),
+            tokens: None,
+        },
     ];
     let result = policy.trim_messages("dev", &msgs, "input", |s| s.len() / 4);
     assert_eq!(result.len(), 2);
@@ -505,16 +604,36 @@ fn context_policy_trim_messages_only_system() {
 
 #[test]
 fn context_policy_trim_messages_preserves_system_order() {
+    use chrono::Utc;
     use memvid_agent_core::context_policy::ContextPolicy;
     use memvid_agent_core::types::{Message, MessageRole};
-    use chrono::Utc;
 
     let policy = ContextPolicy::new(4096, 2048);
     let msgs = vec![
-        Message { role: MessageRole::System, content: "first".into(), timestamp: Utc::now(), tokens: None },
-        Message { role: MessageRole::User, content: "user1".into(), timestamp: Utc::now(), tokens: None },
-        Message { role: MessageRole::System, content: "second".into(), timestamp: Utc::now(), tokens: None },
-        Message { role: MessageRole::User, content: "user2".into(), timestamp: Utc::now(), tokens: None },
+        Message {
+            role: MessageRole::System,
+            content: "first".into(),
+            timestamp: Utc::now(),
+            tokens: None,
+        },
+        Message {
+            role: MessageRole::User,
+            content: "user1".into(),
+            timestamp: Utc::now(),
+            tokens: None,
+        },
+        Message {
+            role: MessageRole::System,
+            content: "second".into(),
+            timestamp: Utc::now(),
+            tokens: None,
+        },
+        Message {
+            role: MessageRole::User,
+            content: "user2".into(),
+            timestamp: Utc::now(),
+            tokens: None,
+        },
     ];
     let result = policy.trim_messages("dev", &msgs, "input", |s| s.len() / 4);
     assert_eq!(result[0].role, MessageRole::System);
@@ -548,10 +667,7 @@ fn prompt_chatml_includes_system_and_history() {
     use memvid_agent_core::prompt::{ChatTemplate, PromptBuilder};
 
     let builder = PromptBuilder::new(ChatTemplate::ChatML);
-    let msgs = vec![
-        msg("user", "hi"),
-        msg("assistant", "hello there"),
-    ];
+    let msgs = vec![msg("user", "hi"), msg("assistant", "hello there")];
     let result = builder.build(&msgs, "how are you?", &[]);
     assert!(result.contains("<|im_start|>system"));
     assert!(result.contains("expert software engineer"));
@@ -618,8 +734,7 @@ fn prompt_raw_template_returns_input_only() {
 fn prompt_custom_developer_prompt() {
     use memvid_agent_core::prompt::{ChatTemplate, PromptBuilder};
 
-    let builder = PromptBuilder::new(ChatTemplate::ChatML)
-        .with_developer_prompt("You are a poet.");
+    let builder = PromptBuilder::new(ChatTemplate::ChatML).with_developer_prompt("You are a poet.");
     let result = builder.build(&[], "write a poem", &[]);
     assert!(result.contains("You are a poet."));
     assert!(!result.contains("expert software engineer"));
@@ -645,14 +760,26 @@ fn format_from_extension_detection() {
     use memvid_agent_core::types::Format;
     assert_eq!(Format::from_extension(Path::new("doc.pdf")), Format::Pdf);
     assert_eq!(Format::from_extension(Path::new("book.epub")), Format::Epub);
-    assert_eq!(Format::from_extension(Path::new("readme.md")), Format::Markdown);
-    assert_eq!(Format::from_extension(Path::new("readme.markdown")), Format::Markdown);
-    assert_eq!(Format::from_extension(Path::new("index.html")), Format::Html);
+    assert_eq!(
+        Format::from_extension(Path::new("readme.md")),
+        Format::Markdown
+    );
+    assert_eq!(
+        Format::from_extension(Path::new("readme.markdown")),
+        Format::Markdown
+    );
+    assert_eq!(
+        Format::from_extension(Path::new("index.html")),
+        Format::Html
+    );
     assert_eq!(Format::from_extension(Path::new("page.htm")), Format::Html);
     assert_eq!(Format::from_extension(Path::new("file.txt")), Format::Text);
     assert_eq!(Format::from_extension(Path::new("Makefile")), Format::Text);
     assert_eq!(Format::from_extension(Path::new("doc.PDF")), Format::Pdf);
-    assert_eq!(Format::from_extension(Path::new("file.backup.pdf")), Format::Pdf);
+    assert_eq!(
+        Format::from_extension(Path::new("file.backup.pdf")),
+        Format::Pdf
+    );
     assert_eq!(Format::from_extension(Path::new("doc.Pdf")), Format::Pdf);
 }
 
@@ -677,21 +804,39 @@ fn chunking_all_strategies_produce_correct_chunks() {
 
     let text = "# Intro\nhello\n# Details\nmore info here\n# Conclusion\nbye";
 
-    let heading_chunks = chunker::chunk_text(text, &ChunkOptions {
-        max_size: 200, overlap: 10, strategy: ChunkStrategy::Heading,
-    }, "doc");
+    let heading_chunks = chunker::chunk_text(
+        text,
+        &ChunkOptions {
+            max_size: 200,
+            overlap: 10,
+            strategy: ChunkStrategy::Heading,
+        },
+        "doc",
+    );
     assert_eq!(heading_chunks.len(), 3);
     assert_eq!(heading_chunks[0].heading, Some("# Intro".into()));
     assert_eq!(heading_chunks[1].heading, Some("# Details".into()));
 
-    let para_chunks = chunker::chunk_text("word\n".repeat(100).as_str(), &ChunkOptions {
-        max_size: 50, overlap: 10, strategy: ChunkStrategy::Paragraph,
-    }, "src");
+    let para_chunks = chunker::chunk_text(
+        "word\n".repeat(100).as_str(),
+        &ChunkOptions {
+            max_size: 50,
+            overlap: 10,
+            strategy: ChunkStrategy::Paragraph,
+        },
+        "src",
+    );
     assert!(para_chunks.len() >= 2);
 
-    let fixed_chunks = chunker::chunk_text("ABCDEFGHIJ", &ChunkOptions {
-        max_size: 5, overlap: 2, strategy: ChunkStrategy::Fixed,
-    }, "fixed");
+    let fixed_chunks = chunker::chunk_text(
+        "ABCDEFGHIJ",
+        &ChunkOptions {
+            max_size: 5,
+            overlap: 2,
+            strategy: ChunkStrategy::Fixed,
+        },
+        "fixed",
+    );
     assert_eq!(fixed_chunks.len(), 3);
     assert_eq!(fixed_chunks[0].content, "ABCDE");
     assert_eq!(fixed_chunks[1].content, "DEFGH");
@@ -703,7 +848,11 @@ fn chunking_empty_and_whitespace() {
     use memvid_agent_core::chunker;
     use memvid_agent_core::types::{ChunkOptions, ChunkStrategy};
 
-    let opts = ChunkOptions { max_size: 50, overlap: 5, strategy: ChunkStrategy::Paragraph };
+    let opts = ChunkOptions {
+        max_size: 50,
+        overlap: 5,
+        strategy: ChunkStrategy::Paragraph,
+    };
     assert!(chunker::chunk_text("", &opts, "empty").is_empty());
 
     let chunks = chunker::chunk_text("   \n  \n  ", &opts, "ws");
@@ -717,17 +866,47 @@ fn chunking_fixed_various_overlaps() {
 
     let text = "ABCDEFGHIJ";
 
-    assert_eq!(chunker::chunk_text(text, &ChunkOptions {
-        max_size: 5, overlap: 0, strategy: ChunkStrategy::Fixed,
-    }, "fixed").len(), 2);
+    assert_eq!(
+        chunker::chunk_text(
+            text,
+            &ChunkOptions {
+                max_size: 5,
+                overlap: 0,
+                strategy: ChunkStrategy::Fixed,
+            },
+            "fixed"
+        )
+        .len(),
+        2
+    );
 
-    assert_eq!(chunker::chunk_text(text, &ChunkOptions {
-        max_size: 5, overlap: 5, strategy: ChunkStrategy::Fixed,
-    }, "fixed").len(), 6);
+    assert_eq!(
+        chunker::chunk_text(
+            text,
+            &ChunkOptions {
+                max_size: 5,
+                overlap: 5,
+                strategy: ChunkStrategy::Fixed,
+            },
+            "fixed"
+        )
+        .len(),
+        6
+    );
 
-    assert_eq!(chunker::chunk_text(text, &ChunkOptions {
-        max_size: 3, overlap: 0, strategy: ChunkStrategy::Fixed,
-    }, "fixed").len(), 4);
+    assert_eq!(
+        chunker::chunk_text(
+            text,
+            &ChunkOptions {
+                max_size: 3,
+                overlap: 0,
+                strategy: ChunkStrategy::Fixed,
+            },
+            "fixed"
+        )
+        .len(),
+        4
+    );
 }
 
 #[test]
@@ -735,7 +914,11 @@ fn chunking_heading_consecutive_and_trailing() {
     use memvid_agent_core::chunker;
     use memvid_agent_core::types::{ChunkOptions, ChunkStrategy};
 
-    let opts = ChunkOptions { max_size: 200, overlap: 10, strategy: ChunkStrategy::Heading };
+    let opts = ChunkOptions {
+        max_size: 200,
+        overlap: 10,
+        strategy: ChunkStrategy::Heading,
+    };
 
     let chunks = chunker::chunk_text("# H1\n# H2\ncontent", &opts, "doc");
     assert_eq!(chunks.len(), 2);
@@ -750,9 +933,15 @@ fn chunking_heading_mixed_levels() {
     use memvid_agent_core::types::{ChunkOptions, ChunkStrategy};
 
     let text = "# H1\ncontent\n## H2\nmore\n### H3\ndetails";
-    let chunks = chunker::chunk_text(text, &ChunkOptions {
-        max_size: 200, overlap: 10, strategy: ChunkStrategy::Heading,
-    }, "doc");
+    let chunks = chunker::chunk_text(
+        text,
+        &ChunkOptions {
+            max_size: 200,
+            overlap: 10,
+            strategy: ChunkStrategy::Heading,
+        },
+        "doc",
+    );
     assert_eq!(chunks.len(), 3);
     assert_eq!(chunks[0].heading, Some("# H1".into()));
     assert_eq!(chunks[1].heading, Some("## H2".into()));
@@ -764,9 +953,15 @@ fn chunking_deduplicate() {
     use memvid_agent_core::chunker;
     use memvid_agent_core::types::{ChunkOptions, ChunkStrategy};
 
-    let chunks = chunker::chunk_and_deduplicate("hello\nhello\nworld", &ChunkOptions {
-        max_size: 5, overlap: 0, strategy: ChunkStrategy::Paragraph,
-    }, "dedup");
+    let chunks = chunker::chunk_and_deduplicate(
+        "hello\nhello\nworld",
+        &ChunkOptions {
+            max_size: 5,
+            overlap: 0,
+            strategy: ChunkStrategy::Paragraph,
+        },
+        "dedup",
+    );
     assert_eq!(chunks.len(), 2);
     assert_eq!(chunks[0].content, "hello");
     assert_eq!(chunks[1].content, "world");
@@ -777,9 +972,18 @@ fn chunking_deduplicate_empty() {
     use memvid_agent_core::chunker;
     use memvid_agent_core::types::{ChunkOptions, ChunkStrategy};
 
-    assert!(chunker::chunk_and_deduplicate("", &ChunkOptions {
-        max_size: 5, overlap: 0, strategy: ChunkStrategy::Paragraph,
-    }, "dedup").is_empty());
+    assert!(
+        chunker::chunk_and_deduplicate(
+            "",
+            &ChunkOptions {
+                max_size: 5,
+                overlap: 0,
+                strategy: ChunkStrategy::Paragraph,
+            },
+            "dedup"
+        )
+        .is_empty()
+    );
 }
 
 #[test]
@@ -787,9 +991,15 @@ fn chunking_deduplicate_all_unique() {
     use memvid_agent_core::chunker;
     use memvid_agent_core::types::{ChunkOptions, ChunkStrategy};
 
-    let chunks = chunker::chunk_and_deduplicate("hello\nworld\nfoo", &ChunkOptions {
-        max_size: 5, overlap: 0, strategy: ChunkStrategy::Paragraph,
-    }, "dedup");
+    let chunks = chunker::chunk_and_deduplicate(
+        "hello\nworld\nfoo",
+        &ChunkOptions {
+            max_size: 5,
+            overlap: 0,
+            strategy: ChunkStrategy::Paragraph,
+        },
+        "dedup",
+    );
     assert_eq!(chunks.len(), 3);
 }
 
@@ -798,9 +1008,15 @@ fn chunking_heading_no_headings() {
     use memvid_agent_core::chunker;
     use memvid_agent_core::types::{ChunkOptions, ChunkStrategy};
 
-    let chunks = chunker::chunk_text("plain text\nwithout any\nheadings", &ChunkOptions {
-        max_size: 200, overlap: 10, strategy: ChunkStrategy::Heading,
-    }, "plain");
+    let chunks = chunker::chunk_text(
+        "plain text\nwithout any\nheadings",
+        &ChunkOptions {
+            max_size: 200,
+            overlap: 10,
+            strategy: ChunkStrategy::Heading,
+        },
+        "plain",
+    );
     assert_eq!(chunks.len(), 1);
     assert!(chunks[0].heading.is_none());
 }
@@ -810,13 +1026,33 @@ fn chunking_fixed_exact_size() {
     use memvid_agent_core::chunker;
     use memvid_agent_core::types::{ChunkOptions, ChunkStrategy};
 
-    assert_eq!(chunker::chunk_text("ABCDE", &ChunkOptions {
-        max_size: 5, overlap: 0, strategy: ChunkStrategy::Fixed,
-    }, "fixed").len(), 1);
+    assert_eq!(
+        chunker::chunk_text(
+            "ABCDE",
+            &ChunkOptions {
+                max_size: 5,
+                overlap: 0,
+                strategy: ChunkStrategy::Fixed,
+            },
+            "fixed"
+        )
+        .len(),
+        1
+    );
 
-    assert_eq!(chunker::chunk_text("ABCDEF", &ChunkOptions {
-        max_size: 5, overlap: 0, strategy: ChunkStrategy::Fixed,
-    }, "fixed").len(), 2);
+    assert_eq!(
+        chunker::chunk_text(
+            "ABCDEF",
+            &ChunkOptions {
+                max_size: 5,
+                overlap: 0,
+                strategy: ChunkStrategy::Fixed,
+            },
+            "fixed"
+        )
+        .len(),
+        2
+    );
 }
 
 #[test]
@@ -824,9 +1060,15 @@ fn chunking_unicode_text() {
     use memvid_agent_core::chunker;
     use memvid_agent_core::types::{ChunkOptions, ChunkStrategy};
 
-    let chunks = chunker::chunk_text("nino y cafe", &ChunkOptions {
-        max_size: 50, overlap: 5, strategy: ChunkStrategy::Fixed,
-    }, "unicode");
+    let chunks = chunker::chunk_text(
+        "nino y cafe",
+        &ChunkOptions {
+            max_size: 50,
+            overlap: 5,
+            strategy: ChunkStrategy::Fixed,
+        },
+        "unicode",
+    );
     assert_eq!(chunks.len(), 1);
     assert!(chunks[0].content.contains("nino"));
 }
@@ -839,13 +1081,17 @@ fn chunking_unicode_text() {
 fn html_to_text_strips_all_tags() {
     use memvid_agent_core::extractor::html_to_text;
     assert_eq!(html_to_text("<p>Hello <b>world</b></p>"), "Hello world");
-    assert_eq!(html_to_text("<div><p>first</p><p>second</p></div>"), "first second");
+    assert_eq!(
+        html_to_text("<div><p>first</p><p>second</p></div>"),
+        "first second"
+    );
 }
 
 #[test]
 fn html_to_text_removes_scripts_and_styles() {
     use memvid_agent_core::extractor::html_to_text;
-    let html = "<p>Hello</p><script>alert('xss')</script><style>.cls{color:red}</style><p>World</p>";
+    let html =
+        "<p>Hello</p><script>alert('xss')</script><style>.cls{color:red}</style><p>World</p>";
     assert_eq!(html_to_text(html), "Hello World");
 }
 
@@ -1027,7 +1273,10 @@ fn extract_text_delegates_correctly() {
     use memvid_agent_core::extractor::extract_text;
     assert_eq!(extract_text("<p>hello</p>", "text/html"), "hello");
     assert_eq!(extract_text("hello world", "text/plain"), "hello world");
-    assert_eq!(extract_text("# Hello\nWorld", "text/markdown"), "# Hello\nWorld");
+    assert_eq!(
+        extract_text("# Hello\nWorld", "text/markdown"),
+        "# Hello\nWorld"
+    );
     assert_eq!(extract_text("**bold**", "text/md"), "**bold**");
     assert_eq!(extract_text("plain", "application/octet-stream"), "plain");
     assert_eq!(extract_text("", "text/html"), "");
@@ -1170,8 +1419,14 @@ fn file_lock_contains_pid() {
 #[test]
 fn sha256_digest_known_values() {
     use memvid_agent_core::utils::sha256_digest;
-    assert_eq!(sha256_digest(b""), "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
-    assert_eq!(sha256_digest(b"hello"), "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824");
+    assert_eq!(
+        sha256_digest(b""),
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    );
+    assert_eq!(
+        sha256_digest(b"hello"),
+        "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
+    );
 }
 
 #[test]
@@ -1188,7 +1443,10 @@ fn file_checksum_matches_direct_digest() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("test.bin");
     std::fs::write(&path, b"checksum me").unwrap();
-    assert_eq!(compute_file_checksum(&path).unwrap(), sha256_digest(b"checksum me"));
+    assert_eq!(
+        compute_file_checksum(&path).unwrap(),
+        sha256_digest(b"checksum me")
+    );
 }
 
 #[test]
@@ -1263,12 +1521,8 @@ fn generation_prompt_assembles_correct_template() {
     let policy = ContextPolicy::new(4096, 2048);
     let batch = vec![msg("user", "hi")];
 
-    let trimmed = policy.trim_messages(
-        builder.developer_prompt(),
-        &batch,
-        "hello",
-        |t| t.len() / 4,
-    );
+    let trimmed =
+        policy.trim_messages(builder.developer_prompt(), &batch, "hello", |t| t.len() / 4);
     let prompt = builder.build(&trimmed, "hello", &[]);
     assert!(prompt.contains("<|im_start|>system"));
     assert!(prompt.contains("expert software engineer"));
@@ -1281,13 +1535,23 @@ fn generation_prompt_assembles_correct_template() {
 
 #[test]
 fn books_catalog_prepare_knowledge() {
-    use memvid_agent_core::books_catalog::{LanguageBooks, BookResource, prepare_knowledge_from_books};
+    use memvid_agent_core::books_catalog::{
+        BookResource, LanguageBooks, prepare_knowledge_from_books,
+    };
 
     let books = LanguageBooks {
         language: "Rust".to_string(),
         resources: vec![
-            BookResource { title: "The Book".into(), url: "https://doc.rust-lang.org/book".into(), format: "HTML".into() },
-            BookResource { title: "Rust by Example".into(), url: "https://doc.rust-lang.org/stable/rust-by-example".into(), format: "HTML".into() },
+            BookResource {
+                title: "The Book".into(),
+                url: "https://doc.rust-lang.org/book".into(),
+                format: "HTML".into(),
+            },
+            BookResource {
+                title: "Rust by Example".into(),
+                url: "https://doc.rust-lang.org/stable/rust-by-example".into(),
+                format: "HTML".into(),
+            },
         ],
     };
     let knowledge = prepare_knowledge_from_books(&books, 5);
@@ -1303,15 +1567,25 @@ fn books_catalog_prepare_knowledge() {
 
 #[test]
 fn types_conversation_batch_roundtrip() {
-    use memvid_agent_core::types::{ConversationBatch, Message, MessageRole};
     use chrono::Utc;
+    use memvid_agent_core::types::{ConversationBatch, Message, MessageRole};
 
     let batch = ConversationBatch {
         id: "test-id".into(),
         timestamp: Utc::now(),
         messages: vec![
-            Message { role: MessageRole::User, content: "hello".into(), timestamp: Utc::now(), tokens: None },
-            Message { role: MessageRole::Assistant, content: "world".into(), timestamp: Utc::now(), tokens: Some(5) },
+            Message {
+                role: MessageRole::User,
+                content: "hello".into(),
+                timestamp: Utc::now(),
+                tokens: None,
+            },
+            Message {
+                role: MessageRole::Assistant,
+                content: "world".into(),
+                timestamp: Utc::now(),
+                tokens: Some(5),
+            },
         ],
         model_used: "test-model".into(),
         tokens_used: 42,
@@ -1326,8 +1600,8 @@ fn types_conversation_batch_roundtrip() {
 
 #[test]
 fn types_manifest_roundtrip() {
-    use memvid_agent_core::types::Manifest;
     use chrono::Utc;
+    use memvid_agent_core::types::Manifest;
 
     let manifest = Manifest {
         version: "1.0.0".into(),
@@ -1346,8 +1620,8 @@ fn types_manifest_roundtrip() {
 
 #[test]
 fn types_knowledge_entry_roundtrip() {
-    use memvid_agent_core::types::KnowledgeEntry;
     use chrono::Utc;
+    use memvid_agent_core::types::KnowledgeEntry;
 
     let entry = KnowledgeEntry {
         id: "know-1".into(),
@@ -1392,8 +1666,8 @@ fn types_fetched_content_optional_fields() {
 
 #[test]
 fn types_segment_entry_roundtrip() {
-    use memvid_agent_core::types::SegmentEntry;
     use chrono::Utc;
+    use memvid_agent_core::types::SegmentEntry;
 
     let entry = SegmentEntry {
         id: "seg-1".into(),

@@ -1,5 +1,5 @@
-use crate::types::{Manifest, SegmentEntry, WriterConfig};
 use crate::memvid::manifest;
+use crate::types::{Manifest, SegmentEntry, WriterConfig};
 use anyhow::{Context, Result};
 use std::path::PathBuf;
 
@@ -20,16 +20,15 @@ impl Playlist {
         let core_path = data_dir.join("core.mv2");
 
         if !core_path.exists() {
-            let mut mv = memvid_core::Memvid::create(&core_path)
-                .context("Failed to create core.mv2")?;
+            let mut mv =
+                memvid_core::Memvid::create(&core_path).context("Failed to create core.mv2")?;
             let identity = serde_json::json!({
                 "agent": "memvid-agent-core",
                 "version": env!("CARGO_PKG_VERSION"),
                 "created_at": chrono::Utc::now().to_rfc3339(),
             });
             mv.put_bytes_with_options(
-                &serde_json::to_vec(&identity)
-                    .context("Failed to serialize identity")?,
+                &serde_json::to_vec(&identity).context("Failed to serialize identity")?,
                 memvid_core::PutOptions {
                     tags: vec!["type=core".into(), "section=identity".into()],
                     ..Default::default()
@@ -248,7 +247,8 @@ mod tests {
         };
         playlist.add_knowledge_segment(entry).unwrap();
         let manifest: crate::types::Manifest =
-            serde_json::from_str(&std::fs::read_to_string(&playlist.manifest_path).unwrap()).unwrap();
+            serde_json::from_str(&std::fs::read_to_string(&playlist.manifest_path).unwrap())
+                .unwrap();
         assert_eq!(manifest.knowledge_segments.len(), 1);
         assert_eq!(manifest.knowledge_segments[0].id, "know-1");
     }

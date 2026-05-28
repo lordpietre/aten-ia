@@ -2,6 +2,7 @@
 name = "memvid-agent-core"
 version = "0.1.0"
 edition = "2024"
+repository = "https://github.com/lordpietre/aten-ia"
 
 [dependencies]
 memvid-core = "2.0.139"

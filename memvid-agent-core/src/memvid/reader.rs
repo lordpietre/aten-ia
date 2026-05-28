@@ -228,8 +228,7 @@ mod tests {
         assert!(frames[0].tags.contains(&"type=conversation".to_string()));
 
         let text = reader.read_text(frames[0].id).expect("read text");
-        let parsed: serde_json::Value =
-            serde_json::from_str(&text).expect("parse json");
+        let parsed: serde_json::Value = serde_json::from_str(&text).expect("parse json");
         assert_eq!(parsed["id"], "conv-1");
         assert_eq!(parsed["model_used"], "smollm2-360m");
         assert_eq!(parsed["messages"][0]["content"], "hello");
@@ -254,10 +253,7 @@ mod tests {
             mv.put_bytes_with_options(
                 &bytes,
                 PutOptions {
-                    tags: vec![
-                        "type=knowledge".into(),
-                        "source=python".into(),
-                    ],
+                    tags: vec!["type=knowledge".into(), "source=python".into()],
                     ..Default::default()
                 },
             )
@@ -271,8 +267,7 @@ mod tests {
         assert!(frames[0].tags.contains(&"type=knowledge".to_string()));
 
         let text = reader.read_text(frames[0].id).expect("read text");
-        let parsed: serde_json::Value =
-            serde_json::from_str(&text).expect("parse json");
+        let parsed: serde_json::Value = serde_json::from_str(&text).expect("parse json");
         assert_eq!(parsed["id"], "know-1");
         assert_eq!(parsed["source"], "python");
         assert_eq!(parsed["content"], "Python is a programming language");

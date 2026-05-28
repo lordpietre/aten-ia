@@ -27,7 +27,11 @@ pub fn extract_file(path: &Path) -> Result<ExtractedFile> {
             let content = std::fs::read_to_string(path)
                 .with_context(|| format!("Failed to read {}", path.display()))?;
             let title = path.file_stem().map(|s| s.to_string_lossy().to_string());
-            Ok(ExtractedFile { content, title, format })
+            Ok(ExtractedFile {
+                content,
+                title,
+                format,
+            })
         }
     }
 }
@@ -36,17 +40,20 @@ pub fn extract_pdf(path: &Path) -> Result<ExtractedFile> {
     let content = pdf_extract::extract_text(path)
         .map_err(|e| anyhow::anyhow!("PDF extraction failed: {}", e))?;
     let title = path.file_stem().map(|s| s.to_string_lossy().to_string());
-    Ok(ExtractedFile { content, title, format: Format::Pdf })
+    Ok(ExtractedFile {
+        content,
+        title,
+        format: Format::Pdf,
+    })
 }
 
 pub fn extract_epub(path: &Path) -> Result<ExtractedFile> {
     use epub::doc::EpubDoc;
 
-    let mut doc = EpubDoc::new(path)
-        .map_err(|e| anyhow::anyhow!("Failed to open EPUB: {}", e))?;
-    let title = doc.get_title().or_else(|| {
-        path.file_stem().map(|s| s.to_string_lossy().to_string())
-    });
+    let mut doc = EpubDoc::new(path).map_err(|e| anyhow::anyhow!("Failed to open EPUB: {}", e))?;
+    let title = doc
+        .get_title()
+        .or_else(|| path.file_stem().map(|s| s.to_string_lossy().to_string()));
     let mut content = String::new();
     let num_chapters = doc.get_num_chapters();
     for _ in 0..num_chapters.max(1) {
@@ -61,7 +68,11 @@ pub fn extract_epub(path: &Path) -> Result<ExtractedFile> {
     if content.trim().is_empty() {
         anyhow::bail!("No text content found in EPUB: {}", path.display());
     }
-    Ok(ExtractedFile { content, title, format: Format::Epub })
+    Ok(ExtractedFile {
+        content,
+        title,
+        format: Format::Epub,
+    })
 }
 
 pub fn extract_text(content: &str, content_type: &str) -> String {
@@ -105,10 +116,36 @@ pub fn html_to_text(html: &str) -> String {
     let mut i = 0;
 
     let block_tags = [
-        "div", "p", "br", "h1", "h2", "h3", "h4", "h5", "h6",
-        "li", "ul", "ol", "tr", "td", "th", "section", "article",
-        "header", "footer", "nav", "main", "blockquote", "pre",
-        "hr", "table", "tbody", "thead", "tfoot", "dd", "dt",
+        "div",
+        "p",
+        "br",
+        "h1",
+        "h2",
+        "h3",
+        "h4",
+        "h5",
+        "h6",
+        "li",
+        "ul",
+        "ol",
+        "tr",
+        "td",
+        "th",
+        "section",
+        "article",
+        "header",
+        "footer",
+        "nav",
+        "main",
+        "blockquote",
+        "pre",
+        "hr",
+        "table",
+        "tbody",
+        "thead",
+        "tfoot",
+        "dd",
+        "dt",
     ];
 
     let mut in_script = false;
@@ -257,12 +294,20 @@ pub fn html_to_markdown(html: &str) -> String {
                 "script" if tag.is_end => in_script = false,
                 "style" if !tag.is_end => in_style = true,
                 "style" if tag.is_end => in_style = false,
-                "pre" if !tag.is_end => { in_pre = true; md.push_str("\n```\n"); }
-                "pre" if tag.is_end => { in_pre = false; md.push_str("\n```\n"); }
+                "pre" if !tag.is_end => {
+                    in_pre = true;
+                    md.push_str("\n```\n");
+                }
+                "pre" if tag.is_end => {
+                    in_pre = false;
+                    md.push_str("\n```\n");
+                }
                 "h1" | "h2" | "h3" | "h4" | "h5" | "h6" if !tag.is_end => {
                     let level = tagname[1..].parse::<usize>().unwrap_or(1);
                     md.push('\n');
-                    for _ in 0..level { md.push('#'); }
+                    for _ in 0..level {
+                        md.push('#');
+                    }
                     md.push(' ');
                 }
                 "h1" | "h2" | "h3" | "h4" | "h5" | "h6" if tag.is_end => {
@@ -328,8 +373,12 @@ pub fn html_to_markdown(html: &str) -> String {
             if !entity.is_empty() {
                 md.push_str(&entity);
                 i += 1;
-                while i < len && chars[i] != ';' { i += 1; }
-                if i < len { i += 1; }
+                while i < len && chars[i] != ';' {
+                    i += 1;
+                }
+                if i < len {
+                    i += 1;
+                }
                 continue;
             }
         }
@@ -356,10 +405,22 @@ fn extract_title(html: &str) -> Option<String> {
 
 fn extract_meta_tag(html: &str, name: &str) -> Option<String> {
     let patterns = [
-        format!(r#"<meta\s+name=["']{}["'][^>]*content=["']([^"']+)["']"#, regex::escape(name)),
-        format!(r#"<meta\s+property=["']{}["'][^>]*content=["']([^"']+)["']"#, regex::escape(name)),
-        format!(r#"<meta\s+content=["']([^"']+)["'][^>]*name=["']{}["']"#, regex::escape(name)),
-        format!(r#"<meta\s+content=["']([^"']+)["'][^>]*property=["']{}["']"#, regex::escape(name)),
+        format!(
+            r#"<meta\s+name=["']{}["'][^>]*content=["']([^"']+)["']"#,
+            regex::escape(name)
+        ),
+        format!(
+            r#"<meta\s+property=["']{}["'][^>]*content=["']([^"']+)["']"#,
+            regex::escape(name)
+        ),
+        format!(
+            r#"<meta\s+content=["']([^"']+)["'][^>]*name=["']{}["']"#,
+            regex::escape(name)
+        ),
+        format!(
+            r#"<meta\s+content=["']([^"']+)["'][^>]*property=["']{}["']"#,
+            regex::escape(name)
+        ),
     ];
     for pattern in &patterns {
         if let Ok(re) = Regex::new(pattern) {
@@ -375,9 +436,13 @@ fn extract_meta_tag(html: &str, name: &str) -> Option<String> {
 
 fn extract_html_lang(html: &str) -> Option<String> {
     let re = Regex::new(r#"<html[^>]*\slang=["']([^"']+)["']"#).ok()?;
-    re.captures(html)
-        .and_then(|c| c.get(1))
-        .map(|m| m.as_str().split('-').next().unwrap_or(m.as_str()).to_string())
+    re.captures(html).and_then(|c| c.get(1)).map(|m| {
+        m.as_str()
+            .split('-')
+            .next()
+            .unwrap_or(m.as_str())
+            .to_string()
+    })
 }
 
 struct TagInfo {
@@ -406,8 +471,12 @@ fn extract_tag(chars: &[char], start: usize) -> TagInfo {
 
     if !is_end {
         while i < len {
-            while i < len && chars[i].is_whitespace() && chars[i] != '>' { i += 1; }
-            if i >= len || chars[i] == '>' || chars[i] == '/' { break; }
+            while i < len && chars[i].is_whitespace() && chars[i] != '>' {
+                i += 1;
+            }
+            if i >= len || chars[i] == '>' || chars[i] == '/' {
+                break;
+            }
 
             let mut attr_name = String::new();
             while i < len && chars[i] != '=' && !chars[i].is_whitespace() && chars[i] != '>' {
@@ -415,11 +484,15 @@ fn extract_tag(chars: &[char], start: usize) -> TagInfo {
                 i += 1;
             }
 
-            while i < len && chars[i].is_whitespace() { i += 1; }
+            while i < len && chars[i].is_whitespace() {
+                i += 1;
+            }
 
             if i < len && chars[i] == '=' {
                 i += 1;
-                while i < len && chars[i].is_whitespace() { i += 1; }
+                while i < len && chars[i].is_whitespace() {
+                    i += 1;
+                }
 
                 let mut attr_val = String::new();
                 if i < len && (chars[i] == '"' || chars[i] == '\'') {
@@ -429,7 +502,9 @@ fn extract_tag(chars: &[char], start: usize) -> TagInfo {
                         attr_val.push(chars[i]);
                         i += 1;
                     }
-                    if i < len { i += 1; }
+                    if i < len {
+                        i += 1;
+                    }
                 } else {
                     while i < len && !chars[i].is_whitespace() && chars[i] != '>' {
                         attr_val.push(chars[i]);
@@ -443,10 +518,19 @@ fn extract_tag(chars: &[char], start: usize) -> TagInfo {
         }
     }
 
-    if i < len && chars[i] == '/' { i += 1; }
-    if i < len && chars[i] == '>' { i += 1; }
+    if i < len && chars[i] == '/' {
+        i += 1;
+    }
+    if i < len && chars[i] == '>' {
+        i += 1;
+    }
 
-    TagInfo { name, is_end, end: i, attrs }
+    TagInfo {
+        name,
+        is_end,
+        end: i,
+        attrs,
+    }
 }
 
 impl TagInfo {
@@ -515,13 +599,19 @@ mod tests {
     #[test]
     fn extract_meta_description() {
         let html = r#"<meta name="description" content="A test page">"#;
-        assert_eq!(extract_meta_tag(html, "description"), Some("A test page".to_string()));
+        assert_eq!(
+            extract_meta_tag(html, "description"),
+            Some("A test page".to_string())
+        );
     }
 
     #[test]
     fn extract_meta_og_description() {
         let html = r#"<meta property="og:description" content="OG desc">"#;
-        assert_eq!(extract_meta_tag(html, "og:description"), Some("OG desc".to_string()));
+        assert_eq!(
+            extract_meta_tag(html, "og:description"),
+            Some("OG desc".to_string())
+        );
     }
 
     #[test]

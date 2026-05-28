@@ -77,7 +77,12 @@ impl PromptBuilder {
         content
     }
 
-    fn build_chatml(&self, messages: &[Message], user_input: &str, rag_context: &[String]) -> String {
+    fn build_chatml(
+        &self,
+        messages: &[Message],
+        user_input: &str,
+        rag_context: &[String],
+    ) -> String {
         let mut prompt = String::new();
 
         let system = self.system_content(rag_context);
@@ -90,7 +95,10 @@ impl PromptBuilder {
                 crate::types::MessageRole::Assistant => "assistant",
                 crate::types::MessageRole::Tool => "tool",
             };
-            prompt.push_str(&format!("<|im_start|>{}\n{}\n<|im_end|>\n", role, msg.content));
+            prompt.push_str(&format!(
+                "<|im_start|>{}\n{}\n<|im_end|>\n",
+                role, msg.content
+            ));
         }
 
         prompt.push_str(&format!("<|im_start|>user\n{}\n<|im_end|>\n", user_input));
@@ -98,11 +106,19 @@ impl PromptBuilder {
         prompt
     }
 
-    fn build_llama3(&self, messages: &[Message], user_input: &str, rag_context: &[String]) -> String {
+    fn build_llama3(
+        &self,
+        messages: &[Message],
+        user_input: &str,
+        rag_context: &[String],
+    ) -> String {
         let mut prompt = String::from("<|begin_of_text|>");
 
         let system = self.system_content(rag_context);
-        prompt.push_str(&format!("<|start_header_id|>system<|end_header_id|>\n\n{}\n<|eot_id|>", system));
+        prompt.push_str(&format!(
+            "<|start_header_id|>system<|end_header_id|>\n\n{}\n<|eot_id|>",
+            system
+        ));
 
         for msg in messages {
             let role = match msg.role {
@@ -111,15 +127,26 @@ impl PromptBuilder {
                 crate::types::MessageRole::Assistant => "assistant",
                 crate::types::MessageRole::Tool => "ipython",
             };
-            prompt.push_str(&format!("<|start_header_id|>{}<|end_header_id|>\n\n{}\n<|eot_id|>", role, msg.content));
+            prompt.push_str(&format!(
+                "<|start_header_id|>{}<|end_header_id|>\n\n{}\n<|eot_id|>",
+                role, msg.content
+            ));
         }
 
-        prompt.push_str(&format!("<|start_header_id|>user<|end_header_id|>\n\n{}\n<|eot_id|>", user_input));
+        prompt.push_str(&format!(
+            "<|start_header_id|>user<|end_header_id|>\n\n{}\n<|eot_id|>",
+            user_input
+        ));
         prompt.push_str("<|start_header_id|>assistant<|end_header_id|>\n\n");
         prompt
     }
 
-    fn build_mistral(&self, messages: &[Message], user_input: &str, rag_context: &[String]) -> String {
+    fn build_mistral(
+        &self,
+        messages: &[Message],
+        user_input: &str,
+        rag_context: &[String],
+    ) -> String {
         let mut prompt = String::new();
 
         let system = self.system_content(rag_context);
@@ -143,7 +170,12 @@ impl PromptBuilder {
         prompt
     }
 
-    fn build_raw(&self, _messages: &[Message], user_input: &str, _rag_context: &[String]) -> String {
+    fn build_raw(
+        &self,
+        _messages: &[Message],
+        user_input: &str,
+        _rag_context: &[String],
+    ) -> String {
         user_input.to_string()
     }
 }
@@ -198,9 +230,7 @@ mod tests {
     #[test]
     fn chatml_with_system_in_history() {
         let builder = PromptBuilder::new(ChatTemplate::ChatML);
-        let messages = vec![
-            msg(MessageRole::System, "user loaded file x.py"),
-        ];
+        let messages = vec![msg(MessageRole::System, "user loaded file x.py")];
         let result = builder.build(&messages, "explain it", &[]);
         assert!(result.contains("<|im_start|>system\nuser loaded file x.py"));
     }
@@ -242,8 +272,8 @@ mod tests {
 
     #[test]
     fn custom_developer_prompt() {
-        let builder = PromptBuilder::new(ChatTemplate::ChatML)
-            .with_developer_prompt("You are a poet.");
+        let builder =
+            PromptBuilder::new(ChatTemplate::ChatML).with_developer_prompt("You are a poet.");
         let result = builder.build(&[], "write a poem", &[]);
         assert!(result.contains("You are a poet."));
         assert!(!result.contains("expert software engineer"));

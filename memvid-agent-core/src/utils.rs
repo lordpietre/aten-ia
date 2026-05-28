@@ -1,8 +1,8 @@
 use anyhow::{Context, Result};
+use std::fs;
 use std::io::Read;
 use std::path::Path;
 use std::path::PathBuf;
-use std::fs;
 use uuid::Uuid;
 
 pub fn atomic_write<P: AsRef<Path>, C: AsRef<[u8]>>(path: P, contents: C) -> Result<()> {
@@ -37,8 +37,12 @@ pub struct FileLock {
 impl FileLock {
     pub fn acquire(data_dir: &Path) -> Result<Self> {
         let path = data_dir.join(".lock");
-        let file = std::fs::File::create_new(&path)
-            .with_context(|| format!("Another instance is already running in {}", data_dir.display()))?;
+        let file = std::fs::File::create_new(&path).with_context(|| {
+            format!(
+                "Another instance is already running in {}",
+                data_dir.display()
+            )
+        })?;
         use std::io::Write;
         writeln!(&file, "{}", std::process::id())?;
         file.sync_all()?;

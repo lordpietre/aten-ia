@@ -65,16 +65,15 @@ impl LanguagesCatalog {
     }
 
     fn load_cache(path: &Path) -> Result<Self> {
-        let content = std::fs::read_to_string(path)
-            .context("Failed to read catalog cache")?;
-        let entries: Vec<LanguageEntry> = serde_json::from_str(&content)
-            .context("Failed to parse catalog cache")?;
+        let content = std::fs::read_to_string(path).context("Failed to read catalog cache")?;
+        let entries: Vec<LanguageEntry> =
+            serde_json::from_str(&content).context("Failed to parse catalog cache")?;
         Ok(Self { entries })
     }
 
     fn save_cache(&self, path: &Path) -> Result<()> {
-        let content = serde_json::to_string_pretty(&self.entries)
-            .context("Failed to serialize catalog")?;
+        let content =
+            serde_json::to_string_pretty(&self.entries).context("Failed to serialize catalog")?;
         utils::atomic_write(path, content)?;
         Ok(())
     }
@@ -143,13 +142,11 @@ impl LanguagesCatalog {
     pub fn find(&self, key_or_name: &str) -> Option<&LanguageEntry> {
         let lower = key_or_name.to_lowercase();
         let folded = fold_accents(&lower);
-        self.entries
-            .iter()
-            .find(|e| {
-                e.key == lower
-                    || e.name.to_lowercase() == lower
-                    || fold_accents(&e.name.to_lowercase()) == folded
-            })
+        self.entries.iter().find(|e| {
+            e.key == lower
+                || e.name.to_lowercase() == lower
+                || fold_accents(&e.name.to_lowercase()) == folded
+        })
     }
 
     pub fn len(&self) -> usize {
@@ -181,10 +178,14 @@ pub fn download_language_resources(
 
         let is_text = content_type.starts_with("text/");
         let is_pdf = content_type.contains("application/pdf");
-        let is_epub = content_type.contains("application/epub+zip") || content_type == "application/epub";
+        let is_epub =
+            content_type.contains("application/epub+zip") || content_type == "application/epub";
 
         if !is_text && !is_pdf && !is_epub {
-            eprintln!("  [skip] {} — unsupported type: {}", resource.title, content_type);
+            eprintln!(
+                "  [skip] {} — unsupported type: {}",
+                resource.title, content_type
+            );
             continue;
         }
 
@@ -250,7 +251,11 @@ pub fn download_language_resources(
             overlap: 600,
             strategy: ChunkStrategy::Heading,
         };
-        let chunks = chunker::chunk_text(&text, &chunk_opts, &format!("{}/{}", lang.key, resource.title));
+        let chunks = chunker::chunk_text(
+            &text,
+            &chunk_opts,
+            &format!("{}/{}", lang.key, resource.title),
+        );
         for chunk in &chunks {
             let content = if let Some(ref h) = chunk.heading {
                 format!("{}\n\n{}", h, chunk.content)
@@ -275,7 +280,10 @@ pub fn download_language_resources(
 
 fn strip_html(html: &str) -> String {
     fn decode_numeric_entity(entity: &str) -> Option<char> {
-        let num_str = if let Some(hex) = entity.strip_prefix("#x").or_else(|| entity.strip_prefix("#X")) {
+        let num_str = if let Some(hex) = entity
+            .strip_prefix("#x")
+            .or_else(|| entity.strip_prefix("#X"))
+        {
             u32::from_str_radix(hex, 16).ok()?
         } else if let Some(dec) = entity.strip_prefix('#') {
             dec.parse::<u32>().ok()?

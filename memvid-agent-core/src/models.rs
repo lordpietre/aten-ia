@@ -3,8 +3,7 @@ use colored::Colorize;
 use std::io::{Read, Write};
 use std::path::Path;
 
-const DEFAULT_MODEL_URL: &str =
-    "https://huggingface.co/bartowski/SmolLM2-360M-Instruct-GGUF/resolve/main/SmolLM2-360M-Instruct-Q4_K_M.gguf";
+const DEFAULT_MODEL_URL: &str = "https://huggingface.co/bartowski/SmolLM2-360M-Instruct-GGUF/resolve/main/SmolLM2-360M-Instruct-Q4_K_M.gguf";
 
 pub fn ensure_model(model_config: &crate::config::ModelConfig) -> Result<()> {
     let path = Path::new(&model_config.path);
@@ -17,10 +16,13 @@ pub fn ensure_model(model_config: &crate::config::ModelConfig) -> Result<()> {
         .as_deref()
         .unwrap_or(DEFAULT_MODEL_URL);
     let parent = path.parent().unwrap_or(Path::new("."));
-    std::fs::create_dir_all(parent)
-        .context("Failed to create models directory")?;
+    std::fs::create_dir_all(parent).context("Failed to create models directory")?;
 
-    eprintln!("{} Model not found at {}", "[↓]".yellow(), model_config.path);
+    eprintln!(
+        "{} Model not found at {}",
+        "[↓]".yellow(),
+        model_config.path
+    );
     eprintln!("{} Downloading from:", "  src".dimmed());
     eprintln!("  {}", url);
     eprintln!();
@@ -45,8 +47,7 @@ pub fn ensure_model(model_config: &crate::config::ModelConfig) -> Result<()> {
     );
     pb.set_message("Downloading model…");
 
-    let mut out = std::fs::File::create(path)
-        .context("Failed to create model file")?;
+    let mut out = std::fs::File::create(path).context("Failed to create model file")?;
     let mut downloaded: u64 = 0;
     let mut buf = [0u8; 65536];
     let mut reader = resp.into_body().into_reader();

@@ -92,7 +92,10 @@ impl ApiServer {
                 }
                 self.handle_token(req)
             }
-            _ => json_response(404, &json!({"error": {"message": "Not found", "type": "not_found"}})),
+            _ => json_response(
+                404,
+                &json!({"error": {"message": "Not found", "type": "not_found"}}),
+            ),
         }
     }
 
@@ -141,7 +144,7 @@ impl ApiServer {
                 return json_response(
                     400,
                     &json!({"error": {"message": format!("Invalid JSON: {}", e), "type": "invalid_request_error"}}),
-                )
+                );
             }
         };
 
@@ -151,7 +154,7 @@ impl ApiServer {
                 return json_response(
                     400,
                     &json!({"error": {"message": "Missing 'messages' field", "type": "invalid_request_error"}}),
-                )
+                );
             }
         };
 
@@ -180,7 +183,7 @@ impl ApiServer {
                 return json_response(
                     500,
                     &json!({"error": {"message": format!("{}", e), "type": "internal_error"}}),
-                )
+                );
             }
         };
 
@@ -454,7 +457,9 @@ mod tests {
     #[test]
     fn route_models_authorized() {
         let (server, _dir) = test_server(Some("secret".to_string()));
-        let req = read_http_request_raw("GET /v1/models HTTP/1.1\r\nAuthorization: Bearer secret\r\n\r\n");
+        let req = read_http_request_raw(
+            "GET /v1/models HTTP/1.1\r\nAuthorization: Bearer secret\r\n\r\n",
+        );
         let resp = server.route(&req);
         assert!(resp.starts_with("HTTP/1.1 200 OK"));
         assert!(resp.contains("test-model"));
@@ -470,28 +475,32 @@ mod tests {
     #[test]
     fn check_auth_valid_token() {
         let (server, _dir) = test_server(Some("abc".to_string()));
-        let req = read_http_request_raw("GET /v1/models HTTP/1.1\r\nAuthorization: Bearer abc\r\n\r\n");
+        let req =
+            read_http_request_raw("GET /v1/models HTTP/1.1\r\nAuthorization: Bearer abc\r\n\r\n");
         assert!(server.check_auth(&req));
     }
 
     #[test]
     fn check_auth_invalid_token() {
         let (server, _dir) = test_server(Some("abc".to_string()));
-        let req = read_http_request_raw("GET /v1/models HTTP/1.1\r\nAuthorization: Bearer wrong\r\n\r\n");
+        let req =
+            read_http_request_raw("GET /v1/models HTTP/1.1\r\nAuthorization: Bearer wrong\r\n\r\n");
         assert!(!server.check_auth(&req));
     }
 
     #[test]
     fn check_auth_malformed_header() {
         let (server, _dir) = test_server(Some("abc".to_string()));
-        let req = read_http_request_raw("GET /v1/models HTTP/1.1\r\nAuthorization: Basic abc\r\n\r\n");
+        let req =
+            read_http_request_raw("GET /v1/models HTTP/1.1\r\nAuthorization: Basic abc\r\n\r\n");
         assert!(!server.check_auth(&req));
     }
 
     #[test]
     fn route_token_returns_token_when_configured() {
         let (server, _dir) = test_server(Some("my-token".to_string()));
-        let req = read_http_request_raw("GET /token HTTP/1.1\r\nAuthorization: Bearer my-token\r\n\r\n");
+        let req =
+            read_http_request_raw("GET /token HTTP/1.1\r\nAuthorization: Bearer my-token\r\n\r\n");
         let resp = server.route(&req);
         assert!(resp.starts_with("HTTP/1.1 200 OK"));
         assert!(resp.contains("my-token"));
@@ -500,7 +509,8 @@ mod tests {
     #[test]
     fn route_post_token_works() {
         let (server, _dir) = test_server(Some("my-token".to_string()));
-        let req = read_http_request_raw("POST /token HTTP/1.1\r\nAuthorization: Bearer my-token\r\n\r\n");
+        let req =
+            read_http_request_raw("POST /token HTTP/1.1\r\nAuthorization: Bearer my-token\r\n\r\n");
         let resp = server.route(&req);
         assert!(resp.starts_with("HTTP/1.1 200 OK"));
         assert!(resp.contains("my-token"));

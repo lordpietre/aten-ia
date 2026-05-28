@@ -133,7 +133,11 @@ impl std::fmt::Display for Format {
 
 impl Format {
     pub fn from_extension(path: &std::path::Path) -> Self {
-        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase();
+        let ext = path
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("")
+            .to_ascii_lowercase();
         match ext.as_str() {
             "pdf" => Format::Pdf,
             "epub" => Format::Epub,
@@ -196,13 +200,22 @@ mod tests {
 
     #[test]
     fn format_from_extension_markdown() {
-        assert_eq!(Format::from_extension(Path::new("readme.md")), Format::Markdown);
-        assert_eq!(Format::from_extension(Path::new("readme.markdown")), Format::Markdown);
+        assert_eq!(
+            Format::from_extension(Path::new("readme.md")),
+            Format::Markdown
+        );
+        assert_eq!(
+            Format::from_extension(Path::new("readme.markdown")),
+            Format::Markdown
+        );
     }
 
     #[test]
     fn format_from_extension_html() {
-        assert_eq!(Format::from_extension(Path::new("index.html")), Format::Html);
+        assert_eq!(
+            Format::from_extension(Path::new("index.html")),
+            Format::Html
+        );
         assert_eq!(Format::from_extension(Path::new("page.htm")), Format::Html);
         assert_eq!(Format::from_extension(Path::new("doc.xhtml")), Format::Html);
     }
@@ -210,7 +223,10 @@ mod tests {
     #[test]
     fn format_from_extension_text_default() {
         assert_eq!(Format::from_extension(Path::new("file.txt")), Format::Text);
-        assert_eq!(Format::from_extension(Path::new("file.unknown")), Format::Text);
+        assert_eq!(
+            Format::from_extension(Path::new("file.unknown")),
+            Format::Text
+        );
         assert_eq!(Format::from_extension(Path::new("Makefile")), Format::Text);
         assert_eq!(Format::from_extension(Path::new("")), Format::Text);
     }
@@ -230,8 +246,18 @@ mod tests {
             id: "test-id".into(),
             timestamp: Utc::now(),
             messages: vec![
-                Message { role: MessageRole::User, content: "hello".into(), timestamp: Utc::now(), tokens: None },
-                Message { role: MessageRole::Assistant, content: "world".into(), timestamp: Utc::now(), tokens: Some(5) },
+                Message {
+                    role: MessageRole::User,
+                    content: "hello".into(),
+                    timestamp: Utc::now(),
+                    tokens: None,
+                },
+                Message {
+                    role: MessageRole::Assistant,
+                    content: "world".into(),
+                    timestamp: Utc::now(),
+                    tokens: Some(5),
+                },
             ],
             model_used: "test-model".into(),
             tokens_used: 42,
@@ -269,7 +295,12 @@ mod tests {
 
     #[test]
     fn message_role_serde() {
-        let roles = vec![MessageRole::User, MessageRole::Assistant, MessageRole::System, MessageRole::Tool];
+        let roles = vec![
+            MessageRole::User,
+            MessageRole::Assistant,
+            MessageRole::System,
+            MessageRole::Tool,
+        ];
         for role in roles {
             let json = serde_json::to_string(&role).unwrap();
             let deserialized: MessageRole = serde_json::from_str(&json).unwrap();
@@ -281,7 +312,10 @@ mod tests {
     fn format_from_extension_uppercase() {
         assert_eq!(Format::from_extension(Path::new("doc.PDF")), Format::Pdf);
         assert_eq!(Format::from_extension(Path::new("book.EPUB")), Format::Epub);
-        assert_eq!(Format::from_extension(Path::new("readme.MD")), Format::Markdown);
+        assert_eq!(
+            Format::from_extension(Path::new("readme.MD")),
+            Format::Markdown
+        );
         assert_eq!(Format::from_extension(Path::new("page.HTML")), Format::Html);
     }
 
@@ -293,9 +327,18 @@ mod tests {
 
     #[test]
     fn format_from_extension_multi_dot() {
-        assert_eq!(Format::from_extension(Path::new("archive.tar.gz")), Format::Text);
-        assert_eq!(Format::from_extension(Path::new("file.backup.pdf")), Format::Pdf);
-        assert_eq!(Format::from_extension(Path::new("file.backup.epub")), Format::Epub);
+        assert_eq!(
+            Format::from_extension(Path::new("archive.tar.gz")),
+            Format::Text
+        );
+        assert_eq!(
+            Format::from_extension(Path::new("file.backup.pdf")),
+            Format::Pdf
+        );
+        assert_eq!(
+            Format::from_extension(Path::new("file.backup.epub")),
+            Format::Epub
+        );
     }
 
     #[test]
@@ -441,8 +484,14 @@ mod tests {
 
     #[test]
     fn format_from_extension_special_chars() {
-        assert_eq!(Format::from_extension(Path::new("file[name].pdf")), Format::Pdf);
-        assert_eq!(Format::from_extension(Path::new("file with spaces.epub")), Format::Epub);
+        assert_eq!(
+            Format::from_extension(Path::new("file[name].pdf")),
+            Format::Pdf
+        );
+        assert_eq!(
+            Format::from_extension(Path::new("file with spaces.epub")),
+            Format::Epub
+        );
     }
 
     #[test]

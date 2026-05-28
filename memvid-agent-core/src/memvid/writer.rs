@@ -1,5 +1,5 @@
-use crate::types::{ConversationBatch, KnowledgeEntry, SegmentEntry, WriterConfig};
 use crate::memvid::playlist::Playlist;
+use crate::types::{ConversationBatch, KnowledgeEntry, SegmentEntry, WriterConfig};
 use crate::utils;
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
@@ -58,12 +58,11 @@ impl MemvidWriter {
 
         // Write combined batches to .mv2 via memvid-core
         {
-            let mut mv = memvid_core::Memvid::create(&temp_path)
-                .context("Failed to create .mv2 segment")?;
+            let mut mv =
+                memvid_core::Memvid::create(&temp_path).context("Failed to create .mv2 segment")?;
 
             for batch in &batches {
-                let bytes = serde_json::to_vec(batch)
-                    .context("Failed to serialize batch")?;
+                let bytes = serde_json::to_vec(batch).context("Failed to serialize batch")?;
 
                 let tags: Vec<String> = vec![
                     format!("type=conversation"),
@@ -71,10 +70,14 @@ impl MemvidWriter {
                     format!("tokens={}", batch.tokens_used),
                 ];
 
-                mv.put_bytes_with_options(&bytes, memvid_core::PutOptions {
-                    tags,
-                    ..Default::default()
-                }).context("Failed to write batch to .mv2")?;
+                mv.put_bytes_with_options(
+                    &bytes,
+                    memvid_core::PutOptions {
+                        tags,
+                        ..Default::default()
+                    },
+                )
+                .context("Failed to write batch to .mv2")?;
             }
 
             mv.commit().context("Failed to commit .mv2 segment")?;
@@ -86,8 +89,8 @@ impl MemvidWriter {
 
         // fsync temp file before rename
         {
-            let file = std::fs::File::open(&temp_path)
-                .context("Failed to open temp file for fsync")?;
+            let file =
+                std::fs::File::open(&temp_path).context("Failed to open temp file for fsync")?;
             file.sync_all()?;
         }
 
@@ -108,7 +111,8 @@ impl MemvidWriter {
 
         let entry = SegmentEntry {
             id: first_batch.id.clone(),
-            filename: self.current_segment_path
+            filename: self
+                .current_segment_path
                 .file_name()
                 .expect("segment path has no file name")
                 .to_string_lossy()
@@ -149,18 +153,22 @@ impl MemvidWriter {
                 .context("Failed to create knowledge .mv2")?;
 
             for entry in &entries {
-                let bytes = serde_json::to_vec(entry)
-                    .context("Failed to serialize knowledge entry")?;
+                let bytes =
+                    serde_json::to_vec(entry).context("Failed to serialize knowledge entry")?;
 
                 let tags: Vec<String> = vec![
                     format!("type=knowledge"),
                     format!("source={}", entry.source),
                 ];
 
-                mv.put_bytes_with_options(&bytes, memvid_core::PutOptions {
-                    tags,
-                    ..Default::default()
-                }).context("Failed to write knowledge to .mv2")?;
+                mv.put_bytes_with_options(
+                    &bytes,
+                    memvid_core::PutOptions {
+                        tags,
+                        ..Default::default()
+                    },
+                )
+                .context("Failed to write knowledge to .mv2")?;
             }
 
             mv.commit().context("Failed to commit knowledge .mv2")?;
@@ -233,7 +241,11 @@ mod tests {
     fn make_batch(model: &str, msg_count: usize) -> ConversationBatch {
         let messages: Vec<Message> = (0..msg_count)
             .map(|i| Message {
-                role: if i % 2 == 0 { MessageRole::User } else { MessageRole::Assistant },
+                role: if i % 2 == 0 {
+                    MessageRole::User
+                } else {
+                    MessageRole::Assistant
+                },
                 content: format!("message {}", i),
                 timestamp: Utc::now(),
                 tokens: Some(10),
@@ -363,7 +375,9 @@ mod tests {
             ..Default::default()
         };
         let mut writer = MemvidWriter::init(config).unwrap();
-        writer.append_knowledge(make_knowledge_entry("src", "content")).unwrap();
+        writer
+            .append_knowledge(make_knowledge_entry("src", "content"))
+            .unwrap();
         assert_eq!(writer.pending_knowledge.len(), 1);
     }
 
@@ -376,10 +390,16 @@ mod tests {
             ..Default::default()
         };
         let mut writer = MemvidWriter::init(config).unwrap();
-        writer.append_knowledge(make_knowledge_entry("a", "1")).unwrap();
-        writer.append_knowledge(make_knowledge_entry("b", "2")).unwrap();
+        writer
+            .append_knowledge(make_knowledge_entry("a", "1"))
+            .unwrap();
+        writer
+            .append_knowledge(make_knowledge_entry("b", "2"))
+            .unwrap();
         assert_eq!(writer.pending_knowledge.len(), 2);
-        writer.append_knowledge(make_knowledge_entry("c", "3")).unwrap();
+        writer
+            .append_knowledge(make_knowledge_entry("c", "3"))
+            .unwrap();
         assert!(writer.pending_knowledge.is_empty());
     }
 
@@ -392,7 +412,9 @@ mod tests {
             ..Default::default()
         };
         let mut writer = MemvidWriter::init(config).unwrap();
-        writer.append_knowledge(make_knowledge_entry("src", "know content")).unwrap();
+        writer
+            .append_knowledge(make_knowledge_entry("src", "know content"))
+            .unwrap();
         writer.flush_knowledge().unwrap();
         assert!(writer.pending_knowledge.is_empty());
         let know_dir = dir.path().join("knowledge");
@@ -414,8 +436,12 @@ mod tests {
             ..Default::default()
         };
         let mut writer = MemvidWriter::init(config).unwrap();
-        writer.append_knowledge(make_knowledge_entry("s1", "c1")).unwrap();
-        writer.append_knowledge(make_knowledge_entry("s2", "c2")).unwrap();
+        writer
+            .append_knowledge(make_knowledge_entry("s1", "c1"))
+            .unwrap();
+        writer
+            .append_knowledge(make_knowledge_entry("s2", "c2"))
+            .unwrap();
         writer.flush_knowledge().unwrap();
         let manifest_path = dir.path().join("manifest.json");
         let manifest: crate::types::Manifest =

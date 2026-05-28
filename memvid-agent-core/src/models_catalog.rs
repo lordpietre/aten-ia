@@ -26,8 +26,8 @@ pub struct ModelsCatalog {
 
 impl ModelsCatalog {
     pub fn load() -> Self {
-        let entries: Vec<ModelEntry> = serde_json::from_str(BUNDLED_CATALOG)
-            .expect("Invalid bundled models_catalog.json");
+        let entries: Vec<ModelEntry> =
+            serde_json::from_str(BUNDLED_CATALOG).expect("Invalid bundled models_catalog.json");
         Self { entries }
     }
 
@@ -46,8 +46,7 @@ impl ModelsCatalog {
             return Ok(target_path);
         }
 
-        std::fs::create_dir_all(target_dir)
-            .context("Failed to create models directory")?;
+        std::fs::create_dir_all(target_dir).context("Failed to create models directory")?;
 
         eprintln!(
             "{} Downloading {} ({})",
@@ -78,8 +77,7 @@ impl ModelsCatalog {
         );
         pb.set_message("Downloading model…");
 
-        let mut out = std::fs::File::create(&target_path)
-            .context("Failed to create model file")?;
+        let mut out = std::fs::File::create(&target_path).context("Failed to create model file")?;
         let mut downloaded: u64 = 0;
         let mut buf = [0u8; 65536];
         let mut reader = resp.into_body().into_reader();
@@ -106,7 +104,11 @@ impl ModelsCatalog {
             let actual_sha = crate::utils::compute_file_checksum(&target_path)?;
             if &actual_sha != expected_sha {
                 std::fs::remove_file(&target_path).ok();
-                anyhow::bail!("SHA-256 mismatch: expected {}, got {}", expected_sha, actual_sha);
+                anyhow::bail!(
+                    "SHA-256 mismatch: expected {}, got {}",
+                    expected_sha,
+                    actual_sha
+                );
             }
             eprintln!("  ✓ Checksum verified");
         }
@@ -119,8 +121,17 @@ pub fn download_model(entry: &ModelEntry, target_dir: &Path) -> Result<PathBuf> 
     ModelsCatalog::download(entry, target_dir)
 }
 
-pub fn apply_model_to_config(model_path: &Path, entry: &ModelEntry, config: &mut config::Config) -> Result<()> {
-    apply_model_to_config_with_path(model_path, entry, config, std::path::Path::new("config.json"))
+pub fn apply_model_to_config(
+    model_path: &Path,
+    entry: &ModelEntry,
+    config: &mut config::Config,
+) -> Result<()> {
+    apply_model_to_config_with_path(
+        model_path,
+        entry,
+        config,
+        std::path::Path::new("config.json"),
+    )
 }
 
 pub fn apply_model_to_config_with_path(

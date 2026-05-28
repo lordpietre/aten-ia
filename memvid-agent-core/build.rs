@@ -1,8 +1,74 @@
 use std::env;
 use std::path::PathBuf;
+use std::process::Command;
 
-fn main() {
-    // Build llama-cpp-turboquant with CMake
+fn repo_slug() -> String {
+    if let Ok(val) = env::var("LLAMA_LIBS_REPO") {
+        return val;
+    }
+    if let Ok(val) = env::var("CARGO_PKG_REPOSITORY") {
+        if let Some(slug) = val.strip_prefix("https://github.com/") {
+            return slug.trim_end_matches(".git").to_string();
+        }
+    }
+    "lordpietre/aten-ia".to_string()
+}
+
+fn download_prebuilt(out_dir: &PathBuf) -> bool {
+    let target = match env::var("TARGET") {
+        Ok(t) => t,
+        Err(_) => return false,
+    };
+
+    let url = format!(
+        "https://github.com/{}/releases/latest/download/llama-libs-{}.tar.gz",
+        repo_slug(),
+        target
+    );
+
+    let tarball = out_dir.join("llama-libs.tar.gz");
+
+    let tarball_str = tarball.to_string_lossy();
+
+    let fetched = Command::new("curl")
+        .args(["-fL", "-o", &tarball_str, &url])
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+        || Command::new("wget")
+            .args(["-qO", &tarball_str, &url])
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false);
+
+    if !fetched {
+        let _ = std::fs::remove_file(&tarball);
+        return false;
+    }
+
+    let status = Command::new("tar")
+        .arg("-xzf")
+        .arg(&tarball)
+        .arg("-C")
+        .arg(out_dir)
+        .status();
+
+    match status {
+        Ok(s) if s.success() => {
+            let _ = std::fs::remove_file(&tarball);
+            true
+        }
+        _ => {
+            let _ = std::fs::remove_file(&tarball);
+            false
+        }
+    }
+}
+
+fn cmake_build() -> PathBuf {
+    // Limit to 1 job to avoid OOM on low-RAM machines
+    unsafe { std::env::set_var("CMAKE_BUILD_PARALLEL_LEVEL", "1") };
+
     let dst = cmake::Config::new("llama-cpp-turboquant")
         .define("LLAMA_BUILD_TOOLS", "OFF")
         .define("LLAMA_BUILD_EXAMPLES", "OFF")
@@ -14,10 +80,19 @@ fn main() {
         .define("GGML_VULKAN", "OFF")
         .profile("Release")
         .build();
+    dst.join("lib")
+}
 
-    let lib_dir = dst.join("lib");
+fn main() {
+    let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
 
-    // Link to llama + ggml static libraries
+    let lib_dir = if download_prebuilt(&out_dir) {
+        println!("cargo:warning=using prebuilt llama libs");
+        out_dir.clone()
+    } else {
+        cmake_build()
+    };
+
     println!("cargo:rustc-link-search=native={}", lib_dir.display());
     println!("cargo:rustc-link-lib=static=llama");
     println!("cargo:rustc-link-lib=static=llama-common");
@@ -25,14 +100,12 @@ fn main() {
     println!("cargo:rustc-link-lib=static=ggml");
     println!("cargo:rustc-link-lib=static=ggml-base");
 
-    // Link system dependencies needed by llama.cpp
     println!("cargo:rustc-link-lib=stdc++");
     println!("cargo:rustc-link-lib=pthread");
     println!("cargo:rustc-link-lib=m");
     println!("cargo:rustc-link-lib=dl");
     println!("cargo:rustc-link-lib=gomp");
 
-    // Generate Rust FFI bindings from llama.h
     let bindings = bindgen::Builder::default()
         .header("wrapper.h")
         .clang_arg("-I./llama-cpp-turboquant/include")
@@ -47,13 +120,11 @@ fn main() {
         .generate()
         .expect("Unable to generate bindings");
 
-    let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
-    let ffi_path = out_path.join("llama_ffi_raw.rs");
+    let ffi_path = out_dir.join("llama_ffi_raw.rs");
     bindings
         .write_to_file(&ffi_path)
         .expect("Couldn't write bindings!");
 
-    // Patch: add `unsafe` before `extern "C"` blocks (needed for Rust 2024 edition)
     let content = std::fs::read_to_string(&ffi_path).expect("Failed to read bindings");
     let content = content.replace("extern \"C\" {", "unsafe extern \"C\" {");
     std::fs::write(&ffi_path, content).expect("Failed to write patched bindings");

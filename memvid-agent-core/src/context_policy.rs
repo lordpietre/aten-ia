@@ -135,14 +135,16 @@ mod tests {
         msgs.push(msg(MessageRole::Assistant, "resp2"));
         msgs.push(msg(MessageRole::User, "newest"));
         let result = policy.trim_messages("dev prompt", &msgs, "current", count_chars);
-        let positions: Vec<usize> = msgs.iter()
+        let positions: Vec<usize> = msgs
+            .iter()
             .filter(|m| result.iter().any(|r| r.content == m.content))
-            .map(|m| {
-                msgs.iter().position(|x| x.content == m.content).unwrap()
-            })
+            .map(|m| msgs.iter().position(|x| x.content == m.content).unwrap())
             .collect();
         if positions.len() >= 2 {
-            assert!(positions.windows(2).all(|w| w[0] <= w[1]), "preserves original order");
+            assert!(
+                positions.windows(2).all(|w| w[0] <= w[1]),
+                "preserves original order"
+            );
         }
     }
 
@@ -150,12 +152,7 @@ mod tests {
     fn returns_empty_when_system_exceeds_budget() {
         let policy = ContextPolicy::new(64, 32);
         let msgs = vec![msg(MessageRole::User, "hi")];
-        let result = policy.trim_messages(
-            &"a".repeat(200),
-            &msgs,
-            "hello",
-            |s| s.len() / 4,
-        );
+        let result = policy.trim_messages(&"a".repeat(200), &msgs, "hello", |s| s.len() / 4);
         assert!(result.is_empty() || result.iter().all(|m| m.role == MessageRole::System));
     }
 
@@ -225,10 +222,16 @@ mod tests {
             msg(MessageRole::User, "user2"),
         ];
         let result = policy.trim_messages("dev", &msgs, "input", |s| s.len() / 4);
-        let system_positions: Vec<_> = result.iter().enumerate()
+        let system_positions: Vec<_> = result
+            .iter()
+            .enumerate()
             .filter(|(_, m)| m.role == MessageRole::System)
             .map(|(i, _)| i)
             .collect();
-        assert_eq!(system_positions, vec![0, 1], "system messages should come first in original order");
+        assert_eq!(
+            system_positions,
+            vec![0, 1],
+            "system messages should come first in original order"
+        );
     }
 }

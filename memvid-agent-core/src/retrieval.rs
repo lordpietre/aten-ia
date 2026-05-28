@@ -48,9 +48,7 @@ impl KnowledgeIndex {
         }
 
         let query_lower = query.to_lowercase();
-        let query_words: Vec<&str> = query_lower
-            .split_whitespace()
-            .collect();
+        let query_words: Vec<&str> = query_lower.split_whitespace().collect();
 
         if query_words.is_empty() {
             return Vec::new();
@@ -65,11 +63,14 @@ impl KnowledgeIndex {
                 let source_lower = entry.source.to_lowercase();
                 let id_lower = entry.id.to_lowercase();
 
-                let matches: usize = query_words.iter().map(|w| {
-                    content_lower.matches(w).count()
-                        + source_lower.matches(w).count()
-                        + id_lower.matches(w).count()
-                }).sum();
+                let matches: usize = query_words
+                    .iter()
+                    .map(|w| {
+                        content_lower.matches(w).count()
+                            + source_lower.matches(w).count()
+                            + id_lower.matches(w).count()
+                    })
+                    .sum();
 
                 (matches * 10000 + i, entry)
             })
@@ -128,10 +129,9 @@ impl KnowledgeIndex {
         let mut out = std::fs::File::create(&temp_path)
             .context("Failed to create temp file for knowledge_index.jsonl")?;
         for entry in &self.entries {
-            let line = serde_json::to_string(entry)
-                .context("Failed to serialize knowledge entry")?;
-            writeln!(out, "{}", line)
-                .context("Failed to write to knowledge_index.jsonl")?;
+            let line =
+                serde_json::to_string(entry).context("Failed to serialize knowledge entry")?;
+            writeln!(out, "{}", line).context("Failed to write to knowledge_index.jsonl")?;
         }
         out.sync_all()
             .context("Failed to fsync knowledge_index.jsonl")?;
@@ -158,19 +158,16 @@ impl KnowledgeIndex {
             .append(true)
             .open(&self.jsonl_path)
             .context("Failed to open knowledge_index.jsonl for append")?;
-        let line = serde_json::to_string(entry)
-            .context("Failed to serialize knowledge entry")?;
+        let line = serde_json::to_string(entry).context("Failed to serialize knowledge entry")?;
         use std::io::Write;
-        writeln!(file, "{}", line)
-            .context("Failed to write to knowledge_index.jsonl")?;
+        writeln!(file, "{}", line).context("Failed to write to knowledge_index.jsonl")?;
         file.sync_all()
             .context("Failed to fsync knowledge_index.jsonl")?;
         Ok(())
     }
 
     fn load_jsonl(path: &Path) -> Result<Vec<KnowledgeEntry>> {
-        let file = std::fs::File::open(path)
-            .context("Failed to open knowledge_index.jsonl")?;
+        let file = std::fs::File::open(path).context("Failed to open knowledge_index.jsonl")?;
         let reader = BufReader::new(file);
         let mut entries = Vec::new();
 
@@ -201,10 +198,9 @@ impl KnowledgeIndex {
         let jsonl_path = data_dir.join(JSONL_FILENAME);
 
         let manifest: Manifest = if manifest_path.exists() {
-            let content = std::fs::read_to_string(&manifest_path)
-                .context("Failed to read manifest.json")?;
-            serde_json::from_str(&content)
-                .context("Failed to parse manifest.json")?
+            let content =
+                std::fs::read_to_string(&manifest_path).context("Failed to read manifest.json")?;
+            serde_json::from_str(&content).context("Failed to parse manifest.json")?
         } else {
             return Self::load(data_dir);
         };
@@ -284,8 +280,15 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let mut index = KnowledgeIndex::load(dir.path()).unwrap();
 
-        index.add_entry(make_entry("python", "Python is a programming language for general purpose")).unwrap();
-        index.add_entry(make_entry("rust", "Rust is a systems programming language")).unwrap();
+        index
+            .add_entry(make_entry(
+                "python",
+                "Python is a programming language for general purpose",
+            ))
+            .unwrap();
+        index
+            .add_entry(make_entry("rust", "Rust is a systems programming language"))
+            .unwrap();
 
         assert_eq!(index.len(), 2);
 
@@ -299,9 +302,18 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let mut index = KnowledgeIndex::load(dir.path()).unwrap();
 
-        index.add_entry(make_entry("python", "Python is great for data science")).unwrap();
-        index.add_entry(make_entry("python_async", "Python async programming with asyncio")).unwrap();
-        index.add_entry(make_entry("rust", "Rust is great for systems")).unwrap();
+        index
+            .add_entry(make_entry("python", "Python is great for data science"))
+            .unwrap();
+        index
+            .add_entry(make_entry(
+                "python_async",
+                "Python async programming with asyncio",
+            ))
+            .unwrap();
+        index
+            .add_entry(make_entry("rust", "Rust is great for systems"))
+            .unwrap();
 
         let results = index.search("python", 5);
         assert_eq!(results.len(), 2);
@@ -314,7 +326,12 @@ mod tests {
         let mut index = KnowledgeIndex::load(dir.path()).unwrap();
 
         for i in 0..10 {
-            index.add_entry(make_entry(&format!("src_{}", i), &format!("content about item {}", i))).unwrap();
+            index
+                .add_entry(make_entry(
+                    &format!("src_{}", i),
+                    &format!("content about item {}", i),
+                ))
+                .unwrap();
         }
 
         let results = index.search("content", 3);
@@ -334,7 +351,9 @@ mod tests {
     fn no_match_returns_empty() {
         let dir = tempfile::tempdir().unwrap();
         let mut index = KnowledgeIndex::load(dir.path()).unwrap();
-        index.add_entry(make_entry("python", "Python is fun")).unwrap();
+        index
+            .add_entry(make_entry("python", "Python is fun"))
+            .unwrap();
         let results = index.search("rust", 5);
         assert!(results.is_empty());
     }
@@ -344,7 +363,9 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         {
             let mut index = KnowledgeIndex::load(dir.path()).unwrap();
-            index.add_entry(make_entry("persist", "test persistence")).unwrap();
+            index
+                .add_entry(make_entry("persist", "test persistence"))
+                .unwrap();
         }
         {
             let index = KnowledgeIndex::load(dir.path()).unwrap();
@@ -412,11 +433,13 @@ mod tests {
     fn add_entries_multiple() {
         let dir = tempfile::tempdir().unwrap();
         let mut index = KnowledgeIndex::load(dir.path()).unwrap();
-        index.add_entries(&[
-            make_entry("a", "alpha"),
-            make_entry("b", "beta"),
-            make_entry("c", "gamma"),
-        ]).unwrap();
+        index
+            .add_entries(&[
+                make_entry("a", "alpha"),
+                make_entry("b", "beta"),
+                make_entry("c", "gamma"),
+            ])
+            .unwrap();
         assert_eq!(index.len(), 3);
     }
 
@@ -424,7 +447,9 @@ mod tests {
     fn search_special_chars() {
         let dir = tempfile::tempdir().unwrap();
         let mut index = KnowledgeIndex::load(dir.path()).unwrap();
-        index.add_entry(make_entry("test", "hello (world) [test] {foo} &bar$")).unwrap();
+        index
+            .add_entry(make_entry("test", "hello (world) [test] {foo} &bar$"))
+            .unwrap();
         let results = index.search("world", 5);
         assert_eq!(results.len(), 1);
         let results = index.search("(world)", 5);
@@ -455,7 +480,9 @@ mod tests {
     fn search_scoring_by_match_count() {
         let dir = tempfile::tempdir().unwrap();
         let mut index = KnowledgeIndex::load(dir.path()).unwrap();
-        index.add_entry(make_entry("a", "python python python")).unwrap();
+        index
+            .add_entry(make_entry("a", "python python python"))
+            .unwrap();
         index.add_entry(make_entry("b", "python is fun")).unwrap();
         let results = index.search("python", 5);
         assert_eq!(results.len(), 2);

@@ -24,15 +24,15 @@ impl BooksCatalog {
     /// Fetch and parse the languages books catalog from GitHub
     pub fn fetch() -> Result<Self> {
         eprintln!("📚 Fetching free programming books catalog...");
-        let response = ureq::get(BOOKS_LANGS_URL).call().context("Failed to fetch books catalog")?;
+        let response = ureq::get(BOOKS_LANGS_URL)
+            .call()
+            .context("Failed to fetch books catalog")?;
         let content = response.into_body().read_to_string()?;
         let languages = Self::parse_markdown(&content)?;
-        
+
         eprintln!("✓ Loaded {} programming languages", languages.len());
-        
-        Ok(Self {
-            languages,
-        })
+
+        Ok(Self { languages })
     }
 
     /// Parse the markdown content and extract languages and books
@@ -60,7 +60,10 @@ impl BooksCatalog {
                     .unwrap_or("")
                     .to_string();
 
-                if !language.is_empty() && !language.contains("Index") && !language.contains("BY PROGRAMMING") {
+                if !language.is_empty()
+                    && !language.contains("Index")
+                    && !language.contains("BY PROGRAMMING")
+                {
                     current_language = Some(language);
                 }
             }
@@ -88,11 +91,11 @@ impl BooksCatalog {
     /// Parse a single resource line: * [Title](url) - Description (Format)
     fn parse_resource_line(line: &str) -> Option<BookResource> {
         let line = line.trim_start_matches("* ").trim();
-        
+
         // Extract title and URL from [Title](url)
         let title_end = line.find("](")? + 1;
         let title = line[1..title_end - 1].to_string();
-        
+
         let url_start = title_end + 1;
         let url_end = line[url_start..].find(')')?;
         let url = line[url_start..url_start + url_end].to_string();
@@ -134,8 +137,12 @@ impl BooksCatalog {
     }
 
     /// Get books grouped by format for a language
-    pub fn get_books_by_format(&self, language: &str) -> Result<HashMap<String, Vec<BookResource>>> {
-        let books = self.get_language_books(language)
+    pub fn get_books_by_format(
+        &self,
+        language: &str,
+    ) -> Result<HashMap<String, Vec<BookResource>>> {
+        let books = self
+            .get_language_books(language)
             .context(format!("Language '{}' not found", language))?;
 
         let mut by_format = HashMap::new();
@@ -304,11 +311,13 @@ mod tests {
     fn test_prepare_knowledge_with_limit() {
         let books = LanguageBooks {
             language: "Rust".to_string(),
-            resources: (0..5).map(|i| BookResource {
-                title: format!("Book {}", i),
-                url: format!("https://example.com/{}", i),
-                format: "PDF".to_string(),
-            }).collect(),
+            resources: (0..5)
+                .map(|i| BookResource {
+                    title: format!("Book {}", i),
+                    url: format!("https://example.com/{}", i),
+                    format: "PDF".to_string(),
+                })
+                .collect(),
         };
 
         let knowledge = prepare_knowledge_from_books(&books, 3);

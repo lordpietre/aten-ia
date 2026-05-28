@@ -110,9 +110,7 @@ fn chunk_by_paragraphs(text: &str, options: &ChunkOptions, source: &str) -> Vec<
             chunk_idx += 1;
 
             let words: Vec<&str> = current.split_whitespace().collect();
-            let overlap_words = words
-                .len()
-                .saturating_sub(options.overlap.max(50));
+            let overlap_words = words.len().saturating_sub(options.overlap.max(50));
             if overlap_words > 0 && overlap_words < words.len() {
                 current = words[overlap_words..].join(" ");
                 current.push('\n');
@@ -369,7 +367,11 @@ mod tests {
     #[test]
     fn chunk_fixed_exact_size() {
         let text = "ABCDE";
-        let opts = ChunkOptions { max_size: 5, overlap: 0, strategy: ChunkStrategy::Fixed };
+        let opts = ChunkOptions {
+            max_size: 5,
+            overlap: 0,
+            strategy: ChunkStrategy::Fixed,
+        };
         let chunks = chunk_text(text, &opts, "fixed");
         assert_eq!(chunks.len(), 1);
         assert_eq!(chunks[0].content, "ABCDE");
@@ -378,7 +380,11 @@ mod tests {
     #[test]
     fn chunk_fixed_exact_size_plus_one() {
         let text = "ABCDEF";
-        let opts = ChunkOptions { max_size: 5, overlap: 0, strategy: ChunkStrategy::Fixed };
+        let opts = ChunkOptions {
+            max_size: 5,
+            overlap: 0,
+            strategy: ChunkStrategy::Fixed,
+        };
         let chunks = chunk_text(text, &opts, "fixed");
         assert_eq!(chunks.len(), 2);
         assert_eq!(chunks[0].content, "ABCDE");
@@ -388,7 +394,11 @@ mod tests {
     #[test]
     fn chunk_fixed_overlap_equals_max_size() {
         let text = "ABCDEFGHIJ";
-        let opts = ChunkOptions { max_size: 5, overlap: 5, strategy: ChunkStrategy::Fixed };
+        let opts = ChunkOptions {
+            max_size: 5,
+            overlap: 5,
+            strategy: ChunkStrategy::Fixed,
+        };
         let chunks = chunk_text(text, &opts, "fixed");
         assert_eq!(chunks.len(), 6);
     }
@@ -396,7 +406,11 @@ mod tests {
     #[test]
     fn chunk_fixed_overlap_zero() {
         let text = "ABCDEFGHIJ";
-        let opts = ChunkOptions { max_size: 3, overlap: 0, strategy: ChunkStrategy::Fixed };
+        let opts = ChunkOptions {
+            max_size: 3,
+            overlap: 0,
+            strategy: ChunkStrategy::Fixed,
+        };
         let chunks = chunk_text(text, &opts, "fixed");
         assert_eq!(chunks.len(), 4); // "ABC", "DEF", "GHI", "J"
     }
@@ -428,14 +442,22 @@ mod tests {
     #[test]
     fn chunk_and_deduplicate_all_unique() {
         let text = "hello\nworld\nfoo";
-        let opts = ChunkOptions { max_size: 5, overlap: 0, strategy: ChunkStrategy::Paragraph };
+        let opts = ChunkOptions {
+            max_size: 5,
+            overlap: 0,
+            strategy: ChunkStrategy::Paragraph,
+        };
         let chunks = chunk_and_deduplicate(text, &opts, "dedup");
         assert_eq!(chunks.len(), 3);
     }
 
     #[test]
     fn chunk_and_deduplicate_empty_input() {
-        let opts = ChunkOptions { max_size: 5, overlap: 0, strategy: ChunkStrategy::Paragraph };
+        let opts = ChunkOptions {
+            max_size: 5,
+            overlap: 0,
+            strategy: ChunkStrategy::Paragraph,
+        };
         let chunks = chunk_and_deduplicate("", &opts, "dedup");
         assert!(chunks.is_empty());
     }
@@ -443,7 +465,11 @@ mod tests {
     #[test]
     fn chunk_unicode_text() {
         let text = "ñoño y café";
-        let opts = ChunkOptions { max_size: 50, overlap: 5, strategy: ChunkStrategy::Fixed };
+        let opts = ChunkOptions {
+            max_size: 50,
+            overlap: 5,
+            strategy: ChunkStrategy::Fixed,
+        };
         let chunks = chunk_text(text, &opts, "unicode");
         assert_eq!(chunks.len(), 1);
         assert!(chunks[0].content.contains("ñoño"));
@@ -451,7 +477,11 @@ mod tests {
 
     #[test]
     fn chunk_whitespace_only() {
-        let opts = ChunkOptions { max_size: 50, overlap: 5, strategy: ChunkStrategy::Paragraph };
+        let opts = ChunkOptions {
+            max_size: 50,
+            overlap: 5,
+            strategy: ChunkStrategy::Paragraph,
+        };
         let chunks = chunk_text("   \n  \n  ", &opts, "ws");
         assert!(chunks.is_empty() || chunks.iter().all(|c| c.content.trim().is_empty()));
     }

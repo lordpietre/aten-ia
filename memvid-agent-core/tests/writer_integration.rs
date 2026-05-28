@@ -49,7 +49,9 @@ fn full_writer_cycle() -> Result<()> {
     });
 
     // 3. Write via memvid-core directly (same pattern as MemvidWriter::flush)
-    let segment_path = data_dir.join("conversations").join("conv_integration_001.mv2");
+    let segment_path = data_dir
+        .join("conversations")
+        .join("conv_integration_001.mv2");
     let temp_path = segment_path.with_extension("tmp");
 
     {

@@ -3,10 +3,9 @@ use anyhow::{Context, Result};
 use std::path::Path;
 
 pub fn load_manifest<P: AsRef<Path>>(path: P) -> Result<Manifest> {
-    let content = std::fs::read_to_string(path.as_ref())
-        .context("Failed to read manifest.json")?;
-    let manifest: Manifest = serde_json::from_str(&content)
-        .context("Failed to parse manifest.json")?;
+    let content = std::fs::read_to_string(path.as_ref()).context("Failed to read manifest.json")?;
+    let manifest: Manifest =
+        serde_json::from_str(&content).context("Failed to parse manifest.json")?;
     Ok(manifest)
 }
 
@@ -46,18 +45,12 @@ pub fn create_initial_manifest(core_segment: &str) -> Manifest {
     }
 }
 
-pub fn append_conversation_to_manifest(
-    manifest: &mut Manifest,
-    entry: SegmentEntry,
-) {
+pub fn append_conversation_to_manifest(manifest: &mut Manifest, entry: SegmentEntry) {
     manifest.conversation_segments.push(entry);
     manifest.updated_at = chrono::Utc::now();
 }
 
-pub fn append_knowledge_to_manifest(
-    manifest: &mut Manifest,
-    entry: SegmentEntry,
-) {
+pub fn append_knowledge_to_manifest(manifest: &mut Manifest, entry: SegmentEntry) {
     manifest.knowledge_segments.push(entry);
     manifest.updated_at = chrono::Utc::now();
 }

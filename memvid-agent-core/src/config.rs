@@ -121,8 +121,8 @@ impl Config {
         let mut config = if config_path.exists() {
             let content = std::fs::read_to_string(config_path)
                 .with_context(|| format!("Failed to read {}", config_path.display()))?;
-            let cfg: Config = serde_json::from_str(&content)
-                .context("Failed to parse config.json")?;
+            let cfg: Config =
+                serde_json::from_str(&content).context("Failed to parse config.json")?;
             cfg
         } else {
             let cfg = Self::default();
@@ -139,8 +139,14 @@ impl Config {
 
     pub fn validate(&self) -> Result<()> {
         anyhow::ensure!(self.model.n_ctx > 0, "model.n_ctx must be > 0");
-        anyhow::ensure!(self.generation.max_tokens > 0, "generation.max_tokens must be > 0");
-        anyhow::ensure!(self.generation.temp >= 0.0, "generation.temp must be >= 0.0");
+        anyhow::ensure!(
+            self.generation.max_tokens > 0,
+            "generation.max_tokens must be > 0"
+        );
+        anyhow::ensure!(
+            self.generation.temp >= 0.0,
+            "generation.temp must be >= 0.0"
+        );
         anyhow::ensure!(self.api.port > 0, "api.port must be > 0");
         Ok(())
     }
@@ -163,8 +169,12 @@ impl Config {
     }
 
     fn ensure_data_dir(&self) -> Result<()> {
-        std::fs::create_dir_all(&self.data_dir)
-            .with_context(|| format!("Failed to create data directory: {}", self.data_dir.display()))?;
+        std::fs::create_dir_all(&self.data_dir).with_context(|| {
+            format!(
+                "Failed to create data directory: {}",
+                self.data_dir.display()
+            )
+        })?;
         Ok(())
     }
 }
@@ -198,7 +208,10 @@ mod tests {
         let deserialized: Config = serde_json::from_str(&json).unwrap();
         assert_eq!(deserialized.model.path, cfg.model.path);
         assert_eq!(deserialized.model.n_ctx, cfg.model.n_ctx);
-        assert_eq!(deserialized.generation.max_tokens, cfg.generation.max_tokens);
+        assert_eq!(
+            deserialized.generation.max_tokens,
+            cfg.generation.max_tokens
+        );
     }
 
     #[test]
@@ -242,11 +255,17 @@ mod tests {
 
     fn with_env_var(key: &str, val: &str, f: impl FnOnce()) {
         let old = std::env::var(key).ok();
-        unsafe { std::env::set_var(key, val); }
+        unsafe {
+            std::env::set_var(key, val);
+        }
         f();
         match old {
-            Some(v) => unsafe { std::env::set_var(key, v); },
-            None => unsafe { std::env::remove_var(key); },
+            Some(v) => unsafe {
+                std::env::set_var(key, v);
+            },
+            None => unsafe {
+                std::env::remove_var(key);
+            },
         }
     }
 
@@ -283,7 +302,10 @@ mod tests {
         with_env_var("MODEL_URL", "https://example.com/model.gguf", || {
             let mut cfg = Config::default();
             cfg.apply_env_overrides();
-            assert_eq!(cfg.model.download_url, Some("https://example.com/model.gguf".to_string()));
+            assert_eq!(
+                cfg.model.download_url,
+                Some("https://example.com/model.gguf".to_string())
+            );
         });
     }
 
@@ -318,7 +340,9 @@ mod tests {
 
     #[test]
     fn mark_installed_adds_key() {
-        let mut lang = LanguagesConfig { installed: Vec::new() };
+        let mut lang = LanguagesConfig {
+            installed: Vec::new(),
+        };
         lang.mark_installed("rust");
         assert_eq!(lang.installed.len(), 1);
         assert!(lang.installed.contains(&"rust".to_string()));
@@ -326,14 +350,18 @@ mod tests {
 
     #[test]
     fn mark_installed_idempotent() {
-        let mut lang = LanguagesConfig { installed: vec!["rust".to_string()] };
+        let mut lang = LanguagesConfig {
+            installed: vec!["rust".to_string()],
+        };
         lang.mark_installed("rust");
         assert_eq!(lang.installed.len(), 1);
     }
 
     #[test]
     fn mark_installed_empty_key() {
-        let mut lang = LanguagesConfig { installed: Vec::new() };
+        let mut lang = LanguagesConfig {
+            installed: Vec::new(),
+        };
         lang.mark_installed("");
         assert_eq!(lang.installed.len(), 1);
         assert!(lang.installed.contains(&"".to_string()));

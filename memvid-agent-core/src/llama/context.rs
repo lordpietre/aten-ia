@@ -20,23 +20,26 @@ pub struct LlamaContext {
 unsafe impl Send for LlamaContext {}
 
 impl LlamaContext {
-    pub fn init(model_path: &str, n_ctx: u32, n_gpu_layers: u32, top_k: i32, top_p: f32, temp: f32) -> Result<Self> {
+    pub fn init(
+        model_path: &str,
+        n_ctx: u32,
+        n_gpu_layers: u32,
+        top_k: i32,
+        top_p: f32,
+        temp: f32,
+    ) -> Result<Self> {
         unsafe {
             let prev = BACKEND_REFCOUNT.fetch_add(1, Ordering::SeqCst);
             if prev == 0 {
                 llama_backend_init();
             }
 
-            let model_path_c = CString::new(model_path)
-                .context("Invalid model path")?;
+            let model_path_c = CString::new(model_path).context("Invalid model path")?;
 
             let mut model_params = llama_model_default_params();
             model_params.n_gpu_layers = n_gpu_layers as i32;
 
-            let model = llama_model_load_from_file(
-                model_path_c.as_ptr(),
-                model_params,
-            );
+            let model = llama_model_load_from_file(model_path_c.as_ptr(), model_params);
             if model.is_null() {
                 anyhow::bail!("Failed to load model from {}", model_path);
             }
@@ -53,7 +56,8 @@ impl LlamaContext {
                 llama_model_free(model);
                 anyhow::bail!(
                     "Model has empty vocab (n_tokens={}, type={})",
-                    n_vocab, vocab_type
+                    n_vocab,
+                    vocab_type
                 );
             }
 
@@ -109,7 +113,8 @@ impl LlamaContext {
                 if n_tokens <= 0 {
                     anyhow::bail!(
                         "llama_tokenize retry failed: returned {} for '{}'",
-                        n_tokens, text
+                        n_tokens,
+                        text
                     );
                 }
                 tokens.truncate(n_tokens as usize);
@@ -184,7 +189,8 @@ impl LlamaContext {
 
     pub fn generate(&mut self, prompt: &str, max_tokens: u32) -> Result<String> {
         self.clear_memory();
-        let mut tokens = self.tokenize(prompt, false)
+        let mut tokens = self
+            .tokenize(prompt, false)
             .context("Failed to tokenize prompt")?;
         self.decode(&mut tokens)
             .context("Failed to decode prompt")?;
@@ -192,12 +198,14 @@ impl LlamaContext {
         let mut output = String::new();
 
         for i in 0..max_tokens {
-            let token = self.sample(self.top_k, self.top_p, self.temp)
+            let token = self
+                .sample(self.top_k, self.top_p, self.temp)
                 .context(format!("Failed to sample token at position {}", i))?;
             if self.is_eog(token) {
                 break;
             }
-            let piece = self.detokenize(token)
+            let piece = self
+                .detokenize(token)
                 .context(format!("Failed to detokenize token at position {}", i))?;
             output.push_str(&piece);
 

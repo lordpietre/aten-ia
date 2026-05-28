@@ -1,3 +1,4 @@
+use crate::books_catalog::{BooksCatalog, prepare_knowledge_from_books};
 use crate::chunker;
 use crate::config::Config;
 use crate::context_policy::ContextPolicy;
@@ -7,12 +8,14 @@ use crate::memvid::writer::MemvidWriter;
 use crate::prompt::{ChatTemplate, DEFAULT_DEVELOPER_PROMPT, PromptBuilder};
 use crate::retrieval::KnowledgeIndex;
 use crate::session::Session;
-use crate::types::{ChunkOptions, ChunkStrategy, FetchedContent, IngestionConfig, KnowledgeEntry, Message, MessageRole, WriterConfig};
+use crate::types::{
+    ChunkOptions, ChunkStrategy, FetchedContent, IngestionConfig, KnowledgeEntry, Message,
+    MessageRole, WriterConfig,
+};
 use crate::web_fetcher::WebFetcher;
 use anyhow::Result;
 use chrono::Utc;
 use uuid::Uuid;
-use crate::books_catalog::{BooksCatalog, prepare_knowledge_from_books};
 
 #[derive(Debug, Default)]
 pub struct BatchResult {
@@ -51,7 +54,9 @@ impl Agent {
         let template = ChatTemplate::from_str(&config.model.chat_template);
         let mut prompt_builder = PromptBuilder::new(template);
         if config.developer_mode {
-            let dev_prompt = config.developer_prompt.clone()
+            let dev_prompt = config
+                .developer_prompt
+                .clone()
                 .unwrap_or_else(|| DEFAULT_DEVELOPER_PROMPT.to_string());
             prompt_builder = prompt_builder.with_developer_prompt(dev_prompt);
         } else {
@@ -120,7 +125,8 @@ impl Agent {
         });
 
         if self.session.interaction_count() % 5 == 0 {
-            self.session.flush(&self.llm, &self.model_name, &mut self.memory)?;
+            self.session
+                .flush(&self.llm, &self.model_name, &mut self.memory)?;
         }
 
         Ok(result.response)
@@ -150,7 +156,10 @@ impl Agent {
         Ok(())
     }
 
-    pub fn ingest_file(&mut self, path: &std::path::Path) -> Result<crate::extractor::ExtractedFile> {
+    pub fn ingest_file(
+        &mut self,
+        path: &std::path::Path,
+    ) -> Result<crate::extractor::ExtractedFile> {
         let extracted = crate::extractor::extract_file(path)?;
         let source = path.file_name().unwrap_or_default().to_string_lossy();
 
@@ -244,7 +253,11 @@ impl Agent {
             match self.fetch_and_ingest(url, ingestion) {
                 Ok(content) => {
                     results.success.push(url.clone());
-                    results.total_chunks += content.content.len().saturating_div(ingestion.chunk_max_size).max(1) as u32;
+                    results.total_chunks += content
+                        .content
+                        .len()
+                        .saturating_div(ingestion.chunk_max_size)
+                        .max(1) as u32;
                 }
                 Err(e) => {
                     results.failures.push((url.clone(), format!("{:#}", e)));
@@ -254,7 +267,12 @@ impl Agent {
         Ok(results)
     }
 
-    pub fn store_knowledge_chunked(&mut self, source: &str, content: &str, chunk_opts: &ChunkOptions) -> Result<Vec<String>> {
+    pub fn store_knowledge_chunked(
+        &mut self,
+        source: &str,
+        content: &str,
+        chunk_opts: &ChunkOptions,
+    ) -> Result<Vec<String>> {
         let chunks = chunker::chunk_text(content, chunk_opts, source);
         let mut ids = Vec::with_capacity(chunks.len());
         for chunk in &chunks {
@@ -297,9 +315,9 @@ impl Agent {
     /// Returns the number of resources included in the ingested knowledge snippet.
     pub fn download_and_ingest_books(&mut self, language: &str, limit: usize) -> Result<usize> {
         let catalog = BooksCatalog::fetch()?;
-        let books = catalog
-            .get_language_books(language)
-            .ok_or_else(|| anyhow::anyhow!(format!("Language '{}' not found in catalog", language)))?;
+        let books = catalog.get_language_books(language).ok_or_else(|| {
+            anyhow::anyhow!(format!("Language '{}' not found in catalog", language))
+        })?;
 
         let knowledge = prepare_knowledge_from_books(&books, limit);
         let source = format!("free-programming-books:{}", language);
@@ -314,7 +332,17 @@ impl Agent {
         Ok(())
     }
 
-    pub fn switch_model(&mut self, path: &str, n_ctx: u32, n_gpu_layers: u32, model_name: &str, chat_template: &str, top_k: i32, top_p: f32, temp: f32) -> Result<()> {
+    pub fn switch_model(
+        &mut self,
+        path: &str,
+        n_ctx: u32,
+        n_gpu_layers: u32,
+        model_name: &str,
+        chat_template: &str,
+        top_k: i32,
+        top_p: f32,
+        temp: f32,
+    ) -> Result<()> {
         let new_llm = LlamaContext::init(path, n_ctx, n_gpu_layers, top_k, top_p, temp)?;
         self.llm = new_llm;
         self.model_name = model_name.to_string();
@@ -355,10 +383,17 @@ impl Agent {
         let m = &self.memory.playlist.manifest;
         let conv_count = m.conversation_segments.len();
         let know_count = m.knowledge_segments.len();
-        let total_chats: u32 = m.conversation_segments.iter().map(|s| s.message_count).sum();
+        let total_chats: u32 = m
+            .conversation_segments
+            .iter()
+            .map(|s| s.message_count)
+            .sum();
         Ok(format!(
             "{} conversations stored ({} segments), {} knowledge entries ({} indexed)",
-            total_chats, conv_count, know_count, self.knowledge_index.len()
+            total_chats,
+            conv_count,
+            know_count,
+            self.knowledge_index.len()
         ))
     }
 
@@ -421,7 +456,10 @@ impl Agent {
 impl Drop for Agent {
     fn drop(&mut self) {
         if self.llm.is_valid() {
-            if let Err(e) = self.session.flush(&self.llm, &self.model_name, &mut self.memory) {
+            if let Err(e) = self
+                .session
+                .flush(&self.llm, &self.model_name, &mut self.memory)
+            {
                 tracing::warn!("Failed to flush session on drop: {}", e);
             }
         }
@@ -461,7 +499,9 @@ mod tests {
         let mut agent = test_agent(dir.path());
         assert_eq!(agent.knowledge_count(), 0);
 
-        agent.store_knowledge_direct("test-source", "test content").unwrap();
+        agent
+            .store_knowledge_direct("test-source", "test content")
+            .unwrap();
         assert_eq!(agent.knowledge_count(), 1);
 
         let results = agent.search_knowledge("test", 10);
@@ -490,7 +530,9 @@ mod tests {
         let mut agent = test_agent(dir.path());
 
         for i in 0..5 {
-            agent.store_knowledge_direct("src", &format!("content number {}", i)).unwrap();
+            agent
+                .store_knowledge_direct("src", &format!("content number {}", i))
+                .unwrap();
         }
 
         let results = agent.search_knowledge("content", 3);
@@ -502,7 +544,9 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let mut agent = test_agent(dir.path());
 
-        agent.store_knowledge_direct("src", "unique content").unwrap();
+        agent
+            .store_knowledge_direct("src", "unique content")
+            .unwrap();
         let results = agent.search_knowledge("nonexistent", 10);
         assert!(results.is_empty());
     }
@@ -547,7 +591,11 @@ mod tests {
         assert_eq!(agent.session.messages().len(), 1);
         assert_eq!(agent.session.messages()[0].role, MessageRole::System);
         assert!(agent.session.messages()[0].content.contains("test.txt"));
-        assert!(agent.session.messages()[0].content.contains("some file content"));
+        assert!(
+            agent.session.messages()[0]
+                .content
+                .contains("some file content")
+        );
     }
 
     #[test]
@@ -588,7 +636,9 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let mut agent = test_agent(dir.path());
         let opts = ChunkOptions::default();
-        let ids = agent.store_knowledge_chunked("src", "some content to chunk", &opts).unwrap();
+        let ids = agent
+            .store_knowledge_chunked("src", "some content to chunk", &opts)
+            .unwrap();
         assert!(!ids.is_empty());
         assert_eq!(agent.knowledge_count(), ids.len());
     }
@@ -607,9 +657,15 @@ mod tests {
     fn store_knowledge_chunked_large_content() {
         let dir = tempfile::tempdir().unwrap();
         let mut agent = test_agent(dir.path());
-        let opts = ChunkOptions { max_size: 20, overlap: 5, strategy: ChunkStrategy::Fixed };
+        let opts = ChunkOptions {
+            max_size: 20,
+            overlap: 5,
+            strategy: ChunkStrategy::Fixed,
+        };
         let content = "word ".repeat(100);
-        let ids = agent.store_knowledge_chunked("src", &content, &opts).unwrap();
+        let ids = agent
+            .store_knowledge_chunked("src", &content, &opts)
+            .unwrap();
         assert!(ids.len() > 1);
     }
 
@@ -650,7 +706,9 @@ mod tests {
     fn search_knowledge_special_chars() {
         let dir = tempfile::tempdir().unwrap();
         let mut agent = test_agent(dir.path());
-        agent.store_knowledge_direct("test", "hello (world) [test]").unwrap();
+        agent
+            .store_knowledge_direct("test", "hello (world) [test]")
+            .unwrap();
         let res = agent.search_knowledge("(world)", 10);
         assert_eq!(res.len(), 1);
     }
@@ -678,8 +736,14 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let mut agent = test_agent(dir.path());
         assert_eq!(agent.knowledge_count(), 0);
-        let opts = ChunkOptions { max_size: 20, overlap: 5, strategy: ChunkStrategy::Fixed };
-        agent.store_knowledge_chunked("src", &"word ".repeat(50), &opts).unwrap();
+        let opts = ChunkOptions {
+            max_size: 20,
+            overlap: 5,
+            strategy: ChunkStrategy::Fixed,
+        };
+        agent
+            .store_knowledge_chunked("src", &"word ".repeat(50), &opts)
+            .unwrap();
         assert!(agent.knowledge_count() > 1);
     }
 
@@ -688,7 +752,9 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let mut agent = test_agent(dir.path());
         let opts = ChunkOptions::default();
-        agent.store_knowledge_chunked("src", "some content", &opts).unwrap();
+        agent
+            .store_knowledge_chunked("src", "some content", &opts)
+            .unwrap();
         let summary = agent.memory_summary().unwrap();
         assert!(summary.contains("1 indexed"));
     }

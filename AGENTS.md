@@ -6,14 +6,17 @@ Single Rust binary+lib crate — local LLM inference via bundled `llama-cpp-turb
 
 | Action | Command |
 |---|---|
-| Build (slow first — cmake+llama.cpp) | `cargo build` |
+| Build | `cargo build` |
 | Run (auto-downloads model if missing) | `cargo run` |
 | All tests | `cargo test` |
 | Format check | `cargo fmt --all -- --check` |
 | Lint (lib only — CI uses `--lib`) | `cargo clippy --lib` |
 | System deps | `cmake libssl-dev clang libgomp1` |
+| Build prebuilt libs release | `git tag v0.1.0 && git push --tags` (triggers `.github/workflows/release.yml`) |
 
 CI order: `build → test → fmt → clippy --lib` (`.github/workflows/ci.yml`).
+
+**Prebuilt libs**: `build.rs` first tries to download `llama-libs-{target}.tar.gz` from GitHub Releases. If unavailable (no release, network, or unmatched target), falls back to cmake compilation with `jobs(1)` to avoid OOM. Override download repo with `LLAMA_LIBS_REPO=user/repo`.
 
 ## Structure
 
