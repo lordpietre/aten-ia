@@ -48,15 +48,15 @@ fn main() {
         .expect("Unable to generate bindings");
 
     let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
-    let ffi_path = out_path.join("llama_ffi.rs");
+    let ffi_path = out_path.join("llama_ffi_raw.rs");
     bindings
         .write_to_file(&ffi_path)
         .expect("Couldn't write bindings!");
 
-    // Post-process: add `unsafe` before `extern "C"` blocks (needed for Rust 2024 edition)
+    // Patch: add `unsafe` before `extern "C"` blocks (needed for Rust 2024 edition)
     let content = std::fs::read_to_string(&ffi_path).expect("Failed to read bindings");
     let content = content.replace("extern \"C\" {", "unsafe extern \"C\" {");
-    std::fs::write(&ffi_path, content).expect("Failed to patch bindings");
+    std::fs::write(&ffi_path, content).expect("Failed to write patched bindings");
 
     println!("cargo:rerun-if-changed=wrapper.h");
     println!("cargo:rerun-if-changed=build.rs");

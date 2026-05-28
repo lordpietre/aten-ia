@@ -1,118 +1,256 @@
 # memvid-agent-core
 
-Interactive AI agent CLI with local LLM inference via [llama.cpp](https://github.com/ggml-org/llama.cpp) (TurboQuant fork) and persistent memory via [memvid-core](https://crates.io/crates/memvid-core).
+Interactive AI agent CLI con inferencia LLM local vía [llama.cpp](https://github.com/ggml-org/llama.cpp) (TurboQuant fork) y persistencia en `.mv2` usando [memvid-core](https://crates.io/crates/memvid-core).
 
-Conversations are persisted atomically in `.mv2` files (memvid-core format), indexed by a lightweight `manifest.json`.
+Este proyecto ya integra un flujo completo de:
+- configuración persistente con `config.json`
+- selección y descarga de modelos desde catálogo
+- prompt templates (
+  `chatml`, `llama3`, `mistral`, `raw`)
+- persistencia atómica de conversaciones y knowledge en `.mv2`
+- índice ligero `knowledge_index.jsonl` para búsquedas rápidas
+- API HTTP compatible OpenAI con token auth
+- catálogo de lenguajes + descarga de docs online como conocimiento indexado
 
 ## Quick start
 
-### Prerequisites
+### Prerrequisitos
 
 - **Rust** ≥ 1.95.0 (edition 2024)
 - **System deps**: `build-essential cmake libssl-dev clang libgomp1`
-- A **GGUF model** file (e.g., [Llama 3.2 1B Instruct](https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF))
 
 ### Build & run
 
 ```bash
 cd memvid-agent-core
-
-# First build compiles llama.cpp via cmake + bindgen (may take a while)
 cargo build
-
-# Run with a model:
-MODEL_PATH=./models/llama-3.2-1b-instruct-q4.gguf \
-MODEL_NAME=llama-3.2-1b \
 cargo run
 ```
+
+Si no existe un modelo GGUF en `config.json`, el agente descarga automáticamente `SmolLM2-360m` desde la URL configurada en el catálogo.
 
 ### Test
 
 ```bash
 cd memvid-agent-core
-cargo test            # 28 tests (26 unit + 2 integration)
+cargo test
 ```
 
-## Architecture
+## Comandos disponibles
 
+**Chat**
+| Comando | Descripción |
+|---|---|
+| `<mensaje>` | Chatea con el agente |
+
+**Modelo**
+| Comando | Descripción |
+|---|---|
+| `/model` | Muestra modelo activo |
+| `/model <id>` | Descarga y cambia a un modelo |
+| `/models` | Lista catálogo de modelos disponibles |
+
+**Conocimiento**
+| Comando | Descripción |
+|---|---|
+| `/learn <lang>` | Descarga e indexa documentación de un lenguaje |
+| `/unlearn <lang>` | Elimina todo el conocimiento de un lenguaje |
+| `/fetch <url>` | Descarga URL, extrae texto, chunkea e indexa |
+| `/ingest <file>` | Indexa archivo local (PDF/EPUB/MD/HTML/txt) |
+| `/search <query>` | Busca en el knowledge index |
+| `/reindex` | Reconstruye índice desde archivos `.mv2` |
+
+**Utilidades**
+| Comando | Descripción |
+|---|---|
+| `/token` | Inicia servidor API OpenAI-compatible |
+| `/batch <file>` | Procesa lote de URLs desde archivo |
+| `/load <file>` | Carga archivo en sesión (sin indexar) |
+| `/stats` | Estadísticas del agente |
+| `/history` | Historial de conversaciones |
+| `/config` | Muestra configuración actual |
+| `/help` | Muestra ayuda completa |
+| `/exit` | Salir |
+
+## Modelos disponibles
+
+El catálogo incluye 20 modelos GGUF Q4_K_M listos para descargar y usar. Selecciona con `/MODEL <id>`:
+
+| # | Modelo | Tamaño | ID (para `/MODEL`) | ChatML Template |
+|---|---|---|---|---|
+| 1 | Qwen2.5-Coder-0.5B-Instruct | 340 MB | `qwen2.5-coder-0.5b` | ✓ |
+| 2 | Qwen2.5-Coder-1.5B-Instruct | 900 MB | `qwen2.5-coder-1.5b` | ✓ |
+| 3 | Qwen2.5-0.5B-Instruct | 350 MB | `qwen2.5-0.5b` | ✓ |
+| 4 | Qwen2.5-1.5B-Instruct | 950 MB | `qwen2.5-1.5b` | ✓ |
+| 5 | Gemma-3-2B-Instruct | 1.2 GB | `gemma3-2b` | ✓ |
+| 6 | SmolLM3-3B-Instruct | 1.9 GB | `smollm3-3b` | ✓ |
+| 7 | Phi-4-mini-Instruct | 2.3 GB | `phi4-mini` | ✓ |
+| 8 | Qwen3-4B-Instruct | 2.4 GB | `qwen3-4b` | ✓ |
+| 9 | Qwen3.5-4B-Instruct | 2.4 GB | `qwen3.5-4b` | ✓ |
+| 10 | Gemma-3-4B-Instruct | 2.4 GB | `gemma3-4b` | ✓ |
+| 11 | Llama-3.2-1B-Instruct | 780 MB | `llama-3.2-1b` | Llama3 |
+| 12 | Llama-3.2-3B-Instruct | 1.9 GB | `llama-3.2-3b` | Llama3 |
+| 13 | MiniCPM3-4B | 2.4 GB | `minicpm3-4b` | ✓ |
+| 14 | DeepSeek-Coder-6.7B-Instruct | 4.0 GB | `deepseek-coder-6.7b` | ✓ |
+| 15 | Qwen2.5-Coder-7B-Instruct | 4.2 GB | `qwen2.5-coder-7b` | ✓ |
+| 16 | Qwen3-7B-Instruct | 4.2 GB | `qwen3-7b` | ✓ |
+| 17 | Mistral-7B-Instruct-v0.3 | 4.2 GB | `mistral-7b` | Mistral |
+| 18 | CodeLlama-7B-Instruct | 4.2 GB | `codellama-7b` | Llama3 |
+| 19 | Phi-4-14B | 8.4 GB | `phi4-14b` | ✓ |
+| 20 | Gemma-2-9B-It | 5.4 GB | `gemma2-9b` | ✓ |
+
+## Ejemplos de uso
+
+### 1. Chatear con el agente
+```bash
+# Una vez dentro del REPL, escribe directamente:
+¿cómo ordenas un vector en Rust?
+# El agente responde aplicando el chat template del modelo activo
 ```
-User Input  →  agent.rs  →  llama/context.rs  →  llama.cpp (C FFI + TurboQuant)
-                  │                                      │
-                  │                                      ▼
-                  │                               Response tokens
-                  │                                      │
-                  ▼                                      │
-            ConversationBatch ◄──────────────────────────┘
-                  │
-                  ▼
-            memvid/writer.rs
-              ├─ memvid-core::Memvid::create() → .mv2 segment
-              ├─ put_bytes_with_options() (tags: type, model, tokens)
-              ├─ commit()
-              └─ Atomic rename: temp → conv_YYYYMMDD_NNN.mv2
-                  │
-                  ▼
-            memvid/playlist.rs
-              ├─ Updates manifest.json (temp + rename)
-              ├─ Backups manifest.json.bak
-              ├─ Rolls segments at 50 MB
-              └─ Creates core.mv2 with identity on first init
+
+### 2. Cambiar de modelo
+```bash
+/MODELS              # lista todos los modelos disponibles
+/MODEL qwen3-4b      # descarga Qwen3-4B Q4_K_M y lo activa
+/MODEL current       # muestra el modelo activo
 ```
 
-## Memory layout
-
-```
-memvid_data/
-├── core.mv2                  # Agent identity & rules (created on first run)
-├── manifest.json             # Lightweight index of all segments
-├── conversations/            # Conversation segments (.mv2)
-├── knowledge/                # Knowledge segments
-└── archive/                  # Archived segments
+### 3. Cargar documentación como conocimiento
+```bash
+/LOAD-ONLINE rust    # descarga docs de Rust, las chunkea y las indexa
+/SEARCH unsafe       # busca en el knowledge indexado
 ```
 
-- Auto-flush every 10 interactions (configurable)
-- Segment rollover at 50 MB
-- All writes are atomic (temp → rename)
+### 4. Ingestar un archivo local (txt, md, html, pdf, epub)
+```bash
+/INGEST manual.txt       # carga texto y lo indexa como knowledge
+/INGEST paper.pdf        # auto-detecta PDF, extrae texto, indexa
+/INGEST book.epub        # auto-detecta EPUB, extrae texto, indexa
+/INGEST-PDF paper.pdf    # explícitamente extrae PDF/EPUB e indexa
+/SEARCH contenido        # busca en todo el knowledge indexado
+```
 
-## Environment variables
+### 5. Iniciar el servidor API
+```bash
+/TOKEN               # genera un token e inicia el servidor HTTP
+```
+```bash
+# Desde otro terminal:
+curl http://localhost:8787/v1/chat/completions \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"messages":[{"role":"user","content":"Hola"}]}'
+```
 
-| Variable | Default | Description |
+### 6. Historial de conversaciones
+```bash
+/HISTORY             # muestra todas las conversaciones almacenadas en .mv2
+/STATS               # muestra estadísticas: interacciones, knowledge, modelo
+```
+
+### 7. Reindexar knowledge desde archivos .mv2
+```bash
+/REINDEX             # reconstruye knowledge_index.jsonl desde los segmentos .mv2
+```
+
+## Configuración
+
+El proyecto usa `config.json` en la raíz de `memvid-agent-core`.
+
+Valores importantes:
+
+- `data_dir`: directorio de persistencia (`memvid_data` por defecto)
+- `model.path`: ruta al archivo GGUF
+- `model.name`: nombre de modelo activo
+- `model.n_ctx`: tamaño de contexto
+- `model.n_gpu_layers`: capas GPU (actualmente CPU only / 0)
+- `model.chat_template`: template de prompt
+- `generation.top_k`, `top_p`, `temp`, `max_tokens`
+- `api.enabled`, `api.host`, `api.port`, `api.token`
+- `languages.installed`
+
+### Variables de entorno
+
+Las siguientes variables son compatibles como overrides:
+
+| Variable | Default | Descripción |
 |---|---|---|
-| `MODEL_PATH` | `models/llama-model.gguf` | Path to the GGUF model file |
-| `MODEL_NAME` | `llama-3.2-3b-tq` | Model display name for metadata |
+| `MODEL_PATH` | `models/default-model.gguf` | Ruta a modelo GGUF |
+| `MODEL_NAME` | `smollm2-360m` | Nombre de modelo |
+| `MODEL_CTX` | `4096` | Tamaño de contexto |
+| `MODEL_URL` | `https://...` | URL de descarga de modelo |
 
-## Project structure
+## Estructura de memoria
 
 ```
-memvid-agent-core/
-├── src/
-│   ├── main.rs              # CLI entrypoint (REPL loop)
-│   ├── lib.rs               # Public re-exports
-│   ├── agent.rs             # Agent loop (chat, flush, Drop)
-│   ├── types.rs             # Data types & WriterConfig
-│   ├── utils.rs             # Atomic write, SHA-256 helpers
-│   ├── llama/
-│   │   ├── mod.rs
-│   │   ├── context.rs       # Safe Rust wrapper over llama.cpp FFI
-│   │   └── ffi.rs           # Auto-generated bindgen bindings
-│   └── memvid/
-│       ├── mod.rs
-│       ├── manifest.rs      # manifest.json load/save
-│       ├── playlist.rs      # Segment management & rolling
-│       └── writer.rs        # .mv2 atomic writes via memvid-core
-├── build.rs                 # Compiles llama.cpp + generates FFI bindings
-├── wrapper.h                # #include "llama.h" for bindgen
-├── llama-cpp-turboquant/    # llama.cpp fork source (TurboQuant)
-├── tests/
-│   └── writer_integration.rs
-├── Cargo.toml
-└── AGENTS.md                # AI assistant instructions
+$DATA_DIR/
+├── core.mv2
+├── manifest.json
+├── conversations/
+├── knowledge/
+└── archive/
 ```
 
-## llmama-cpp-turboquant
+- Conversaciones y knowledge se guardan como segmentos `.mv2`
+- `manifest.json` indexa segmentos y metadatos
+- `knowledge_index.jsonl` es un índice local para búsquedas
+- La escritura es atómica: temp file + fsync + rename
 
-This repo bundles [TheTom/llama-cpp-turboquant](https://github.com/TheTom/llama-cpp-turboquant), a fork of llama.cpp with TurboQuant optimizations. See `memvid-agent-core/llama-cpp-turboquant/AGENTS.md` for contribution policies.
+## Funcionalidades actuales
 
-## License
+- Configuración persistente con archivo JSON
+- Descarga y selección de modelos desde catálogo
+- Cambio dinámico de modelo en tiempo real
+- Prompt templates para distintos formatos
+- Persistencia segura de `.mv2` para conversaciones y knowledge
+- Buscador de knowledge indexado (`/SEARCH`)
+- Reindexado desde `.mv2` (`/REINDEX`)
+- API local compatible OpenAI con token auth
+- Descarga de documentación de lenguajes desde free-programming-books
+- `FileLock` para evitar instancias múltiples en el mismo `data_dir`
+- Extracción de texto de PDFs y EPUBs (`pdf-extract` + `epub`)
+- Detección automática de formato por extensión de archivo
+
+## Limitaciones actuales
+
+- RAG es keyword-based (word matching), sin embeddings semánticos
+- API server single-threaded, sin streaming SSE
+- `switch_model` no preserva `developer_mode`
+- Template `Raw` ignora historial y RAG context
+- `add_entries()` batch reescribe JSONL completo (solo `add_entry()` individual es O(1))
+- Knowledge index sin deduplicación por checksum
+- Sin catálogo de idiomas offline embebido
+- Sin `MODEL_GPU_LAYERS` env var (CPU only)
+
+## Archivo `models_catalog.json`
+
+El catálogo de modelos esta embebido en el binario y contiene información de descarga, contexto recomendado y template de prompt.
+
+## llama-cpp-turboquant
+
+Este repositorio incluye el submódulo `llama-cpp-turboquant`, un fork de llama.cpp con TurboQuant. Se compila con CMake y bindgen para generar el wrapper Rust.
+
+## Dependencias principales
+
+- `memvid-core` | `.mv2` persistence
+- `serde` / `serde_json` | serialización JSON
+- `chrono` | timestamps
+- `uuid` | IDs UUID v4
+- `anyhow` | manejo de errores
+- `sha2` | checksums SHA-256
+- `ureq` | descargas HTTP
+- `pdf-extract` | extracción de texto de PDFs
+- `epub` | extracción de texto de EPUBs
+- `indicatif` | barras y spinners
+- `colored` | salida de terminal colorida
+- `dotenvy` | carga de `.env`
+
+## Cómo contribuir
+
+- Prueba primero con `cargo test`
+- Mantén los cambios en `src/` separados de `llama-cpp-turboquant/`
+- No modifiques la lógica de build de llama.cpp sin entender `build.rs`
+
+## Licencia
 
 Apache 2.0

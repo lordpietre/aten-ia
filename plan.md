@@ -1,212 +1,305 @@
-# Plan de Integración: `memvid-agent-core` — Estado + Siguientes Pasos
+# Plan de Desarrollo: `memvid-agent-core`
 
-## Estado actual (Mayo 2026)
+## Análisis Técnico Profundo
 
-### Lo que funciona
+### Stack Tecnológico
 
-| Componente | Estado | Notas |
+| Capa | Tecnología | Detalle |
 |---|---|---|
-| `memvid/` (librería publicada) | ✅ Completo | Compila, tests pasan, CI verde, publicado en crates.io |
-| `memvid-agent-core/` código base | ✅ Implementado | Fases 1-8 completas, compila con 0 errores |
-| `build.rs` (cmake + bindgen) | ✅ Funcional | Compila llama-cpp-turboquant static libs, genera FFI bindings, parcha `unsafe extern "C"` |
-| Submódulo `llama-cpp-turboquant/` | ✅ Inicializado | Apunta a `2cbfdc62`, sincronizado |
-| `llama-cpp-turboquant/` standalone | ✅ Copia upstream | Sin modificaciones locales |
+| **Lenguaje** | Rust edition 2024 (min 1.75 → actual 1.95+) | FFI con C via bindgen, `unsafe extern "C"` |
+| **LLM** | llama.cpp fork (turboquant) | cmake + bindgen, ~100 FFI functions, CPU-only |
+| **Persistencia** | memvid-core v2.0.139 | Contenedores `.mv2` con atomic rename + fsync en todos los paths |
+| **Serialización** | serde + serde_json | ConversationBatch, KnowledgeEntry, Manifest, Config |
+| **HTTP cliente** | ureq 3 + rustls | Descarga de modelos, fetch de catálogos, sin openssl |
+| **HTTP servidor** | Raw TCP (TcpListener) | HTTP/1.1 manual, sin crate HTTP, single-threaded |
+| **Búsqueda** | Keyword word-matching | Scored sobre JSONL, split por whitespace, substring match |
+| **Templates chat** | ChatML, Llama3, Mistral, Raw | Implementación propia, Raw ignora todo |
+| **Auth** | Bearer token | UUID v4 generado, validación manual en headers |
+| **Chunking** | Heading/Paragraph/Fixed | 1024 chars default, 200 overlap, semántico por secciones/párrafos |
+| **Build** | cmake crate + bindgen | Linkea estáticamente 5 libs: llama, llama-common, ggml-cpu, ggml, ggml-base |
 
-### Lo que falta
+### Modelos Soportados (20 en catálogo)
 
-| Fase | Descripción | Estado |
+| Rango | Parámetros | Modelos |
 |---|---|---|
-| 9 | Init automático de `memvid_data/` con `core.mv2` real | ✅ Crea `.mv2` válido con identidad/versión vía `memvid-core::Memvid::create()` |
-| 10 | Tests | ✅ 28 tests (26 unit + 2 integración) — types, manifest, playlist, writer, utils, writer_integration |
-| 11 | CI/CD para `memvid-agent-core` | ✅ Workflow GitHub Actions en `.github/workflows/ci.yml` |
-| 12 | Pequeñas mejoras de calidad | ✅ `unwrap()` → `expect()`, `tempfile` dev-dep, advertencias de bindgen toleradas |
+| Micro | 360M | SmolLM2-360M |
+| Pequeño | 0.5B-1.5B | Qwen2.5-Coder-0.5B/1.5B, Qwen2.5-0.5B/1.5B, Llama-3.2-1B |
+| Mediano | 2B-4B | Gemma3-2B/4B, SmolLM3-3B, Qwen3-4B, Qwen3.5-4B, MiniCPM3-4B, Llama-3.2-3B, Phi-4-mini-3.8B |
+| Grande | 6.7B-14B | DeepSeek-Coder-6.7B, Qwen2.5-Coder-7B, Qwen3-7B, Mistral-7B, CodeLlama-7B, Gemma2-9B, Phi-4-14B |
+
+Todos Q4_K_M, CPU-only, n_ctx_recommended 4096-8192.
+
+Modelo por defecto en `config.json`: `Qwen2.5-0.5B-Instruct` (chatml, n_ctx: 8192).
+
+### Arquitectura de Persistencia
+
+```
+memvid_data/
+├── .lock                          ← FileLock (singleton instance)
+├── core.mv2                       ← Identity + metadata inicial
+├── manifest.json                  ← Segment registry (conversation + knowledge)
+├── knowledge_index.jsonl          ← Append-only O(1) por entrada
+├── conversations/                 ← .mv2 segments named conv_YYYYMMDD_NNN.mv2
+├── knowledge/                     ← .mv2 segments named know_YYYYMMDD_NNN.mv2
+└── archive/                       ← Segmentos retirados
+```
+
+Atomic write pattern en todos los paths: `write → fsync → rename → fsync(parent)`.
+
+### Estado de Componentes (Mayo 2026)
+
+| Componente | Líneas | Tests | Estado |
+|---|---|---|
+| `main.rs` | 931 | 0 | ✅ REPL completo con setup wizard |
+| `agent.rs` | 690 | 22 | ✅ Orchestrador con chat, ingest, reindex, switch model, fetch, batch, books |
+| `config.rs` | 366 | 20 | ✅ Load/save/validate + env overrides + ingestion config |
+| `prompt.rs` | 251 | 9 | ✅ 4 templates + developer prompt + RAG injection |
+| `context_policy.rs` | 234 | 13 | ✅ Token-budget trimming con tokenización real |
+| `generation.rs` | 90 | 2 | ✅ Pipeline: search → trim → build → generate |
+| `types.rs` | 455 | 26 | ✅ Tipos serializables + Format tests + defaults + Chunk/IngestionConfig |
+| `retrieval.rs` | 501 | 24 | ✅ JSONL append-only, word-match search, chunking, rebuild |
+| `session.rs` | 236 | 15 | ✅ Batch + flush cada 5 interacciones |
+| `api.rs` | 508 | 15 | ✅ HTTP/1.1 raw TCP, /health, /v1/models, /v1/chat, /token |
+| `models.rs` | 70 | 0 | ✅ Auto-download con progress bar |
+| `models_catalog.rs` | 196 | 5 | ✅ Catálogo desde JSON externo, 20 modelos, SHA-256 verify |
+| `languages_catalog.rs` | 509 | 21 | ✅ Fetch free-programming-books, HTML strip, chunking |
+| `books_catalog.rs` | 339 | 13 | ✅ Fetch EbookFoundation, prepare metadata + ingest |
+| `llama/context.rs` | 262 | 0 | ✅ Init, tokenize, generate, sample, Drop safe |
+| `memvid/writer.rs` | 471 | 13 | ✅ .mv2 con atomic rename + fsync + segment rollover |
+| `memvid/reader.rs` | 280 | 9 | ✅ .mv2 read con timeline query + frame enumeration |
+| `memvid/manifest.rs` | 192 | 9 | ✅ Manifest atomic save/load |
+| `memvid/playlist.rs` | 344 | 14 | ✅ Segment path generation, rollover logic |
+| `utils.rs` | 201 | 13 | ✅ atomic_write, FileLock, SHA-256 |
+| `web_fetcher.rs` | 226 | 9 | ✅ Fetch HTTP con rate limiting, retry, global throttle |
+| `extractor.rs` | 898 | 62 | ✅ HTML→text, HTML→markdown, metadata + entity parsing + PDF/EPUB + tempfile tests |
+| `chunker.rs` | 473 | 23 | ✅ Chunking por headings/paragraphs/fixed + dedup |
+| `lib.rs` | 19 | 0 | ✅ Module declarations + pub exports |
+| `llama/mod.rs` + `ffi.rs` | 4 | 0 | ✅ FFI module re-exports |
+| `memvid/mod.rs` | 4 | 0 | ✅ Memvid module re-exports |
+
+**Total: ~10,400 líneas, ~455 tests (339 unit + 116 integración)**
+
+### Limitaciones Actuales
+
+1. **RAG sin embeddings** — puro keyword matching, no captura semántica
+2. **HTML parsing básico** — `html_to_text` y `html_to_markdown` basados en regex, no manejan estructuras complejas (tablas, formularios)
+3. **Sin deduplicación en índice** — `chunk_and_deduplicate` existe pero el índice KnowledgeIndex no deduplica por checksum/URL
+4. **Sin streaming** — API bloqueante
+5. **Sin GPU** — solo CPU
+6. **Sin catálogo offline** — `languages_catalog` requiere fetch remoto siempre
+7. **Sin feeds RSS/Atom** — no hay `/feed <url>`
+8. **`switch_model` no preserva `developer_mode`**
+9. **`add_entries()` batch rewritea full JSONL** (solo `add_entry()` individual es O(1) append)
 
 ---
 
-## Fase 9 — Init automático de `core.mv2`
+## Nueva Visión: Sistema de Ingestión de Contenido
 
-**Archivo**: `memvid-agent-core/src/memvid/playlist.rs:22-24`
+### Objetivo
 
-Actualmente es un placeholder:
-```rust
-if !core_path.exists() {
-    std::fs::write(&core_path, [])?;  // ❌ archivo vacío, no es un .mv2 válido
+Construir un **pipeline unificado de ingestión de contenido** que permita alimentar a memvid con:
+- Páginas web individuales (URLs)
+- Documentación técnica online
+- Libros (PDF, EPUB, HTML)
+- Feeds RSS/Atom
+- Archivos locales (txt, md, pdf, epub)
+- Batch de URLs desde archivo
+
+### Pipeline de Ingestión Propuesto
+
+```
+Fuente → Fetcher → Extractor → Chunker → Indexer → Almacenamiento
+                                                        ↓
+                                                   .mv2 + JSONL
+                                                        ↓
+                                                   RAG (keyword)
+```
+
+### Componentes a Implementar
+
+#### 1. Web Fetcher (`web_fetcher.rs`)
+- `/fetch <url>` — fetch + extract + chunk + index en un solo comando
+- Rate limiting, timeout configurable (30s default)
+- User-Agent configurable
+- Cache HTTP (ETag, Last-Modified)
+- Límite de tamaño (5MB default)
+- Soporte para URLs relativas → absolutas
+
+#### 2. Content Extractor (`extractor.rs`)
+- **HTML → Markdown** con `html2md` o regex-based mejorado
+- **PDF → texto** con crate `pdf-extract` o `lopdf`
+- **EPUB → texto** con crate `epub`
+- **Metadata extraction** (title, author, date, description)
+- Language detection (opcional)
+
+#### 3. Smart Chunker (`chunker.rs`)
+- Chunking semántico (por párrafos, headers, secciones)
+- Overlap configurable (default 200 chars)
+- Tamaño configurable (default 1024 tokens)
+- Preservación de metadata por chunk (source, section, position)
+
+#### 4. Feed Reader (`feeds.rs`)
+- `/feed <rss-url>` — fetch RSS/Atom, extraer entries, chunkear cada una
+- Soporte para RSS 2.0, Atom 1.0
+- Rate limiting entre entries
+- Deduplicación por entry GUID/link
+
+#### 5. Batch Processor (`batch.rs`)
+- `/batch <file>` — procesar archivo con URLs (una por línea)
+- `/batch-dir <dir>` — procesar todos los archivos en un directorio
+- Progreso visible con indicatif
+- Reporte de éxito/fallo por item
+- Reanudable (checkpoint file)
+
+#### 6. URL Queue (`queue.rs`)
+- Cola persistente de URLs pendientes
+- Priorización (alto/bajo)
+- Estado: pending, downloading, processing, done, failed
+- Reintentos con backoff exponencial (3 intentos max)
+
+### Nuevos Comandos CLI
+
+| Comando | Descripción |
+|---|---|
+| `/fetch <url>` | Fetch + extract + chunk + index una URL ✅ |
+| `/fetch-md <url>` | Fetch, convertir a markdown, mostrar sin indexar ✅ |
+| `/feed <rss-url>` | Fetch RSS/Atom, indexar todos los entries ❌ |
+| `/batch <file>` | Procesar archivo con URLs (una por línea) ✅ |
+| `/queue` | Mostrar estado de la cola de URLs ❌ |
+| `/queue-add <url>` | Agregar URL a la cola ❌ |
+| `/queue-process` | Procesar todas las URLs en cola ❌ |
+| `/ingest-pdf <file>` | Extraer texto de PDF e indexar ✅ |
+| `/sources` | Listar fuentes de conocimiento indexadas ❌ |
+| `/books` | Listar lenguajes de EbookFoundation ✅ |
+| `/download-books <lang>` | Descargar + ingestar libros de un lenguaje ✅ |
+
+### Nuevos Módulos
+
+```
+src/
+├── web_fetcher.rs       ← Fetch HTTP con rate limiting, cache, UA configurable ✅
+├── extractor.rs         ← HTML→MD, PDF→text, EPUB→text, metadata extraction ✅ (HTML→MD + metadata)
+├── chunker.rs           ← Chunking semántico por secciones/párrafos ✅
+├── feeds.rs             ← RSS/Atom parser + ingestion ❌ Pendiente Fase 4
+├── batch.rs             ← Procesamiento batch con checkpoint ❌ (integrado en agent.rs + main.rs con progress bar)
+├── queue.rs             ← Cola persistente de URLs ❌ Pendiente Fase 4
+└── config/
+    └── ingestion.rs     ← Config de ingestión ✅ (integrado en types.rs como IngestionConfig + serde defaults en config.json)
+```
+
+### Esquema de Configuración
+
+```json
+{
+  "ingestion": {
+    "user_agent": "memvid-agent-core/0.1.0",
+    "timeout_seconds": 30,
+    "max_size_bytes": 5242880,
+    "rate_limit_per_second": 2,
+    "chunk_size_tokens": 1024,
+    "chunk_overlap_chars": 200,
+    "max_retries": 3,
+    "retry_backoff_seconds": 5
+  }
 }
 ```
 
-**Qué hacer**: Usar `memvid-core` para crear un `.mv2` real con:
+### Plan de Implementación por Fases
 
-1. **Identity segment** — nombre del agente, versión, fecha de creación
-2. **System prompt / reglas** — instrucciones base del agente
-3. **Metadata inicial** — tags como `type=core`, `version=1.0.0`
+#### Fase 1 — Base ✅ (Completada)
+- [x] `web_fetcher.rs` con `/fetch <url>` básico (GET, HTML, extract text, rate limiting, retry)
+- [x] `extractor.rs` con HTML→text y HTML→markdown, extracción de metadata (title, description, lang)
+- [x] `/batch <file>` simple (leer URLs, fetch secuencial con progress bar)
+- [x] Tests unitarios para cada módulo
 
-Código esperado:
+#### Fase 2 — Chunking Inteligente ✅ (Completada)
+- [x] `chunker.rs` con chunking por headings, párrafos, fixed + deduplicación
+- [x] Preservación de metadata en chunks (heading, source, index)
+- [x] Reemplazar `KnowledgeIndex::chunk_text()` fijo por smart chunker
+- [x] Integrar con pipeline existente de `/load` e `/ingest`
+
+#### Fase 3 — Formats Rich ✅ (Completada)
+- [x] Soporte PDF (crate `pdf-extract` 0.10)
+- [x] Soporte EPUB (crate `epub` 2.1.5)
+- [x] `/ingest-pdf` comando (también acepta EPUB)
+- [x] Detección automática de formato por extensión (`Format::from_extension()`)
+- [x] Tests unitarios (11 nuevos: Format + extractor error paths)
+
+#### Fase 4 — Feeds y Cola ❌ Pendiente
+- [ ] `feeds.rs` con parser RSS/Atom
+- [ ] `/feed <url>` comando
+- [ ] `queue.rs` con cola persistente
+- [ ] `/queue`, `/queue-add`, `/queue-process`
+- [ ] Rate limiting global (función `global_throttle` ya existe en web_fetcher.rs)
+
+#### Fase 5 — Mejoras RAG ❌ Pendiente
+- [ ] Embeddings semánticos (opcional, crate `fastembed` o similar)
+- [ ] Deduplicación por checksum + URL en KnowledgeIndex
+- [ ] Búsqueda híbrida (keyword + vector)
+- [ ] Fuentes como filtro de búsqueda (`/search <q> from:<source>`)
+
+#### Fase 6 — API y UX ❌ Pendiente
+- [ ] Streaming SSE en API
+- [ ] Multi-threading en API server
+- [ ] Web UI básica (opcional)
+- [ ] Plugins/extensions (futuro)
+
+### Arquitectura de Datos — Knowledge (actual vs propuesto)
+
+**Actual** (`types.rs`):
 ```rust
-if !core_path.exists() {
-    let mut mv = memvid_core::Memvid::create(&core_path)
-        .context("Failed to create core.mv2")?;
-    let identity = serde_json::json!({
-        "agent": "memvid-agent-core",
-        "version": env!("CARGO_PKG_VERSION"),
-        "created_at": chrono::Utc::now(),
-    });
-    mv.put_bytes_with_options(
-        &serde_json::to_vec(&identity)?,
-        memvid_core::PutOptions {
-            tags: vec!["type=core".into(), "section=identity".into()],
-            ..Default::default()
-        },
-    )?;
-    mv.commit()?;
+pub struct KnowledgeEntry {
+    pub id: String,
+    pub source: String,
+    pub content: String,
+    pub timestamp: DateTime<Utc>,
+    pub checksum: String,
 }
 ```
 
-**Verificación**: `memvid-core::Memvid::verify(&core_path, false)?` debe pasar.
-
----
-
-## Fase 10 — Tests
-
-### 10a. Types — serialización roundtrip
-
-Archivo: `memvid-agent-core/src/types.rs` (nuevo `#[cfg(test)]` module)
-
-- Serializar/deserializar `ConversationBatch` a JSON
-- Serializar/deserializar `Manifest` completo
-- `WriterConfig::default()` produce valores correctos (batch_size=10, segment_max_bytes=50MB)
-- `SegmentEntry` con checksum SHA-256
-
-### 10b. Manifest — load/save/create/append
-
-Archivo: `memvid-agent-core/src/memvid/manifest.rs`
-
-- `create_initial_manifest()` produce versión "1.0.0"
-- `save_manifest()` + `load_manifest()` roundtrip en temp file
-- `append_conversation_to_manifest()` incrementa contador y actualiza timestamp
-- Atomic write: save a temp path, verificar que el original no se corrompe si falla
-
-### 10c. Playlist — init, segment rolling
-
-Archivo: `memvid-agent-core/src/memvid/playlist.rs`
-
-- `init()` crea directorios `conversations/`, `knowledge/`, `archive/`
-- `init()` crea `core.mv2` (válido post-Fase-9)
-- `init()` crea `manifest.json` si no existe
-- `next_segment_path()` genera `conv_YYYYMMDD_NNN.mv2`
-- `should_roll_segment()` retorna true cuando current_size >= max
-- `add_segment()` crea backup y persiste
-- Usar `tempfile::tempdir()` para aislar cada test (agregar `tempfile` a dev-dependencies)
-
-### 10d. Writer — flush, batch, atomic rename
-
-Archivo: `memvid-agent-core/src/memvid/writer.rs`
-
-- `init()` con config temporal
-- `append_conversation()` acumula hasta `batch_size`
-- `flush()` escribe .mv2 vía memvid-core y hace atomic rename
-- `flush()` actualiza manifest con SegmentEntry correcto
-- Verificar que tras flush el .mv2 existe y `Memvid::verify()` pasa
-- `Drop` hace flush automático si hay pendientes
-- `should_roll_segment()` crea nuevo segment path al superar el threshold
-
-### 10e. Utils — sha256, atomic_write
-
-Archivo: `memvid-agent-core/src/utils.rs`
-
-- `sha256_digest()` produce hash correcto para inputs conocidos
-- `compute_file_checksum()` coincide con `sha256_digest` del contenido
-- `atomic_write()`: archivo temporal no queda visible tras rename
-- `atomic_write()`: contenido final es correcto
-
-### 10f. Integration — build + FFI
-
-Archivo: `memvid-agent-core/tests/` (integration tests, nuevo directorio)
-
-- `build_links_correctly.rs`: test que verifica que las funciones FFI de llama.h existen en los bindings generados (compila, llama backend init/free sin model — `llama_backend_init()` / `llama_backend_free()`)
-- `writer_integration.rs`: ciclo completo — init Playlist, append ConversationBatch, flush, verificar .mv2 con memvid-core, verificar manifest.json
-
-**Nota**: El test de `LlamaContext::init()` requiere un `.gguf` real. Marcar como `#[ignore]` con instrucciones de cómo ejecutarlo.
-
-### Dependencias a agregar
-
-```toml
-[dev-dependencies]
-tempfile = "3"       # temp dirs para tests
-```
-
----
-
-## Fase 11 — CI/CD
-
-Archivo: `memvid-agent-core/.github/workflows/ci.yml`
-
-Inspirado en `memvid/.github/workflows/ci.yml`:
-
-```yaml
-name: CI
-on: [push, pull_request]
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-      - uses: dtolnay/rust-toolchain@stable
-      - run: sudo apt-get update && sudo apt-get install -y cmake libssl-dev clang libgomp1
-      - run: cargo build --verbose
-      - run: cargo test --verbose
-```
-
-Puntos clave:
-- `submodules: recursive` — necesario para el submódulo gitsubmodule
-- `libgomp1` para OpenMP
-- `clang` para bindgen
-- `cmake` y `libssl-dev` para compilar llama.cpp
-
----
-
-## Fase 12 — Mejoras de calidad
-
-### 12a. Clippy cleanup en memvid-agent-core
-
-Actualmente `cargo clippy` produce 0 warnings en memvid-core, pero memvid-agent-core tiene 314 warnings del código generado por bindgen. El código manual debe pasar clippy limpio. Agregar al `lib.rs`:
-
+**Propuesto** (para Fase 5):
 ```rust
-// los warnings de bindgen se emiten en OUT_DIR y no se pueden silenciar desde aquí
+// Futuro: extender KnowledgeEntry con:
+//   title: Option<String>,
+//   url: Option<String>,
+//   content_type: String,    // "text", "html", "markdown", "pdf", "epub"
+//   language: Option<String>,
+//   metadata: HashMap<String, String>,
+//   chunk_index: u32,
+//   parent_id: Option<String>,
 ```
 
-### 12b. Error handling
+### Integración con Sistema Existente
 
-- `writer.rs:89-91`: `unwrap()` en `file_name()` puede panic si el path termina en `..`
-- `writer.rs:51`: `Memvid::create` en el temp path no limpia el temp file si falla — considerar `Drop` guard
-- `playlist.rs:43`: `std::fs::copy` con `.ok()` traga errores silenciosamente
+El pipeline se integra con:
 
-### 12c. Re-exportar públicas clean
+1. **KnowledgeIndex** (`retrieval.rs`) — los chunks van al JSONL + .mv2 ✅
+2. **Session** (`session.rs`) — contexto en sesión via `ingest_raw()` como system message ✅
+3. **Config** (`config.rs`) — sección `ingestion` en config.json con serde defaults ✅
+4. **Agent** (`agent.rs`) — métodos: `fetch_and_ingest()`, `process_url_batch()`, `ingest_file()` ✅
+5. **main.rs** — comandos `/fetch`, `/fetch-md`, `/ingest`, `/ingest-pdf`, `/batch` ✅
+6. **API** (`api.rs`) — endpoint `/v1/ingest` ❌ Pendiente
 
-`lib.rs` actual:
-```rust
-pub mod agent;
-pub mod types;
-pub mod utils;
-pub mod memvid;
-pub mod llama;
-```
+### Principios de Diseño
 
-Considerar si `llama` y `memvid` (internals) deben ser públicos. Al menos `llama` contiene bindings FFI unsafe.
+1. **Atomic writes** — mismo patrón temp + rename + fsync
+2. **Graceful degradation** — si falla un recurso, continuar con los demás
+3. **Progreso visible** — indicatif progress bars para todas las ops largas
+4. **Deduplication first** — checksum + URL antes de indexar
+5. **Testabilidad** — unit tests con mock HTTP server
+6. **Backward compatibility** — no romper comandos existentes
+
+### Riesgos y Mitigaciones
+
+| Riesgo | Mitigación |
+|---|---|
+| HTML malformado | Usar crate `html2md` o `scraper` en vez de strip_html casero |
+| PDFs muy grandes | Límite de tamaño configurable, chunking progresivo |
+| Rate limiting bloquea | Retry con backoff, respetar `Retry-After` header |
+| URLs maliciosas | Sanitizar URLs, no ejecutar scripts, timeout estricto |
+| Dependencias grandes | Evaluar impacto en binary size antes de agregar crates |
+| Memoria con muchos chunks | Streaming processing, no cargar todo en RAM |
 
 ---
 
-## Resumen de prioridades
-
-| Prioridad | Fase | Esfuerzo estimado |
-|---|---|---|
-| Fase | Estado |
-|---|---|---|
-| 9 — core.mv2 real | ✅ Completado |
-| 10a-e — tests unitarios (21 tests) | ✅ Completado |
-| 10f — test integración writer (2 tests) | ✅ Completado |
-| 11 — CI | ✅ Completado |
-| 12 — mejoras de calidad | ✅ Completado |
-
-**Estado**: Proyecto listo para uso y desarrollo. 28 tests, CI configurado, core.mv2 válido generado automáticamente. Pendiente: agregar un modelo `.gguf` y probar end-to-end con `cargo run`.
+*Documento mantenido en `plan.md`. Última actualización: Junio 2026.*

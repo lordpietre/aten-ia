@@ -64,6 +64,15 @@ impl Playlist {
         Ok(())
     }
 
+    pub fn add_knowledge_segment(&mut self, entry: SegmentEntry) -> Result<()> {
+        let backup_path = self.manifest_path.with_extension("json.bak");
+        std::fs::copy(&self.manifest_path, &backup_path).ok();
+
+        manifest::append_knowledge_to_manifest(&mut self.manifest, entry);
+        manifest::save_manifest(&self.manifest, &self.manifest_path)?;
+        Ok(())
+    }
+
     pub fn next_segment_path(&self) -> PathBuf {
         let now = chrono::Utc::now();
         let date = now.format("%Y%m%d");
@@ -72,6 +81,16 @@ impl Playlist {
             .data_dir
             .join("conversations")
             .join(format!("conv_{}_{:03}.mv2", date, count))
+    }
+
+    pub fn next_knowledge_path(&self) -> PathBuf {
+        let now = chrono::Utc::now();
+        let date = now.format("%Y%m%d");
+        let count = self.manifest.knowledge_segments.len() + 1;
+        self.config
+            .data_dir
+            .join("knowledge")
+            .join(format!("know_{}_{:03}.mv2", date, count))
     }
 
     pub fn should_roll_segment(&self, current_size: u64) -> bool {
@@ -183,5 +202,143 @@ mod tests {
         Playlist::init(config.clone()).unwrap();
         let playlist2 = Playlist::init(config).unwrap();
         assert_eq!(playlist2.manifest.version, "1.0.0");
+    }
+
+    #[test]
+    fn add_knowledge_segment_adds_entry() {
+        let dir = tempfile::tempdir().unwrap();
+        let config = WriterConfig {
+            data_dir: dir.path().to_path_buf(),
+            ..Default::default()
+        };
+        let mut playlist = Playlist::init(config).unwrap();
+        let entry = SegmentEntry {
+            id: "know-seg-1".into(),
+            filename: "know_20250101_001.mv2".into(),
+            created_at: chrono::Utc::now(),
+            size_bytes: 1024,
+            message_count: 0,
+            model_used: "test".into(),
+            tokens_used: 0,
+            checksum: "chk".into(),
+        };
+        playlist.add_knowledge_segment(entry).unwrap();
+        assert_eq!(playlist.manifest.knowledge_segments.len(), 1);
+        let loaded = crate::memvid::manifest::load_manifest(&playlist.manifest_path).unwrap();
+        assert_eq!(loaded.knowledge_segments.len(), 1);
+    }
+
+    #[test]
+    fn add_knowledge_segment_persists_to_disk() {
+        let dir = tempfile::tempdir().unwrap();
+        let config = WriterConfig {
+            data_dir: dir.path().to_path_buf(),
+            ..Default::default()
+        };
+        let mut playlist = Playlist::init(config).unwrap();
+        let entry = SegmentEntry {
+            id: "know-1".into(),
+            filename: "know_20250101_001.mv2".into(),
+            created_at: chrono::Utc::now(),
+            size_bytes: 512,
+            message_count: 0,
+            model_used: "test".into(),
+            tokens_used: 0,
+            checksum: "abc".into(),
+        };
+        playlist.add_knowledge_segment(entry).unwrap();
+        let manifest: crate::types::Manifest =
+            serde_json::from_str(&std::fs::read_to_string(&playlist.manifest_path).unwrap()).unwrap();
+        assert_eq!(manifest.knowledge_segments.len(), 1);
+        assert_eq!(manifest.knowledge_segments[0].id, "know-1");
+    }
+
+    #[test]
+    fn next_knowledge_path_format() {
+        let dir = tempfile::tempdir().unwrap();
+        let config = WriterConfig {
+            data_dir: dir.path().to_path_buf(),
+            ..Default::default()
+        };
+        let playlist = Playlist::init(config).unwrap();
+        let path = playlist.next_knowledge_path();
+        let filename = path.file_name().unwrap().to_string_lossy();
+        assert!(filename.starts_with("know_"));
+        assert!(filename.ends_with(".mv2"));
+        assert!(path.parent().unwrap().ends_with("knowledge"));
+    }
+
+    #[test]
+    fn next_knowledge_path_increments_count() {
+        let dir = tempfile::tempdir().unwrap();
+        let config = WriterConfig {
+            data_dir: dir.path().to_path_buf(),
+            ..Default::default()
+        };
+        let mut playlist = Playlist::init(config).unwrap();
+        let first = playlist.next_knowledge_path();
+        let entry = SegmentEntry {
+            id: "know-1".into(),
+            filename: first.file_name().unwrap().to_string_lossy().to_string(),
+            created_at: chrono::Utc::now(),
+            size_bytes: 100,
+            message_count: 0,
+            model_used: "test".into(),
+            tokens_used: 0,
+            checksum: "x".into(),
+        };
+        playlist.add_knowledge_segment(entry).unwrap();
+        let second = playlist.next_knowledge_path();
+        assert_ne!(first, second);
+    }
+
+    #[test]
+    fn should_roll_segment_false_below_threshold() {
+        let dir = tempfile::tempdir().unwrap();
+        let config = WriterConfig {
+            data_dir: dir.path().to_path_buf(),
+            segment_max_bytes: 1024,
+            ..Default::default()
+        };
+        let playlist = Playlist::init(config).unwrap();
+        assert!(!playlist.should_roll_segment(0));
+        assert!(!playlist.should_roll_segment(512));
+        assert!(!playlist.should_roll_segment(1023));
+    }
+
+    #[test]
+    fn should_roll_segment_true_at_exact_threshold() {
+        let dir = tempfile::tempdir().unwrap();
+        let config = WriterConfig {
+            data_dir: dir.path().to_path_buf(),
+            segment_max_bytes: 1024,
+            ..Default::default()
+        };
+        let playlist = Playlist::init(config).unwrap();
+        assert!(playlist.should_roll_segment(1024));
+        assert!(playlist.should_roll_segment(2048));
+    }
+
+    #[test]
+    fn init_creates_backup_on_add_segment() {
+        let dir = tempfile::tempdir().unwrap();
+        let config = WriterConfig {
+            data_dir: dir.path().to_path_buf(),
+            ..Default::default()
+        };
+        let mut playlist = Playlist::init(config.clone()).unwrap();
+        let entry = SegmentEntry {
+            id: "s1".into(),
+            filename: "conv_20250101_001.mv2".into(),
+            created_at: chrono::Utc::now(),
+            size_bytes: 100,
+            message_count: 1,
+            model_used: "t".into(),
+            tokens_used: 10,
+            checksum: "c".into(),
+        };
+        playlist.add_segment(entry).unwrap();
+        let bak_path = playlist.manifest_path.with_extension("json.bak");
+        assert!(bak_path.exists());
     }
 }

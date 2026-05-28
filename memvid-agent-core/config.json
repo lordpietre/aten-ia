@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "data_dir": "memvid_data",
+  "developer_mode": true,
+  "developer_prompt": null,
+  "model": {
+    "path": "models/qwen2.5-0.5b.gguf",
+    "name": "Qwen2.5-0.5B-Instruct",
+    "n_ctx": 8192,
+    "n_gpu_layers": 0,
+    "chat_template": "chatml",
+    "download_url": "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf",
+    "sha256": null
+  },
+  "generation": {
+    "top_k": 40,
+    "top_p": 0.95,
+    "temp": 0.8,
+    "max_tokens": 2048
+  },
+  "api": {
+    "enabled": true,
+    "host": "127.0.0.1",
+    "port": 8787,
+    "token": "a9330b26-257e-42d2-b974-58959c67cc07"
+  },
+  "languages": {
+    "installed": [
+      "python",
+      "c"
+    ]
+  },
+  "ingestion": {
+    "user_agent": "memvid-agent-core/0.1.0",
+    "timeout_seconds": 30,
+    "max_size_bytes": 5242880,
+    "rate_limit_per_second": 2,
+    "chunk_max_size": 1024,
+    "chunk_overlap": 200,
+    "max_retries": 3,
+    "retry_backoff_seconds": 5
+  }
+}

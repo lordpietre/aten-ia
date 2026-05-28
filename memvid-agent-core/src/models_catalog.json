@@ -1,0 +1,212 @@
+[
+  {
+    "id": "smollm2-360m",
+    "name": "SmolLM2-360M-Instruct",
+    "url": "https://huggingface.co/bartowski/SmolLM2-360M-Instruct-GGUF/resolve/main/SmolLM2-360M-Instruct-Q4_K_M.gguf",
+    "description": "Small efficient instruct model, 360M params, Q4_K_M quantization",
+    "size_mb": 246,
+    "n_ctx_recommended": 4096,
+    "sha256": null,
+    "chat_template": "chatml"
+  },
+  {
+    "id": "qwen2.5-coder-0.5b",
+    "name": "Qwen2.5-Coder-0.5B-Instruct",
+    "url": "https://huggingface.co/unsloth/Qwen2.5-Coder-0.5B-Instruct-GGUF/resolve/main/Qwen2.5-Coder-0.5B-Instruct-Q4_K_M.gguf",
+    "description": "Qwen2.5 Coder 0.5B, optimized for code, Q4_K_M",
+    "size_mb": 340,
+    "n_ctx_recommended": 8192,
+    "sha256": null,
+    "chat_template": "chatml"
+  },
+  {
+    "id": "qwen2.5-coder-1.5b",
+    "name": "Qwen2.5-Coder-1.5B-Instruct",
+    "url": "https://huggingface.co/bartowski/Qwen2.5-Coder-1.5B-Instruct-GGUF/resolve/main/Qwen2.5-Coder-1.5B-Instruct-Q4_K_M.gguf",
+    "description": "Qwen2.5 Coder 1.5B, optimized for code, Q4_K_M",
+    "size_mb": 900,
+    "n_ctx_recommended": 8192,
+    "sha256": null,
+    "chat_template": "chatml"
+  },
+  {
+    "id": "qwen2.5-0.5b",
+    "name": "Qwen2.5-0.5B-Instruct",
+    "url": "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf",
+    "description": "Lightweight instruct model, 0.5B params, Q4_K_M",
+    "size_mb": 350,
+    "n_ctx_recommended": 8192,
+    "sha256": null,
+    "chat_template": "chatml"
+  },
+  {
+    "id": "qwen2.5-1.5b",
+    "name": "Qwen2.5-1.5B-Instruct",
+    "url": "https://huggingface.co/bartowski/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/Qwen2.5-1.5B-Instruct-Q4_K_M.gguf",
+    "description": "Small instruct model, 1.5B params, Q4_K_M",
+    "size_mb": 950,
+    "n_ctx_recommended": 8192,
+    "sha256": null,
+    "chat_template": "chatml"
+  },
+  {
+    "id": "gemma3-2b",
+    "name": "Gemma-3-2B-Instruct",
+    "url": "https://huggingface.co/bartowski/google_gemma-3-2b-it-GGUF/resolve/main/google_gemma-3-2b-it-Q4_K_M.gguf",
+    "description": "Google Gemma 3 2B instruct, Q4_K_M",
+    "size_mb": 1200,
+    "n_ctx_recommended": 8192,
+    "sha256": null,
+    "chat_template": "chatml"
+  },
+  {
+    "id": "smollm3-3b",
+    "name": "SmolLM3-3B-Instruct",
+    "url": "https://huggingface.co/HuggingFaceTB/SmolLM3-3B-GGUF/resolve/main/SmolLM3-3B-Instruct-Q4_K_M.gguf",
+    "description": "SmolLM3 3B instruct, Q4_K_M",
+    "size_mb": 1900,
+    "n_ctx_recommended": 8192,
+    "sha256": null,
+    "chat_template": "chatml"
+  },
+  {
+    "id": "phi4-mini",
+    "name": "Phi-4-mini-Instruct",
+    "url": "https://huggingface.co/bartowski/microsoft_Phi-4-mini-instruct-GGUF/resolve/main/microsoft_Phi-4-mini-instruct-Q4_K_M.gguf",
+    "description": "Microsoft Phi 4 mini 3.8B, Q4_K_M",
+    "size_mb": 2300,
+    "n_ctx_recommended": 8192,
+    "sha256": null,
+    "chat_template": "chatml"
+  },
+  {
+    "id": "qwen3-4b",
+    "name": "Qwen3-4B-Instruct",
+    "url": "https://huggingface.co/bartowski/Qwen_Qwen3-4B-Instruct-2507-GGUF/resolve/main/Qwen_Qwen3-4B-Instruct-Q4_K_M.gguf",
+    "description": "Qwen3 4B instruct, Q4_K_M",
+    "size_mb": 2400,
+    "n_ctx_recommended": 8192,
+    "sha256": null,
+    "chat_template": "chatml"
+  },
+  {
+    "id": "qwen3.5-4b",
+    "name": "Qwen3.5-4B-Instruct",
+    "url": "https://huggingface.co/bartowski/Qwen_Qwen3.5-4B-GGUF/resolve/main/Qwen_Qwen3.5-4B-Instruct-Q4_K_M.gguf",
+    "description": "Qwen3.5 4B instruct, Q4_K_M",
+    "size_mb": 2400,
+    "n_ctx_recommended": 8192,
+    "sha256": null,
+    "chat_template": "chatml"
+  },
+  {
+    "id": "gemma3-4b",
+    "name": "Gemma-3-4B-Instruct",
+    "url": "https://huggingface.co/bartowski/google_gemma-3-4b-it-GGUF/resolve/main/google_gemma-3-4b-it-Q4_K_M.gguf",
+    "description": "Google Gemma 3 4B instruct, Q4_K_M",
+    "size_mb": 2400,
+    "n_ctx_recommended": 8192,
+    "sha256": null,
+    "chat_template": "chatml"
+  },
+  {
+    "id": "llama-3.2-1b",
+    "name": "Llama-3.2-1B-Instruct",
+    "url": "https://huggingface.co/hugging-quants/Llama-3.2-1B-Instruct-Q4_K_M-GGUF/resolve/main/llama-3.2-1b-instruct-q4_k_m.gguf",
+    "description": "Meta Llama 3.2 1B instruct, Q4_K_M",
+    "size_mb": 780,
+    "n_ctx_recommended": 8192,
+    "sha256": null,
+    "chat_template": "llama3"
+  },
+  {
+    "id": "llama-3.2-3b",
+    "name": "Llama-3.2-3B-Instruct",
+    "url": "https://huggingface.co/bartowski/meta-llama_Llama-3.2-3B-Instruct-GGUF/resolve/main/meta-llama_Llama-3.2-3B-Instruct-Q4_K_M.gguf",
+    "description": "Meta Llama 3.2 3B instruct, Q4_K_M",
+    "size_mb": 1900,
+    "n_ctx_recommended": 8192,
+    "sha256": null,
+    "chat_template": "llama3"
+  },
+  {
+    "id": "minicpm3-4b",
+    "name": "MiniCPM3-4B",
+    "url": "https://huggingface.co/bartowski/MiniCPM3-4B-GGUF/resolve/main/MiniCPM3-4B-Instruct-Q4_K_M.gguf",
+    "description": "MiniCPM3 4B multi-modal instruct, Q4_K_M",
+    "size_mb": 2400,
+    "n_ctx_recommended": 8192,
+    "sha256": null,
+    "chat_template": "chatml"
+  },
+  {
+    "id": "deepseek-coder-6.7b",
+    "name": "DeepSeek-Coder-6.7B-Instruct",
+    "url": "https://huggingface.co/TheBloke/deepseek-coder-6.7B-instruct-GGUF/resolve/main/deepseek-coder-6.7B-instruct-Q4_K_M.gguf",
+    "description": "DeepSeek Coder 6.7B, optimized for code, Q4_K_M",
+    "size_mb": 4000,
+    "n_ctx_recommended": 8192,
+    "sha256": null,
+    "chat_template": "chatml"
+  },
+  {
+    "id": "qwen2.5-coder-7b",
+    "name": "Qwen2.5-Coder-7B-Instruct",
+    "url": "https://huggingface.co/bartowski/Qwen2.5-Coder-7B-Instruct-GGUF/resolve/main/Qwen2.5-Coder-7B-Instruct-Q4_K_M.gguf",
+    "description": "Qwen2.5 Coder 7B, optimized for code, Q4_K_M",
+    "size_mb": 4200,
+    "n_ctx_recommended": 8192,
+    "sha256": null,
+    "chat_template": "chatml"
+  },
+  {
+    "id": "qwen3-7b",
+    "name": "Qwen3-7B-Instruct",
+    "url": "https://huggingface.co/bartowski/Qwen_Qwen3-7B-Instruct-GGUF/resolve/main/Qwen_Qwen3-7B-Instruct-Q4_K_M.gguf",
+    "description": "Qwen3 7B instruct, Q4_K_M",
+    "size_mb": 4200,
+    "n_ctx_recommended": 8192,
+    "sha256": null,
+    "chat_template": "chatml"
+  },
+  {
+    "id": "mistral-7b",
+    "name": "Mistral-7B-Instruct-v0.3",
+    "url": "https://huggingface.co/TheBloke/Mistral-7B-Instruct-v0.3-GGUF/resolve/main/Mistral-7B-Instruct-v0.3-Q4_K_M.gguf",
+    "description": "Mistral 7B instruct v0.3, Q4_K_M",
+    "size_mb": 4200,
+    "n_ctx_recommended": 8192,
+    "sha256": null,
+    "chat_template": "mistral"
+  },
+  {
+    "id": "codellama-7b",
+    "name": "CodeLlama-7B-Instruct",
+    "url": "https://huggingface.co/TheBloke/CodeLlama-7B-Instruct-GGUF/resolve/main/CodeLlama-7B-Instruct-Q4_K_M.gguf",
+    "description": "Meta Code Llama 7B instruct, Q4_K_M",
+    "size_mb": 4200,
+    "n_ctx_recommended": 8192,
+    "sha256": null,
+    "chat_template": "llama3"
+  },
+  {
+    "id": "phi4-14b",
+    "name": "Phi-4-14B",
+    "url": "https://huggingface.co/bartowski/phi-4-GGUF/resolve/main/phi-4-Q4_K_M.gguf",
+    "description": "Microsoft Phi 4 14B, Q4_K_M",
+    "size_mb": 8400,
+    "n_ctx_recommended": 8192,
+    "sha256": null,
+    "chat_template": "chatml"
+  },
+  {
+    "id": "gemma2-9b",
+    "name": "Gemma-2-9B-It",
+    "url": "https://huggingface.co/bartowski/gemma-2-9b-it-GGUF/resolve/main/gemma-2-9b-it-Q4_K_M.gguf",
+    "description": "Google Gemma 2 9B instruct, Q4_K_M",
+    "size_mb": 5400,
+    "n_ctx_recommended": 8192,
+    "sha256": null,
+    "chat_template": "chatml"
+  }
+]
