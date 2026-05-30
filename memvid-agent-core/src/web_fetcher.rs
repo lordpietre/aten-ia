@@ -13,11 +13,9 @@ pub struct WebFetcher {
 
 impl WebFetcher {
     pub fn new(config: &IngestionConfig) -> Self {
-        let interval_ms = if config.rate_limit_per_second > 0 {
-            1000 / config.rate_limit_per_second
-        } else {
-            0
-        };
+        let interval_ms = 1000u32
+            .checked_div(config.rate_limit_per_second)
+            .unwrap_or(0);
 
         let agent = ureq::Agent::new_with_defaults();
 

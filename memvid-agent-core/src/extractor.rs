@@ -79,9 +79,8 @@ pub fn extract_text(content: &str, content_type: &str) -> String {
     let ct = content_type.to_lowercase();
     if ct.contains("html") {
         html_to_text(content)
-    } else if ct.contains("markdown") || ct.contains("md") {
-        content.to_string()
     } else {
+        // Markdown and plain text are stored as-is.
         content.to_string()
     }
 }
@@ -96,10 +95,10 @@ pub fn extract_metadata(html: &str) -> Metadata {
     if let Some(desc) = extract_meta_tag(html, "description") {
         meta.description = Some(desc);
     }
-    if meta.description.is_none() {
-        if let Some(desc) = extract_meta_tag(html, "og:description") {
-            meta.description = Some(desc);
-        }
+    if meta.description.is_none()
+        && let Some(desc) = extract_meta_tag(html, "og:description")
+    {
+        meta.description = Some(desc);
     }
 
     if let Some(lang) = extract_html_lang(html) {
@@ -177,11 +176,14 @@ pub fn html_to_text(html: &str) -> String {
                 in_style = false;
             }
 
-            if !in_script && !in_style && block_tags.contains(&tag_name.as_str()) && !is_end {
-                if !prev_space {
-                    result.push(' ');
-                    prev_space = true;
-                }
+            if !in_script
+                && !in_style
+                && block_tags.contains(&tag_name.as_str())
+                && !is_end
+                && !prev_space
+            {
+                result.push(' ');
+                prev_space = true;
             }
 
             while i < len && chars[i] != '>' {
@@ -191,11 +193,14 @@ pub fn html_to_text(html: &str) -> String {
                 i += 1;
             }
 
-            if !in_script && !in_style && block_tags.contains(&tag_name.as_str()) && is_end {
-                if !prev_space {
-                    result.push(' ');
-                    prev_space = true;
-                }
+            if !in_script
+                && !in_style
+                && block_tags.contains(&tag_name.as_str())
+                && is_end
+                && !prev_space
+            {
+                result.push(' ');
+                prev_space = true;
             }
             continue;
         }
@@ -263,10 +268,9 @@ fn parse_html_entity(chars: &[char], start: usize) -> String {
                 u32::from_str_radix(&num[1..], 16)
             } else {
                 num.parse::<u32>()
-            } {
-                if let Some(c) = char::from_u32(codepoint) {
-                    return c.to_string();
-                }
+            } && let Some(c) = char::from_u32(codepoint)
+            {
+                return c.to_string();
             }
             String::new()
         }
@@ -315,7 +319,7 @@ pub fn html_to_markdown(html: &str) -> String {
                 }
                 "p" if !tag.is_end => {}
                 "p" if tag.is_end => md.push_str("\n\n"),
-                "br" => md.push_str("\n"),
+                "br" => md.push('\n'),
                 "hr" => md.push_str("\n---\n"),
                 "li" if !tag.is_end => {
                     md.push_str("\n- ");
@@ -335,11 +339,11 @@ pub fn html_to_markdown(html: &str) -> String {
                 }
                 "strong" | "b" if !tag.is_end => md.push_str("**"),
                 "strong" | "b" if tag.is_end => md.push_str("**"),
-                "em" | "i" if !tag.is_end => md.push_str("*"),
-                "em" | "i" if tag.is_end => md.push_str("*"),
-                "code" if !in_pre => md.push_str("`"),
+                "em" | "i" if !tag.is_end => md.push('*'),
+                "em" | "i" if tag.is_end => md.push('*'),
+                "code" if !in_pre => md.push('`'),
                 "code" if in_pre => {}
-                "code" if tag.is_end && !in_pre => md.push_str("`"),
+                "code" if tag.is_end && !in_pre => md.push('`'),
                 "code" if tag.is_end && in_pre => {}
                 "blockquote" if !tag.is_end => md.push_str("\n> "),
                 "blockquote" if tag.is_end => md.push('\n'),
@@ -423,12 +427,11 @@ fn extract_meta_tag(html: &str, name: &str) -> Option<String> {
         ),
     ];
     for pattern in &patterns {
-        if let Ok(re) = Regex::new(pattern) {
-            if let Some(caps) = re.captures(html) {
-                if let Some(m) = caps.get(1) {
-                    return Some(m.as_str().trim().to_string());
-                }
-            }
+        if let Ok(re) = Regex::new(pattern)
+            && let Some(caps) = re.captures(html)
+            && let Some(m) = caps.get(1)
+        {
+            return Some(m.as_str().trim().to_string());
         }
     }
     None

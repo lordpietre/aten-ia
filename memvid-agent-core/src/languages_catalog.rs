@@ -103,14 +103,14 @@ impl LanguagesCatalog {
 
         for line in markdown.lines() {
             if let Some(caps) = lang_re.captures(line) {
-                if let Some(name) = current_name.take() {
-                    if !current_resources.is_empty() {
-                        entries.push(LanguageEntry {
-                            key: name.to_lowercase().replace(' ', "-"),
-                            name,
-                            resources: std::mem::take(&mut current_resources),
-                        });
-                    }
+                if let Some(name) = current_name.take()
+                    && !current_resources.is_empty()
+                {
+                    entries.push(LanguageEntry {
+                        key: name.to_lowercase().replace(' ', "-"),
+                        name,
+                        resources: std::mem::take(&mut current_resources),
+                    });
                 }
                 current_name = Some(strip_html(&caps[1]));
             } else if let Some(caps) = link_re.captures(line) {
@@ -122,14 +122,14 @@ impl LanguagesCatalog {
             }
         }
 
-        if let Some(name) = current_name {
-            if !current_resources.is_empty() {
-                entries.push(LanguageEntry {
-                    key: name.to_lowercase().replace(' ', "-"),
-                    name,
-                    resources: current_resources,
-                });
-            }
+        if let Some(name) = current_name
+            && !current_resources.is_empty()
+        {
+            entries.push(LanguageEntry {
+                key: name.to_lowercase().replace(' ', "-"),
+                name,
+                resources: current_resources,
+            });
         }
 
         Ok(Self { entries })
@@ -151,6 +151,10 @@ impl LanguagesCatalog {
 
     pub fn len(&self) -> usize {
         self.entries.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.entries.is_empty()
     }
 }
 
@@ -302,50 +306,77 @@ fn strip_html(html: &str) -> String {
     let mut in_entity = false;
     let mut entity_buf = String::new();
 
+    // Flush a half-parsed entity back as a literal `&` + its buffered text.
+    // Used for a lone `&` that never reaches a `;` (e.g. "AT&T").
+    fn flush_entity(result: &mut String, buf: &mut String) {
+        result.push('&');
+        result.push_str(buf);
+        buf.clear();
+    }
+
     for c in html.chars() {
+        if in_tag {
+            if c == '>' {
+                in_tag = false;
+            }
+            continue;
+        }
         match c {
-            '<' => in_tag = true,
-            '>' if in_tag => in_tag = false,
-            _ if !in_tag => {
-                if c == '&' {
-                    in_entity = true;
-                    entity_buf.clear();
-                } else if in_entity {
-                    if c == ';' {
-                        if entity_buf.starts_with('#') {
-                            if let Some(ch) = decode_numeric_entity(&entity_buf) {
-                                result.push(ch);
-                            }
-                        } else if is_known_entity(entity_buf.as_str()) {
-                            let decoded = match entity_buf.as_str() {
-                                "amp" => "&",
-                                "lt" => "<",
-                                "gt" => ">",
-                                "quot" => "\"",
-                                "apos" => "'",
-                                "nbsp" => " ",
-                                _ => "",
-                            };
-                            result.push_str(decoded);
-                        } else {
-                            result.push('&');
-                            result.push_str(&entity_buf);
-                        }
-                        in_entity = false;
-                    } else if entity_buf.len() > 16 {
-                        result.push('&');
-                        result.push_str(&entity_buf);
-                        result.push(c);
-                        in_entity = false;
-                    } else {
-                        entity_buf.push(c);
+            // A tag starts: any pending entity was a lone '&', emit it literally.
+            '<' => {
+                if in_entity {
+                    flush_entity(&mut result, &mut entity_buf);
+                    in_entity = false;
+                }
+                in_tag = true;
+            }
+            // A new '&' while parsing one means the previous '&' was literal.
+            '&' => {
+                if in_entity {
+                    flush_entity(&mut result, &mut entity_buf);
+                }
+                in_entity = true;
+                entity_buf.clear();
+            }
+            ';' if in_entity => {
+                if entity_buf.starts_with('#') {
+                    // Invalid numeric entities are dropped (unchanged behavior).
+                    if let Some(ch) = decode_numeric_entity(&entity_buf) {
+                        result.push(ch);
                     }
+                } else if is_known_entity(entity_buf.as_str()) {
+                    let decoded = match entity_buf.as_str() {
+                        "amp" => "&",
+                        "lt" => "<",
+                        "gt" => ">",
+                        "quot" => "\"",
+                        "apos" => "'",
+                        "nbsp" => " ",
+                        _ => "",
+                    };
+                    result.push_str(decoded);
                 } else {
+                    flush_entity(&mut result, &mut entity_buf);
+                }
+                in_entity = false;
+            }
+            _ if in_entity => {
+                // Entity names are [A-Za-z0-9#]; anything else (or an overlong
+                // run) means the '&' was literal — flush and treat c normally.
+                if (c.is_ascii_alphanumeric() || c == '#') && entity_buf.len() <= 16 {
+                    entity_buf.push(c);
+                } else {
+                    flush_entity(&mut result, &mut entity_buf);
+                    in_entity = false;
                     result.push(c);
                 }
             }
-            _ => {}
+            _ => result.push(c),
         }
+    }
+    // End of input with a still-open entity → it was a lone '&'.
+    if in_entity {
+        flush_entity(&mut result, &mut entity_buf);
     }
 
     let mut cleaned = String::with_capacity(result.len());
@@ -417,6 +448,17 @@ mod tests {
     }
 
     #[test]
+    fn catalog_is_empty_reflects_len() {
+        let empty = LanguagesCatalog::parse("").unwrap();
+        assert!(empty.is_empty());
+        assert_eq!(empty.len(), 0);
+
+        let one = LanguagesCatalog::parse("### Rust\n* [Book](https://example.com)\n").unwrap();
+        assert!(!one.is_empty());
+        assert_eq!(one.len(), 1);
+    }
+
+    #[test]
     fn strip_html_simple() {
         let html = "<p>Hello <b>world</b></p>";
         let text = strip_html(html);
@@ -476,6 +518,30 @@ mod tests {
             eprintln!("  text[{}] = U+{:04X} '{}'", i, c as u32, c);
         }
         assert_eq!(text, "AT&T");
+    }
+
+    #[test]
+    fn strip_html_lone_ampersand_at_eof() {
+        // No closing tag: the lone '&' must survive to end-of-input.
+        assert_eq!(strip_html("AT&T"), "AT&T");
+    }
+
+    #[test]
+    fn strip_html_ampersand_followed_by_space() {
+        // '&' followed by a non-entity char (space) is literal.
+        assert_eq!(strip_html("Tom & Jerry"), "Tom & Jerry");
+    }
+
+    #[test]
+    fn strip_html_two_lone_ampersands() {
+        // A second '&' flushes the first as literal.
+        assert_eq!(strip_html("A&B&C"), "A&B&C");
+    }
+
+    #[test]
+    fn strip_html_lone_then_valid_entity() {
+        // Lone '&' immediately before a real entity.
+        assert_eq!(strip_html("R&amp;D"), "R&D");
     }
 
     #[test]

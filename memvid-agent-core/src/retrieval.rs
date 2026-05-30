@@ -38,8 +38,29 @@ impl KnowledgeIndex {
         for entry in entries {
             self.entries.push(entry.clone());
         }
-        self.flush_jsonl()?;
-        Ok(())
+        // Append the new lines (one write + one fsync) instead of rewriting the
+        // whole JSONL. The on-disk file already holds the previously-loaded
+        // entries, so appending keeps it consistent with the in-memory vec.
+        self.append_entries_to_jsonl(entries)
+    }
+
+    /// Add an entry only if no existing entry shares the same `(source, checksum)`.
+    /// Returns `true` if it was added, `false` if it was a duplicate and skipped.
+    ///
+    /// Opt-in dedup for re-ingestion (re-fetching a URL, re-ingesting a file):
+    /// the plain `add_entry` keeps appending so callers that intentionally store
+    /// repeated content (e.g. chunk tests) are unaffected. Linear scan — fine for
+    /// the per-document ingestion path; not for bulk inserts of millions.
+    pub fn add_entry_dedup(&mut self, entry: KnowledgeEntry) -> Result<bool> {
+        let is_dup = self
+            .entries
+            .iter()
+            .any(|e| e.source == entry.source && e.checksum == entry.checksum);
+        if is_dup {
+            return Ok(false);
+        }
+        self.add_entry(entry)?;
+        Ok(true)
     }
 
     pub fn search(&self, query: &str, limit: usize) -> Vec<&KnowledgeEntry> {
@@ -54,7 +75,11 @@ impl KnowledgeIndex {
             return Vec::new();
         }
 
-        let mut scored: Vec<(usize, &KnowledgeEntry)> = self
+        // Rank by (match_count desc, insertion_index desc) using a tuple sort.
+        // The previous formula `matches * 10000 + i` overflowed its bucket once
+        // there were >10000 entries: a 1-match late entry could tie a 2-match
+        // early one, corrupting the ranking. Separate keys avoid that entirely.
+        let mut scored: Vec<(usize, usize, &KnowledgeEntry)> = self
             .entries
             .iter()
             .enumerate()
@@ -72,17 +97,18 @@ impl KnowledgeIndex {
                     })
                     .sum();
 
-                (matches * 10000 + i, entry)
+                (matches, i, entry)
             })
-            .filter(|(_, e)| {
+            .filter(|(_, _, e)| {
                 let content_lower = e.content.to_lowercase();
                 query_words.iter().any(|w| content_lower.contains(w))
             })
             .collect();
 
-        scored.sort_by_key(|k| std::cmp::Reverse(k.0));
+        // Higher match count first; ties broken by most-recently-added (higher i).
+        scored.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| b.1.cmp(&a.1)));
         scored.truncate(limit);
-        scored.into_iter().map(|(_, e)| e).collect()
+        scored.into_iter().map(|(_, _, e)| e).collect()
     }
 
     pub fn len(&self) -> usize {
@@ -161,6 +187,35 @@ impl KnowledgeIndex {
         let line = serde_json::to_string(entry).context("Failed to serialize knowledge entry")?;
         use std::io::Write;
         writeln!(file, "{}", line).context("Failed to write to knowledge_index.jsonl")?;
+        file.sync_all()
+            .context("Failed to fsync knowledge_index.jsonl")?;
+        Ok(())
+    }
+
+    /// Append several entries with a single open/write/fsync.
+    fn append_entries_to_jsonl(&self, entries: &[KnowledgeEntry]) -> Result<()> {
+        if entries.is_empty() {
+            return Ok(());
+        }
+        let parent = self.jsonl_path.parent().unwrap_or(Path::new("."));
+        if !parent.exists() {
+            std::fs::create_dir_all(parent)
+                .context("Failed to create parent directory for knowledge_index.jsonl")?;
+        }
+        let mut file = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&self.jsonl_path)
+            .context("Failed to open knowledge_index.jsonl for append")?;
+        let mut batch = String::new();
+        for entry in entries {
+            let line =
+                serde_json::to_string(entry).context("Failed to serialize knowledge entry")?;
+            batch.push_str(&line);
+            batch.push('\n');
+        }
+        file.write_all(batch.as_bytes())
+            .context("Failed to write to knowledge_index.jsonl")?;
         file.sync_all()
             .context("Failed to fsync knowledge_index.jsonl")?;
         Ok(())
@@ -273,6 +328,59 @@ mod tests {
         let index = KnowledgeIndex::load(dir.path()).unwrap();
         assert_eq!(index.len(), 0);
         assert!(index.is_empty());
+    }
+
+    #[test]
+    fn add_entry_dedup_skips_same_source_and_checksum() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut index = KnowledgeIndex::load(dir.path()).unwrap();
+
+        let e1 = make_entry("doc.txt", "same content");
+        assert!(index.add_entry_dedup(e1).unwrap()); // first → stored
+        assert_eq!(index.len(), 1);
+
+        let e2 = make_entry("doc.txt", "same content"); // same source+content
+        assert!(!index.add_entry_dedup(e2).unwrap()); // duplicate → skipped
+        assert_eq!(index.len(), 1);
+    }
+
+    #[test]
+    fn add_entry_dedup_keeps_distinct_content_and_sources() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut index = KnowledgeIndex::load(dir.path()).unwrap();
+
+        assert!(index.add_entry_dedup(make_entry("a.txt", "alpha")).unwrap());
+        // Same source, different content → not a duplicate.
+        assert!(index.add_entry_dedup(make_entry("a.txt", "beta")).unwrap());
+        // Same content, different source → not a duplicate.
+        assert!(index.add_entry_dedup(make_entry("b.txt", "alpha")).unwrap());
+        assert_eq!(index.len(), 3);
+    }
+
+    #[test]
+    fn search_ranks_by_match_count_not_corrupted_by_index_overflow() {
+        // Regression for the `matches * 10000 + i` bucket-overflow bug.
+        // With >10000 entries, a 1-match late entry used to tie a 2-match
+        // early entry. Build exactly that adversarial layout and assert the
+        // higher-match entry still wins.
+        let dir = tempfile::tempdir().unwrap();
+        let mut index = KnowledgeIndex::load(dir.path()).unwrap();
+
+        // Entry 0: two matches of "needle".
+        let mut batch = vec![make_entry("rich", "needle needle in a haystack")];
+        // Entries 1..=12000: a single match of "needle" each (later indices).
+        for i in 0..12_000 {
+            batch.push(make_entry("poor", &format!("needle number {i}")));
+        }
+        index.add_entries(&batch).unwrap();
+
+        let results = index.search("needle", 5);
+        assert!(!results.is_empty());
+        // The 2-match entry must rank first despite its low insertion index.
+        assert_eq!(
+            results[0].source, "rich",
+            "two-match entry should outrank every one-match entry"
+        );
     }
 
     #[test]
@@ -427,6 +535,25 @@ mod tests {
         let mut index = KnowledgeIndex::load(dir.path()).unwrap();
         index.add_entries(&[make_entry("src", "content")]).unwrap();
         assert_eq!(index.len(), 1);
+    }
+
+    #[test]
+    fn add_entries_persists_incrementally_to_jsonl() {
+        // R1: add_entries appends to the JSONL instead of rewriting it. Verify
+        // the entries survive a reload from disk (i.e. they were persisted).
+        let dir = tempfile::tempdir().unwrap();
+        {
+            let mut index = KnowledgeIndex::load(dir.path()).unwrap();
+            index
+                .add_entries(&[make_entry("a", "alpha"), make_entry("b", "beta")])
+                .unwrap();
+            // A second batch must append, not clobber the first.
+            index.add_entries(&[make_entry("c", "gamma")]).unwrap();
+        }
+        let reloaded = KnowledgeIndex::load(dir.path()).unwrap();
+        assert_eq!(reloaded.len(), 3);
+        assert_eq!(reloaded.search("beta", 5).len(), 1);
+        assert_eq!(reloaded.search("gamma", 5).len(), 1);
     }
 
     #[test]

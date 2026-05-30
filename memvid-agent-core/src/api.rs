@@ -9,6 +9,18 @@ use std::net::{TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
+/// Reject request bodies larger than this (protects against unbounded memory).
+const MAX_BODY_BYTES: usize = 10 * 1024 * 1024;
+/// Reject header blocks larger than this.
+const MAX_HEADER_BYTES: usize = 64 * 1024;
+/// Per-connection read/write timeout so a stalled client can't pin a worker.
+const CONN_TIMEOUT_SECS: u64 = 30;
+
+fn within_body_limit(content_length: usize) -> bool {
+    content_length <= MAX_BODY_BYTES
+}
+
+#[derive(Clone)]
 pub struct ApiServer {
     agent: Arc<Mutex<Agent>>,
     model_name: String,
@@ -52,15 +64,28 @@ impl ApiServer {
 
         for stream in listener.incoming() {
             match stream {
-                Ok(mut stream) => {
-                    if let Err(e) = self.handle_connection(&mut stream) {
-                        eprintln!("[api] Error: {}", e);
-                    }
+                Ok(stream) => {
+                    // One thread per connection: a slow client can't block others
+                    // during the read phase. Inference still serializes on the
+                    // agent mutex, which is the intended single-model behavior.
+                    let server = self.clone();
+                    std::thread::spawn(move || {
+                        if let Err(e) = server.handle_one(stream) {
+                            eprintln!("[api] Error: {}", e);
+                        }
+                    });
                 }
                 Err(e) => eprintln!("[api] Connection error: {}", e),
             }
         }
         Ok(())
+    }
+
+    fn handle_one(&self, mut stream: TcpStream) -> Result<()> {
+        let timeout = std::time::Duration::from_secs(CONN_TIMEOUT_SECS);
+        stream.set_read_timeout(Some(timeout)).ok();
+        stream.set_write_timeout(Some(timeout)).ok();
+        self.handle_connection(&mut stream)
     }
 
     fn handle_connection(&self, stream: &mut TcpStream) -> Result<()> {
@@ -106,7 +131,7 @@ impl ApiServer {
                 .headers
                 .get("authorization")
                 .and_then(|h| h.strip_prefix("Bearer "))
-                .map(|t| t == token)
+                .map(|t| constant_time_eq(t, token))
                 .unwrap_or(false),
         }
     }
@@ -211,7 +236,7 @@ impl ApiServer {
     }
 
     fn handle_token(&self, _req: &HttpRequest) -> String {
-        let token = self.token.clone().unwrap_or_else(|| String::new());
+        let token = self.token.clone().unwrap_or_default();
         json_response(
             200,
             &json!({
@@ -235,6 +260,9 @@ fn read_http_request(stream: &mut TcpStream) -> Result<HttpRequest> {
         if buf.windows(4).any(|w| w == b"\r\n\r\n") {
             break;
         }
+        if buf.len() > MAX_HEADER_BYTES {
+            anyhow::bail!("Request headers too large");
+        }
     }
 
     let request_str = String::from_utf8_lossy(&buf);
@@ -252,18 +280,21 @@ fn read_http_request(stream: &mut TcpStream) -> Result<HttpRequest> {
                 method = parts[0].to_string();
                 path = parts[1].to_string();
             }
-        } else if !line.is_empty() {
-            if let Some(pos) = line.find(':') {
-                headers.insert(
-                    line[..pos].trim().to_lowercase(),
-                    line[pos + 1..].trim().to_string(),
-                );
-            }
+        } else if !line.is_empty()
+            && let Some(pos) = line.find(':')
+        {
+            headers.insert(
+                line[..pos].trim().to_lowercase(),
+                line[pos + 1..].trim().to_string(),
+            );
         }
     }
 
     if let Some(cl) = headers.get("content-length") {
         content_length = cl.parse().unwrap_or(0);
+    }
+    if !within_body_limit(content_length) {
+        anyhow::bail!("Request body too large ({} bytes)", content_length);
     }
 
     let body_received = buf.len().saturating_sub(header_end + 4);
@@ -306,6 +337,23 @@ fn json_response(status: u16, body: &serde_json::Value) -> String {
     )
 }
 
+/// Compare two strings without short-circuiting on the first differing byte,
+/// so an attacker can't recover the token byte-by-byte via response timing.
+/// Strings of different lengths still compare in time proportional to the
+/// longer one (the length itself is not secret here — the bytes are).
+fn constant_time_eq(a: &str, b: &str) -> bool {
+    let a = a.as_bytes();
+    let b = b.as_bytes();
+    let max = a.len().max(b.len());
+    let mut diff = (a.len() ^ b.len()) as u8;
+    for i in 0..max {
+        let x = a.get(i).copied().unwrap_or(0);
+        let y = b.get(i).copied().unwrap_or(0);
+        diff |= x ^ y;
+    }
+    diff == 0
+}
+
 fn unauthorized() -> String {
     json_response(
         401,
@@ -316,6 +364,23 @@ fn unauthorized() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn within_body_limit_enforces_cap() {
+        assert!(within_body_limit(0));
+        assert!(within_body_limit(MAX_BODY_BYTES));
+        assert!(!within_body_limit(MAX_BODY_BYTES + 1));
+    }
+
+    #[test]
+    fn constant_time_eq_matches_only_on_equal() {
+        assert!(constant_time_eq("secret-token", "secret-token"));
+        assert!(constant_time_eq("", ""));
+        assert!(!constant_time_eq("secret-token", "secret-tokeX"));
+        assert!(!constant_time_eq("secret", "secret-token")); // different length
+        assert!(!constant_time_eq("secret-token", "secret")); // different length
+        assert!(!constant_time_eq("a", ""));
+    }
 
     #[test]
     fn json_response_format() {

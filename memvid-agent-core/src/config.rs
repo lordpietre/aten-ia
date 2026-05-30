@@ -28,8 +28,22 @@ pub struct ModelConfig {
     pub n_ctx: u32,
     pub n_gpu_layers: u32,
     pub chat_template: String,
+    /// KV-cache data type for the K (keys) cache. Plain types (`f16`, `f32`,
+    /// `bf16`, `q8_0`, `q4_0`) or TurboQuant codecs (`turbo2`/`turbo3`/`turbo4`).
+    /// Defaults to `f16` (unchanged behavior). Keep K at >= V precision.
+    #[serde(default = "default_kv_cache_type")]
+    pub kv_type_k: String,
+    /// KV-cache data type for the V (values) cache. See `kv_type_k`.
+    /// V tolerates aggressive compression ("V is free"), so this is where
+    /// TurboQuant codecs pay off. Defaults to `f16`.
+    #[serde(default = "default_kv_cache_type")]
+    pub kv_type_v: String,
     pub download_url: Option<String>,
     pub sha256: Option<String>,
+}
+
+fn default_kv_cache_type() -> String {
+    "f16".to_string()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -78,6 +92,8 @@ impl Default for Config {
                 n_ctx: 4096,
                 n_gpu_layers: 0,
                 chat_template: "chatml".to_string(),
+                kv_type_k: default_kv_cache_type(),
+                kv_type_v: default_kv_cache_type(),
                 download_url: None,
                 sha256: None,
             },
@@ -158,10 +174,10 @@ impl Config {
         if let Ok(val) = std::env::var("MODEL_NAME") {
             self.model.name = val;
         }
-        if let Ok(val) = std::env::var("MODEL_CTX") {
-            if let Ok(n) = val.parse() {
-                self.model.n_ctx = n;
-            }
+        if let Ok(val) = std::env::var("MODEL_CTX")
+            && let Ok(n) = val.parse()
+        {
+            self.model.n_ctx = n;
         }
         if let Ok(val) = std::env::var("MODEL_URL") {
             self.model.download_url = Some(val);
@@ -191,6 +207,8 @@ mod tests {
         assert_eq!(cfg.model.n_ctx, 4096);
         assert_eq!(cfg.model.n_gpu_layers, 0);
         assert_eq!(cfg.model.chat_template, "chatml");
+        assert_eq!(cfg.model.kv_type_k, "f16");
+        assert_eq!(cfg.model.kv_type_v, "f16");
         assert_eq!(cfg.generation.top_k, 40);
         assert_eq!(cfg.generation.top_p, 0.95);
         assert!(cfg.generation.temp - 0.8 < f32::EPSILON);
@@ -226,6 +244,44 @@ mod tests {
         let loaded = Config::load_or_create_with_path(&config_path).unwrap();
         assert_eq!(loaded.model.path, cfg.model.path);
         assert_eq!(loaded.model.n_ctx, cfg.model.n_ctx);
+    }
+
+    #[test]
+    fn kv_cache_types_default_to_f16_when_absent() {
+        // An older config.json without the kv_type_* fields must still load,
+        // defaulting both caches to f16 (i.e. unchanged behavior).
+        let json = r#"{
+            "version": 1,
+            "data_dir": "memvid_data",
+            "developer_mode": true,
+            "developer_prompt": null,
+            "model": {
+                "path": "m.gguf",
+                "name": "m",
+                "n_ctx": 4096,
+                "n_gpu_layers": 0,
+                "chat_template": "chatml",
+                "download_url": null,
+                "sha256": null
+            },
+            "generation": { "top_k": 40, "top_p": 0.95, "temp": 0.8, "max_tokens": 2048 },
+            "api": { "enabled": false, "host": "127.0.0.1", "port": 8787, "token": null },
+            "languages": { "installed": [] }
+        }"#;
+        let cfg: Config = serde_json::from_str(json).unwrap();
+        assert_eq!(cfg.model.kv_type_k, "f16");
+        assert_eq!(cfg.model.kv_type_v, "f16");
+    }
+
+    #[test]
+    fn kv_cache_types_roundtrip() {
+        let mut cfg = Config::default();
+        cfg.model.kv_type_k = "f16".to_string();
+        cfg.model.kv_type_v = "turbo3".to_string();
+        let json = serde_json::to_string_pretty(&cfg).unwrap();
+        let back: Config = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.model.kv_type_k, "f16");
+        assert_eq!(back.model.kv_type_v, "turbo3");
     }
 
     #[test]

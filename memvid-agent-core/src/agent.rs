@@ -40,6 +40,8 @@ impl Agent {
             &config.model.path,
             config.model.n_ctx,
             config.model.n_gpu_layers,
+            &config.model.kv_type_k,
+            &config.model.kv_type_v,
             config.generation.top_k,
             config.generation.top_p,
             config.generation.temp,
@@ -81,8 +83,7 @@ impl Agent {
     pub fn chat_with_messages(&mut self, messages: &[Message]) -> Result<String> {
         let user_input = messages
             .iter()
-            .filter(|m| m.role == MessageRole::User)
-            .last()
+            .rfind(|m| m.role == MessageRole::User)
             .map(|m| m.content.as_str())
             .unwrap_or("");
 
@@ -124,7 +125,7 @@ impl Agent {
             tokens: Some(result.tokens_estimated),
         });
 
-        if self.session.interaction_count() % 5 == 0 {
+        if self.session.interaction_count().is_multiple_of(5) {
             self.session
                 .flush(&self.llm, &self.model_name, &mut self.memory)?;
         }
@@ -205,11 +206,33 @@ impl Agent {
         Ok(())
     }
 
+    /// Like `store_knowledge_direct` but skips entries already present with the
+    /// same `(source, checksum)`. Returns `true` if stored, `false` if skipped.
+    pub fn store_knowledge_dedup(&mut self, source: &str, content: &str) -> Result<bool> {
+        let entry = KnowledgeEntry {
+            id: Uuid::new_v4().to_string(),
+            source: source.to_string(),
+            content: content.to_string(),
+            timestamp: Utc::now(),
+            checksum: crate::utils::sha256_digest(content.as_bytes()),
+        };
+
+        if self.knowledge_index.add_entry_dedup(entry.clone())? {
+            self.memory.append_knowledge(entry)?;
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+
+    /// Fetch a URL, chunk it, and index the chunks (deduplicated by checksum).
+    /// Returns the fetched content and the number of chunks actually indexed
+    /// (duplicates already present are not counted).
     pub fn fetch_and_ingest(
         &mut self,
         url: &str,
         ingestion: &IngestionConfig,
-    ) -> Result<FetchedContent> {
+    ) -> Result<(FetchedContent, usize)> {
         let mut fetcher = WebFetcher::new(ingestion);
         let content = fetcher.fetch_and_retry(url)?;
 
@@ -220,8 +243,11 @@ impl Agent {
         };
 
         let chunks = chunker::chunk_text(&content.content, &chunk_opts, url);
+        let mut indexed = 0usize;
         for chunk in &chunks {
-            self.store_knowledge_direct(&chunk.source, &chunk.content)?;
+            if self.store_knowledge_dedup(&chunk.source, &chunk.content)? {
+                indexed += 1;
+            }
         }
 
         let title_info = match &content.title {
@@ -232,15 +258,13 @@ impl Agent {
             role: MessageRole::System,
             content: format!(
                 "The user fetched URL '{}'{} — {} chunks indexed as knowledge.",
-                url,
-                title_info,
-                chunks.len()
+                url, title_info, indexed
             ),
             timestamp: Utc::now(),
             tokens: None,
         });
 
-        Ok(content)
+        Ok((content, indexed))
     }
 
     pub fn process_url_batch(
@@ -251,13 +275,10 @@ impl Agent {
         let mut results = BatchResult::default();
         for url in urls {
             match self.fetch_and_ingest(url, ingestion) {
-                Ok(content) => {
+                Ok((_content, indexed)) => {
                     results.success.push(url.clone());
-                    results.total_chunks += content
-                        .content
-                        .len()
-                        .saturating_div(ingestion.chunk_max_size)
-                        .max(1) as u32;
+                    // Real number of chunks indexed, not a size-based estimate.
+                    results.total_chunks += indexed as u32;
                 }
                 Err(e) => {
                     results.failures.push((url.clone(), format!("{:#}", e)));
@@ -332,22 +353,38 @@ impl Agent {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn switch_model(
         &mut self,
         path: &str,
         n_ctx: u32,
         n_gpu_layers: u32,
+        kv_type_k: &str,
+        kv_type_v: &str,
         model_name: &str,
         chat_template: &str,
         top_k: i32,
         top_p: f32,
         temp: f32,
     ) -> Result<()> {
-        let new_llm = LlamaContext::init(path, n_ctx, n_gpu_layers, top_k, top_p, temp)?;
+        let new_llm = LlamaContext::init(
+            path,
+            n_ctx,
+            n_gpu_layers,
+            kv_type_k,
+            kv_type_v,
+            top_k,
+            top_p,
+            temp,
+        )?;
         self.llm = new_llm;
         self.model_name = model_name.to_string();
         self.context_policy = ContextPolicy::new(n_ctx, self.context_policy.max_tokens());
-        self.prompt_builder = PromptBuilder::new(ChatTemplate::from_str(chat_template));
+        // Preserve the developer prompt across the model switch instead of
+        // resetting it to the default (previously a silent regression).
+        self.prompt_builder = self
+            .prompt_builder
+            .with_template(ChatTemplate::from_str(chat_template));
         Ok(())
     }
 
@@ -423,27 +460,24 @@ impl Agent {
                 Err(_) => continue,
             };
             for frame in &frames {
-                if let Ok(text) = reader.read_text(frame.id) {
-                    if let Ok(batch) = serde_json::from_str::<serde_json::Value>(&text) {
-                        if let Some(messages) = batch["messages"].as_array() {
-                            for msg in messages {
-                                let role = msg["role"].as_str().unwrap_or("unknown");
-                                let content = msg["content"].as_str().unwrap_or("");
-                                let label = match role {
-                                    "user" => "You",
-                                    "assistant" => "Assistant",
-                                    "system" => "System",
-                                    "tool" => "Tool",
-                                    _ => role,
-                                };
-                                let display = if content.len() > 500 {
-                                    format!("{}...", &content[..500])
-                                } else {
-                                    content.to_string()
-                                };
-                                results.push(format!("  {}: {}", label, display));
-                            }
-                        }
+                if let Ok(text) = reader.read_text(frame.id)
+                    && let Ok(batch) = serde_json::from_str::<serde_json::Value>(&text)
+                    && let Some(messages) = batch["messages"].as_array()
+                {
+                    for msg in messages {
+                        let role = msg["role"].as_str().unwrap_or("unknown");
+                        let content = msg["content"].as_str().unwrap_or("");
+                        let label = match role {
+                            "user" => "You",
+                            "assistant" => "Assistant",
+                            "system" => "System",
+                            "tool" => "Tool",
+                            _ => role,
+                        };
+                        // UTF-8-safe truncation: byte slicing `&content[..500]`
+                        // panics when byte 500 falls inside a multi-byte char.
+                        let display = crate::utils::truncate_chars(content, 500, "...");
+                        results.push(format!("  {}: {}", label, display));
                     }
                 }
             }
@@ -455,13 +489,12 @@ impl Agent {
 
 impl Drop for Agent {
     fn drop(&mut self) {
-        if self.llm.is_valid() {
-            if let Err(e) = self
+        if self.llm.is_valid()
+            && let Err(e) = self
                 .session
                 .flush(&self.llm, &self.model_name, &mut self.memory)
-            {
-                tracing::warn!("Failed to flush session on drop: {}", e);
-            }
+        {
+            tracing::warn!("Failed to flush session on drop: {}", e);
         }
     }
 }
@@ -508,6 +541,23 @@ mod tests {
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].source, "test-source");
         assert_eq!(results[0].content, "test content");
+    }
+
+    #[test]
+    fn store_knowledge_dedup_skips_repeat_ingestion() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut agent = test_agent(dir.path());
+
+        assert!(agent.store_knowledge_dedup("doc.txt", "hello").unwrap());
+        assert_eq!(agent.knowledge_count(), 1);
+
+        // Re-ingesting identical (source, content) is a no-op.
+        assert!(!agent.store_knowledge_dedup("doc.txt", "hello").unwrap());
+        assert_eq!(agent.knowledge_count(), 1);
+
+        // Different content under the same source is still stored.
+        assert!(agent.store_knowledge_dedup("doc.txt", "world").unwrap());
+        assert_eq!(agent.knowledge_count(), 2);
     }
 
     #[test]

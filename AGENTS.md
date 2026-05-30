@@ -40,7 +40,8 @@ CI order: `build → test → fmt → clippy --lib` (`.github/workflows/ci.yml`)
 - **Default model** in `config.json`: `Qwen2.5-0.5B-Instruct` (`n_ctx: 8192`, `chat_template: chatml`)
 - **Commands accept uppercase**: `/MODELS`, `/LOAD`, `/INGEST`, etc.
 - **`Raw` chat template** ignores messages, history, and RAG context
-- **`switch_model`** does not preserve `developer_mode`
+- **`switch_model`** preserves the developer prompt across the switch (via `PromptBuilder::with_template`)
+- **KV cache type** is configurable: `model.kv_type_k` / `model.kv_type_v` (default `f16`; `turbo2/3/4` enable flash-attn automatically)
 - **`add_entries()` batch** rewrites full JSONL (only single `add_entry()` is O(1) append)
 - **`llama-cpp-turboquant/AGENTS.md`**: no AI-submitted PRs to upstream llama.cpp
 - **`FileLock::acquire()`** creates `data_dir/.lock` with PID — concurrent instances rejected

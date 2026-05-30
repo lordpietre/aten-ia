@@ -45,11 +45,11 @@ impl BooksCatalog {
             // Match section headers like "### Python" or "### C++"
             if line.starts_with("### ") {
                 // Save previous language if exists
-                if let Some(lang) = current_language.take() {
-                    if !current_resources.is_empty() {
-                        languages.insert(lang, current_resources.clone());
-                        current_resources.clear();
-                    }
+                if let Some(lang) = current_language.take()
+                    && !current_resources.is_empty()
+                {
+                    languages.insert(lang, current_resources.clone());
+                    current_resources.clear();
                 }
 
                 let language = line
@@ -69,20 +69,19 @@ impl BooksCatalog {
             }
 
             // Match resource links: * [Title](url)
-            if current_language.is_some() {
-                if line.trim_start_matches("* ").starts_with('[') {
-                    if let Some(resource) = Self::parse_resource_line(line) {
-                        current_resources.push(resource);
-                    }
-                }
+            if current_language.is_some()
+                && line.trim_start_matches("* ").starts_with('[')
+                && let Some(resource) = Self::parse_resource_line(line)
+            {
+                current_resources.push(resource);
             }
         }
 
         // Save last language
-        if let Some(lang) = current_language {
-            if !current_resources.is_empty() {
-                languages.insert(lang, current_resources);
-            }
+        if let Some(lang) = current_language
+            && !current_resources.is_empty()
+        {
+            languages.insert(lang, current_resources);
         }
 
         Ok(languages)

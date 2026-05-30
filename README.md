@@ -11,6 +11,33 @@ Este proyecto ya integra un flujo completo de:
 - índice ligero `knowledge_index.jsonl` para búsquedas rápidas
 - API HTTP compatible OpenAI con token auth
 - catálogo de lenguajes + descarga de docs online como conocimiento indexado
+- **tipo de KV-cache configurable** (`f16` por defecto; codecs TurboQuant `turbo2/3/4`)
+
+## Cambios recientes
+
+Ver [`IMPROVEMENTS_PLAN.md`](memvid-agent-core/IMPROVEMENTS_PLAN.md) para el detalle y el roadmap.
+
+- **KV-cache configurable (Opción 4):** `model.kv_type_k` / `model.kv_type_v` en
+  `config.json` (default `f16`, retrocompatible). Activa flash-attention
+  automáticamente para tipos cuantizados; avisa si K se comprime más que V.
+- **Fix 🔴 pánico UTF-8 en `/history`** al truncar mensajes con caracteres multibyte.
+- **Fix 🟠 ranking de `/search`** corrompido con >10 000 entradas.
+- **Fix 🟠 `switch_model`** ahora preserva el developer prompt.
+- **Fix 🟠 `strip_html`** (usado por `/learn`) ya no se come el `&` literal (p. ej. `AT&T`).
+- **Fix 🟡 `detokenize`** reintenta con buffer mayor en vez de truncar tokens > 256 bytes.
+- **Dedup opt-in en ingesta:** `/fetch` deduplica chunks por checksum y reporta el nº
+  real de chunks indexados (también en `/batch`).
+- **Seguridad API:** comparación de token en tiempo constante; token fuera del
+  `config.json` versionado (se genera en runtime).
+- **Comando `/kv [k] [v]`:** consulta/cambia los tipos de KV-cache en caliente
+  (valida nombres, persiste en config y recarga el contexto).
+- **Limpieza de lints:** `cargo clippy --lib` ahora sin warnings; `LanguagesCatalog`
+  expone `is_empty()`.
+- **API más robusta:** un hilo por conexión, timeouts de lectura/escritura (30 s) y
+  límites de tamaño de cabeceras/body. `/fetch-md` ya no bloquea el mutex del agente
+  durante la descarga.
+- **`add_entries` incremental:** añade solo las líneas nuevas al índice JSONL
+  (un `fsync`) en vez de reescribirlo entero.
 
 ## Quick start
 
@@ -69,6 +96,7 @@ cargo test
 | `/stats` | Estadísticas del agente |
 | `/history` | Historial de conversaciones |
 | `/config` | Muestra configuración actual |
+| `/kv [k] [v]` | Consulta o cambia los tipos de KV-cache (ej. `/kv f16 turbo3`) |
 | `/help` | Muestra ayuda completa |
 | `/exit` | Salir |
 
@@ -165,6 +193,9 @@ Valores importantes:
 - `model.n_ctx`: tamaño de contexto
 - `model.n_gpu_layers`: capas GPU (actualmente CPU only / 0)
 - `model.chat_template`: template de prompt
+- `model.kv_type_k` / `model.kv_type_v`: tipo de KV-cache (`f16` por defecto;
+  `f32`, `bf16`, `q8_0`, `q4_0`, o codecs TurboQuant `turbo2`/`turbo3`/`turbo4`).
+  Recomendado mantener K en mayor o igual precisión que V ("V is free, K is everything").
 - `generation.top_k`, `top_p`, `temp`, `max_tokens`
 - `api.enabled`, `api.host`, `api.port`, `api.token`
 - `languages.installed`
@@ -214,11 +245,9 @@ $DATA_DIR/
 ## Limitaciones actuales
 
 - RAG es keyword-based (word matching), sin embeddings semánticos
-- API server single-threaded, sin streaming SSE
-- `switch_model` no preserva `developer_mode`
+- API: un hilo por conexión (inferencia serializada por mutex); aún sin streaming SSE
 - Template `Raw` ignora historial y RAG context
-- `add_entries()` batch reescribe JSONL completo (solo `add_entry()` individual es O(1))
-- Knowledge index sin deduplicación por checksum
+- Dedup por checksum solo en la ruta de `/fetch` (opt-in); `add_entry` genérico sigue apilando
 - Sin catálogo de idiomas offline embebido
 - Sin `MODEL_GPU_LAYERS` env var (CPU only)
 
@@ -247,9 +276,14 @@ Este repositorio incluye el submódulo `llama-cpp-turboquant`, un fork de llama.
 
 ## Cómo contribuir
 
-- Prueba primero con `cargo test`
+- Prueba primero con `cargo test`. En máquinas con poca RAM (~8 GB) la suite a
+  máxima paralelización puede agotar memoria/espacio temporal (muchos tests
+  escriben segmentos `.mv2` con `fsync` a la vez); usa
+  `cargo test -- --test-threads=2` para una ejecución estable.
 - Mantén los cambios en `src/` separados de `llama-cpp-turboquant/`
 - No modifiques la lógica de build de llama.cpp sin entender `build.rs`
+- El roadmap de mejoras y correcciones vive en
+  [`IMPROVEMENTS_PLAN.md`](memvid-agent-core/IMPROVEMENTS_PLAN.md)
 
 ## Licencia
 

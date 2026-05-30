@@ -52,10 +52,10 @@ impl FileLock {
 
 impl Drop for FileLock {
     fn drop(&mut self) {
-        if let Err(e) = std::fs::remove_file(&self.path) {
-            if e.kind() != std::io::ErrorKind::NotFound {
-                tracing::warn!("Failed to remove lock file {}: {}", self.path.display(), e);
-            }
+        if let Err(e) = std::fs::remove_file(&self.path)
+            && e.kind() != std::io::ErrorKind::NotFound
+        {
+            tracing::warn!("Failed to remove lock file {}: {}", self.path.display(), e);
         }
     }
 }
@@ -65,6 +65,20 @@ pub fn sha256_digest(data: &[u8]) -> String {
     let mut hasher = Sha256::new();
     hasher.update(data);
     format!("{:x}", hasher.finalize())
+}
+
+/// Truncate a string to at most `max_chars` Unicode scalar values, appending
+/// `…` (via `suffix`) when truncation occurred.
+///
+/// This exists because naive byte slicing (`&s[..n]`) panics when `n` lands in
+/// the middle of a multi-byte UTF-8 sequence (accents, CJK, emoji). Truncating
+/// by `char` boundaries is always safe regardless of where the limit falls.
+pub fn truncate_chars(s: &str, max_chars: usize, suffix: &str) -> String {
+    if s.chars().count() <= max_chars {
+        return s.to_string();
+    }
+    let truncated: String = s.chars().take(max_chars).collect();
+    format!("{}{}", truncated, suffix)
 }
 
 pub fn compute_file_checksum<P: AsRef<Path>>(path: P) -> Result<String> {
@@ -121,6 +135,37 @@ mod tests {
         atomic_write(&path, b"data").unwrap();
         assert!(path.exists());
         assert_eq!(std::fs::read_to_string(&path).unwrap(), "data");
+    }
+
+    #[test]
+    fn truncate_chars_under_limit_unchanged() {
+        assert_eq!(truncate_chars("hello", 10, "..."), "hello");
+        assert_eq!(truncate_chars("hello", 5, "..."), "hello");
+    }
+
+    #[test]
+    fn truncate_chars_over_limit_adds_suffix() {
+        assert_eq!(truncate_chars("hello world", 5, "..."), "hello...");
+    }
+
+    #[test]
+    fn truncate_chars_is_utf8_safe_at_multibyte_boundary() {
+        // Regression test: naive `&s[..n]` would panic here because the byte
+        // index lands inside a 2-byte 'é'. truncate_chars must never panic and
+        // must cut on a char boundary.
+        let s = "é".repeat(600); // each 'é' is 2 bytes → byte 500 is mid-char
+        let out = truncate_chars(&s, 500, "...");
+        assert_eq!(out.chars().count(), 503); // 500 chars + "..."
+        assert!(out.starts_with('é'));
+        // The whole thing is still valid UTF-8 (would have panicked otherwise).
+        assert!(out.ends_with("..."));
+    }
+
+    #[test]
+    fn truncate_chars_handles_emoji_and_cjk() {
+        let s = "😀漢字テスト";
+        assert_eq!(truncate_chars(s, 3, "…"), "😀漢字…");
+        assert_eq!(truncate_chars(s, 100, "…"), s);
     }
 
     #[test]

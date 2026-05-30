@@ -6,10 +6,10 @@ fn repo_slug() -> String {
     if let Ok(val) = env::var("LLAMA_LIBS_REPO") {
         return val;
     }
-    if let Ok(val) = env::var("CARGO_PKG_REPOSITORY") {
-        if let Some(slug) = val.strip_prefix("https://github.com/") {
-            return slug.trim_end_matches(".git").to_string();
-        }
+    if let Ok(val) = env::var("CARGO_PKG_REPOSITORY")
+        && let Some(slug) = val.strip_prefix("https://github.com/")
+    {
+        return slug.trim_end_matches(".git").to_string();
     }
     "lordpietre/aten-ia".to_string()
 }

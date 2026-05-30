@@ -78,6 +78,77 @@ fn main() -> Result<()> {
             continue;
         }
 
+        if input_lower == "/kv" || input_lower.starts_with("/kv ") {
+            let args: Vec<&str> = input.split_whitespace().skip(1).collect();
+            if args.is_empty() {
+                println!(
+                    "{} KV cache: K={} / V={}",
+                    "↳".dimmed(),
+                    config.model.kv_type_k,
+                    config.model.kv_type_v
+                );
+                println!(
+                    "  usage: /kv <type_k> <type_v>  (f16 f32 bf16 q8_0 q4_0 turbo2 turbo3 turbo4)"
+                );
+                continue;
+            }
+            if args.len() != 2 {
+                eprintln!("{} usage: /kv <type_k> <type_v>", "✗".red());
+                continue;
+            }
+            let (k, v) = (args[0], args[1]);
+            let invalid: Vec<&str> = [k, v]
+                .into_iter()
+                .filter(|t| !memvid_agent_core::llama::context::is_valid_kv_cache_type(t))
+                .collect();
+            if !invalid.is_empty() {
+                eprintln!(
+                    "{} unknown KV cache type(s): {}. Valid: f16 f32 bf16 q8_0 q4_0 turbo2 turbo3 turbo4",
+                    "✗".red(),
+                    invalid.join(", ")
+                );
+                continue;
+            }
+
+            config.model.kv_type_k = k.to_string();
+            config.model.kv_type_v = v.to_string();
+            if let Err(e) = config.save() {
+                eprintln!("{} Failed to save config: {:#}", "✗".red(), e);
+                continue;
+            }
+
+            // Re-initialize the context with the new KV cache types.
+            let switch = {
+                let mut a = agent.lock().unwrap();
+                a.switch_model(
+                    &config.model.path,
+                    config.model.n_ctx,
+                    config.model.n_gpu_layers,
+                    &config.model.kv_type_k,
+                    &config.model.kv_type_v,
+                    &config.model.name,
+                    &config.model.chat_template,
+                    config.generation.top_k,
+                    config.generation.top_p,
+                    config.generation.temp,
+                )
+            };
+            match switch {
+                Ok(()) => println!(
+                    "{} KV cache set to K={} / V={} (context reloaded)",
+                    "✓".green(),
+                    config.model.kv_type_k,
+                    config.model.kv_type_v
+                ),
+                Err(e) => eprintln!(
+                    "{} Saved to config, but context reload failed: {:#}",
+                    "✗".red(),
+                    e
+                ),
+            }
+            continue;
+        }
+
         if input_lower == "/stats" {
             let a = agent.lock().unwrap();
             print_stats(&a, &config, &loaded_files)?;
@@ -152,6 +223,8 @@ fn main() -> Result<()> {
                             &config.model.path,
                             config.model.n_ctx,
                             config.model.n_gpu_layers,
+                            &config.model.kv_type_k,
+                            &config.model.kv_type_v,
                             &config.model.name,
                             &config.model.chat_template,
                             config.generation.top_k,
@@ -575,7 +648,7 @@ fn main() -> Result<()> {
             spinner.finish_and_clear();
 
             match result {
-                Ok(content) => {
+                Ok((content, indexed)) => {
                     let title = content.title.as_deref().unwrap_or("untitled");
                     let preview: String = content.content.chars().take(200).collect();
                     println!(
@@ -586,6 +659,7 @@ fn main() -> Result<()> {
                     );
                     println!("  {} type: {}", "↳".dimmed(), content.content_type);
                     println!("  {} size: {} bytes", "↳".dimmed(), content.size_bytes);
+                    println!("  {} chunks indexed: {}", "↳".dimmed(), indexed);
                     println!("  {} preview: {}", "↳".dimmed(), preview.dimmed());
                 }
                 Err(e) => {
@@ -615,8 +689,9 @@ fn main() -> Result<()> {
             spinner.set_message("Fetching…");
             spinner.enable_steady_tick(std::time::Duration::from_millis(80));
 
+            // No agent lock here: /fetch-md only fetches and prints. Locking the
+            // agent during network I/O would needlessly block other operations.
             let result = {
-                let mut a = agent.lock().unwrap();
                 let mut fetcher =
                     memvid_agent_core::web_fetcher::WebFetcher::new(&config.ingestion);
                 fetcher.fetch_and_retry(url)
@@ -916,6 +991,10 @@ fn print_help() {
         "  {:<20}  Show current configuration",
         "/config".bright_blue()
     );
+    println!(
+        "  {:<20}  Get/set KV-cache types (e.g. /kv f16 turbo3)",
+        "/kv [k] [v]".bright_blue()
+    );
     println!("  {:<20}  Show this help", "/help".bright_blue());
     println!("  {:<20}  Exit the agent", "/exit".bright_blue());
     println!();
@@ -989,6 +1068,12 @@ fn print_config(config: &Config) {
         "chat_template:".dimmed(),
         config.model.chat_template
     );
+    println!(
+        "    {} K={} / V={}",
+        "kv_cache:".dimmed(),
+        config.model.kv_type_k,
+        config.model.kv_type_v
+    );
     println!("  {} Generation", "──".dimmed());
     println!("    {} {}", "top_k:".dimmed(), config.generation.top_k);
     println!("    {} {}", "top_p:".dimmed(), config.generation.top_p);
@@ -1026,6 +1111,12 @@ fn print_model_current(config: &Config) {
     println!("  {} {}", "Context:".dimmed(), config.model.n_ctx);
     println!("  {} {}", "GPU layers:".dimmed(), config.model.n_gpu_layers);
     println!("  {} {}", "Template:".dimmed(), config.model.chat_template);
+    println!(
+        "  {} K={} / V={}",
+        "KV cache:".dimmed(),
+        config.model.kv_type_k,
+        config.model.kv_type_v
+    );
     println!();
 }
 

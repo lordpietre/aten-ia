@@ -218,15 +218,15 @@ impl MemvidWriter {
 
 impl Drop for MemvidWriter {
     fn drop(&mut self) {
-        if !self.pending_batches.is_empty() {
-            if let Err(e) = self.flush() {
-                tracing::warn!("Failed to flush batches on drop: {}", e);
-            }
+        if !self.pending_batches.is_empty()
+            && let Err(e) = self.flush()
+        {
+            tracing::warn!("Failed to flush batches on drop: {}", e);
         }
-        if !self.pending_knowledge.is_empty() {
-            if let Err(e) = self.flush_knowledge() {
-                tracing::warn!("Failed to flush knowledge on drop: {}", e);
-            }
+        if !self.pending_knowledge.is_empty()
+            && let Err(e) = self.flush_knowledge()
+        {
+            tracing::warn!("Failed to flush knowledge on drop: {}", e);
         }
     }
 }

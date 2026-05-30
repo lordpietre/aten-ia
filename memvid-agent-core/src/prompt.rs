@@ -11,6 +11,9 @@ pub enum ChatTemplate {
 }
 
 impl ChatTemplate {
+    // Inherent `from_str` (not the `FromStr` trait) on purpose: it's infallible
+    // (unknown → `Raw`) so a `Result`-returning trait impl would be misleading.
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> Self {
         match s.to_lowercase().trim() {
             "chatml" => ChatTemplate::ChatML,
@@ -46,6 +49,16 @@ impl PromptBuilder {
     pub fn with_developer_prompt(mut self, prompt: impl Into<String>) -> Self {
         self.developer_prompt = prompt.into();
         self
+    }
+
+    /// Return a builder for a different chat template while preserving the
+    /// current developer prompt. Used by `switch_model` so that switching the
+    /// model does not silently reset the developer prompt to the default.
+    pub fn with_template(&self, template: ChatTemplate) -> Self {
+        Self {
+            template,
+            developer_prompt: self.developer_prompt.clone(),
+        }
     }
 
     pub fn developer_prompt(&self) -> &str {
@@ -277,5 +290,25 @@ mod tests {
         let result = builder.build(&[], "write a poem", &[]);
         assert!(result.contains("You are a poet."));
         assert!(!result.contains("expert software engineer"));
+    }
+
+    #[test]
+    fn with_template_preserves_developer_prompt() {
+        // Regression: switching templates (as `switch_model` does) must keep
+        // the developer prompt, not reset it to the default.
+        let original =
+            PromptBuilder::new(ChatTemplate::ChatML).with_developer_prompt("You are a poet.");
+        let switched = original.with_template(ChatTemplate::Llama3);
+        assert_eq!(switched.developer_prompt(), "You are a poet.");
+        assert_eq!(switched.template(), ChatTemplate::Llama3);
+    }
+
+    #[test]
+    fn with_template_preserves_empty_developer_prompt() {
+        // developer_mode = false stores an empty developer prompt; that empty
+        // state must also survive a template switch.
+        let original = PromptBuilder::new(ChatTemplate::ChatML).with_developer_prompt("");
+        let switched = original.with_template(ChatTemplate::Mistral);
+        assert_eq!(switched.developer_prompt(), "");
     }
 }
