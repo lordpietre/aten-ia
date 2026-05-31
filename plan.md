@@ -71,13 +71,15 @@ Atomic write pattern en todos los paths: `write → fsync → rename → fsync(p
 | `memvid/playlist.rs` | 344 | 14 | ✅ Segment path generation, rollover logic |
 | `utils.rs` | 201 | 13 | ✅ atomic_write, FileLock, SHA-256 |
 | `web_fetcher.rs` | 226 | 9 | ✅ Fetch HTTP con rate limiting, retry, global throttle |
+| `feeds.rs` | 138 | 5 | ✅ Parser RSS/Atom con feed-rs, filtrado de entries sin link |
+| `queue.rs` | 258 | 9 | ✅ Cola persistente JSONL, estados, persistencia atómica |
 | `extractor.rs` | 898 | 62 | ✅ HTML→text, HTML→markdown, metadata + entity parsing + PDF/EPUB + tempfile tests |
 | `chunker.rs` | 473 | 23 | ✅ Chunking por headings/paragraphs/fixed + dedup |
-| `lib.rs` | 19 | 0 | ✅ Module declarations + pub exports |
+| `lib.rs` | 21 | 0 | ✅ Module declarations + pub exports |
 | `llama/mod.rs` + `ffi.rs` | 4 | 0 | ✅ FFI module re-exports |
 | `memvid/mod.rs` | 4 | 0 | ✅ Memvid module re-exports |
 
-**Total: ~10,400 líneas, ~455 tests (339 unit + 116 integración)**
+**Total: ~10,800 líneas, ~499 tests (377 unit + 122 integración)**
 
 ### Limitaciones Actuales
 
@@ -225,12 +227,12 @@ src/
 - [x] Detección automática de formato por extensión (`Format::from_extension()`)
 - [x] Tests unitarios (11 nuevos: Format + extractor error paths)
 
-#### Fase 4 — Feeds y Cola ❌ Pendiente
-- [ ] `feeds.rs` con parser RSS/Atom
-- [ ] `/feed <url>` comando
-- [ ] `queue.rs` con cola persistente
-- [ ] `/queue`, `/queue-add`, `/queue-process`
-- [ ] Rate limiting global (función `global_throttle` ya existe en web_fetcher.rs)
+#### Fase 4 — Feeds y Cola ✅ Completada
+- [x] `feeds.rs` con parser RSS/Atom (feed-rs, soporte RSS 2.0 + Atom 1.0)
+- [x] `/feed <url>` comando (fetch feed + fetch+chunk cada entry, hasta 20)
+- [x] `queue.rs` con cola persistente (JSONL, estados pending/processing/done/failed)
+- [x] `/queue`, `/queue-add`, `/queue-process` comandos
+- [x] Rate limiting global (función `global_throttle` ya existe en web_fetcher.rs)
 
 #### Fase 5 — Mejoras RAG ❌ Pendiente
 - [ ] Embeddings semánticos (opcional, crate `fastembed` o similar)
