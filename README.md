@@ -13,31 +13,7 @@ Este proyecto ya integra un flujo completo de:
 - catálogo de lenguajes + descarga de docs online como conocimiento indexado
 - **tipo de KV-cache configurable** (`f16` por defecto; codecs TurboQuant `turbo2/3/4`)
 
-## Cambios recientes
-
-Ver [`IMPROVEMENTS_PLAN.md`](memvid-agent-core/IMPROVEMENTS_PLAN.md) para el detalle y el roadmap.
-
-- **KV-cache configurable (Opción 4):** `model.kv_type_k` / `model.kv_type_v` en
-  `config.json` (default `f16`, retrocompatible). Activa flash-attention
-  automáticamente para tipos cuantizados; avisa si K se comprime más que V.
-- **Fix 🔴 pánico UTF-8 en `/history`** al truncar mensajes con caracteres multibyte.
-- **Fix 🟠 ranking de `/search`** corrompido con >10 000 entradas.
-- **Fix 🟠 `switch_model`** ahora preserva el developer prompt.
-- **Fix 🟠 `strip_html`** (usado por `/learn`) ya no se come el `&` literal (p. ej. `AT&T`).
-- **Fix 🟡 `detokenize`** reintenta con buffer mayor en vez de truncar tokens > 256 bytes.
-- **Dedup opt-in en ingesta:** `/fetch` deduplica chunks por checksum y reporta el nº
-  real de chunks indexados (también en `/batch`).
-- **Seguridad API:** comparación de token en tiempo constante; token fuera del
-  `config.json` versionado (se genera en runtime).
-- **Comando `/kv [k] [v]`:** consulta/cambia los tipos de KV-cache en caliente
-  (valida nombres, persiste en config y recarga el contexto).
-- **Limpieza de lints:** `cargo clippy --lib` ahora sin warnings; `LanguagesCatalog`
-  expone `is_empty()`.
-- **API más robusta:** un hilo por conexión, timeouts de lectura/escritura (30 s) y
-  límites de tamaño de cabeceras/body. `/fetch-md` ya no bloquea el mutex del agente
-  durante la descarga.
-- **`add_entries` incremental:** añade solo las líneas nuevas al índice JSONL
-  (un `fsync`) en vez de reescribirlo entero.
+Para el roadmap de mejoras y cambios recientes, ver [`IMPROVEMENTS_PLAN.md`](memvid-agent-core/IMPROVEMENTS_PLAN.md).
 
 ## Quick start
 
@@ -48,13 +24,36 @@ Ver [`IMPROVEMENTS_PLAN.md`](memvid-agent-core/IMPROVEMENTS_PLAN.md) para el det
 
 ### Build & run
 
+La primera compilación tarda ~30 min (compila llama.cpp desde fuente). Las siguientes son <1 s gracias al caché.
+
 ```bash
 cd memvid-agent-core
 cargo build
 cargo run
 ```
 
-Si no existe un modelo GGUF en `config.json`, el agente descarga automáticamente `SmolLM2-360m` desde la URL configurada en el catálogo.
+La compilación en CI usa un fallback de **librerías precompiladas**: si existe un release en GitHub con `llama-libs-{target}.tar.gz`, lo descarga en vez de compilar. Si no, compila desde fuente con `CMAKE_BUILD_PARALLEL_LEVEL=1` para evitar OOM.
+
+### Release
+
+```bash
+git tag v0.1.0 && git push --tags
+```
+
+Esto dispara GitHub Actions para compilar binarios + `.deb` para x86_64 y ARM64, y los sube a un GitHub Release.
+
+Si no existe un modelo GGUF en `config.json`, el agente descarga automáticamente `Qwen2.5-0.5B-Instruct` (~350 MB) desde la URL configurada en el catálogo.
+
+### Descarga precompilada
+
+| Archivo | Plataforma |
+|---|---|
+| `memvid-agent-core-x86_64-unknown-linux-gnu.tar.gz` | Linux x86_64 |
+| `memvid-agent-core-aarch64-unknown-linux-gnu.tar.gz` | Linux ARM64 |
+| `memvid-agent-core_<version>_amd64.deb` | Debian/Ubuntu x86_64 |
+| `memvid-agent-core_<version>_arm64.deb` | Debian/Ubuntu ARM64 |
+
+Los `.deb` incluyen el binario + documentación. Dependencias: `libc6 libstdc++6 libgomp1`.
 
 ### Test
 

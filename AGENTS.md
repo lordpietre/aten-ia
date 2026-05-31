@@ -12,7 +12,7 @@ Single Rust binary+lib crate in `memvid-agent-core/` — local LLM inference via
 | All tests (no GGUF needed) | `cargo test` |
 | Format check | `cargo fmt --all -- --check` |
 | Lint (lib only — CI uses `--lib`) | `cargo clippy --lib` |
-| System deps | `cmake libssl-dev clang libgomp1` |
+| System deps | `cmake libssl-dev clang libgomp1 fakeroot` |
 | Prebuilt libs + binary + .deb release | `git tag v0.1.0 && git push --tags` (triggers `.github/workflows/release.yml` + `release-binary.yml`) |
 
 CI order: `build → test → fmt → clippy --lib` (`.github/workflows/ci.yml`).
