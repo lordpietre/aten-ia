@@ -7,11 +7,14 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  CARGO_BUILD_JOBS: 2
 
 jobs:
   build:
     name: ${{ matrix.target }}
     runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: write
     strategy:
       matrix:
         include:
@@ -52,7 +55,7 @@ jobs:
             -DGGML_METAL=OFF \
             -DGGML_VULKAN=OFF \
             -DCMAKE_BUILD_TYPE=Release
-          cmake --build build --config Release -j$(nproc)
+          cmake --build build --config Release -j2
 
       - name: Package llama static libs
         run: |
@@ -105,6 +108,7 @@ jobs:
           sha256sum "aten-ia_${VERSION}_${{ matrix.deb_arch }}.deb" > "aten-ia_${VERSION}_${{ matrix.deb_arch }}.deb.sha256"
 
       - name: Build snap package
+        continue-on-error: true
         run: |
           VERSION=${GITHUB_REF_NAME#v}
           sed -i "s/^version:.*/version: \"${VERSION}\"/" ../snapcraft.yaml
