@@ -1,0 +1,75 @@
+name: Release binary
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-release:
+    name: Build release binary
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: memvid-agent-core
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y cmake libssl-dev clang libgomp1
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build release
+        run: cargo build --release --verbose
+
+      - name: Strip binary
+        run: strip target/release/memvid-agent-core
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: memvid-agent-core-x86_64-linux
+          path: memvid-agent-core/target/release/memvid-agent-core
+          if-no-files-found: error
+
+  create-release:
+    name: Create GitHub Release
+    needs: build-release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: memvid-agent-core-x86_64-linux
+          path: release/
+
+      - name: Compress binary
+        run: tar czf memvid-agent-core-x86_64-linux.tar.gz -C release memvid-agent-core
+
+      - name: Generate checksum
+        run: sha256sum memvid-agent-core-x86_64-linux.tar.gz > memvid-agent-core-x86_64-linux.tar.gz.sha256
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Release ${{ github.ref_name }}
+          tag_name: ${{ github.ref }}
+          body: |
+            ## memvid-agent-core ${{ github.ref_name }}
+
+            Descarga: `memvid-agent-core-x86_64-linux.tar.gz`
+          files: |
+            memvid-agent-core-x86_64-linux.tar.gz
+            memvid-agent-core-x86_64-linux.tar.gz.sha256
