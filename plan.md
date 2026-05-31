@@ -234,11 +234,11 @@ src/
 - [x] `/queue`, `/queue-add`, `/queue-process` comandos
 - [x] Rate limiting global (función `global_throttle` ya existe en web_fetcher.rs)
 
-#### Fase 5 — Mejoras RAG ❌ Pendiente
-- [ ] Embeddings semánticos (opcional, crate `fastembed` o similar)
-- [ ] Deduplicación por checksum + URL en KnowledgeIndex
-- [ ] Búsqueda híbrida (keyword + vector)
-- [ ] Fuentes como filtro de búsqueda (`/search <q> from:<source>`)
+#### Fase 5 — Mejoras RAG ✅ Completada (parcial)
+- [x] Scoring ponderado (source 4x, contenido normalizado por densidad, id 1x)
+- [x] Deduplicación por checksum (`add_entry_dedup`, existente) + por URL (`add_entry_dedup_url`)
+- [x] Fuentes como filtro de búsqueda (`/search <q> from:<source>`)
+- [ ] Embeddings semánticos + búsqueda híbrida (keyword + vector) — futuro
 
 #### Fase 6 — API y UX ❌ Pendiente
 - [ ] Streaming SSE en API
