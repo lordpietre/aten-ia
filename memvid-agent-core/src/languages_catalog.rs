@@ -304,7 +304,14 @@ fn strip_html(html: &str) -> String {
 
     for c in html.chars() {
         match c {
-            '<' => in_tag = true,
+            '<' => {
+                if in_entity {
+                    result.push('&');
+                    result.push_str(&entity_buf);
+                    in_entity = false;
+                }
+                in_tag = true;
+            }
             '>' if in_tag => in_tag = false,
             _ if !in_tag => {
                 if c == '&' {
@@ -346,6 +353,11 @@ fn strip_html(html: &str) -> String {
             }
             _ => {}
         }
+    }
+
+    if in_entity {
+        result.push('&');
+        result.push_str(&entity_buf);
     }
 
     let mut cleaned = String::with_capacity(result.len());

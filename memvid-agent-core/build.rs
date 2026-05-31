@@ -14,6 +14,26 @@ fn repo_slug() -> String {
     "lordpietre/aten-ia".to_string()
 }
 
+fn local_prebuilt(out_dir: &PathBuf) -> bool {
+    let Some(src) = env::var("LLAMA_LOCAL_LIBS").ok() else { return false };
+    let src = PathBuf::from(src);
+    if !src.is_dir() { return false; }
+    let find = Command::new("find")
+        .args([&src.to_string_lossy(), "-name", "*.a"])
+        .output()
+        .ok();
+    if let Some(output) = find {
+        for path in String::from_utf8_lossy(&output.stdout).lines() {
+            let path = PathBuf::from(path);
+            if path.exists() {
+                let dst = out_dir.join(path.file_name().unwrap());
+                let _ = std::fs::copy(&path, &dst);
+            }
+        }
+    }
+    true
+}
+
 fn download_prebuilt(out_dir: &PathBuf) -> bool {
     let target = match env::var("TARGET") {
         Ok(t) => t,
@@ -86,7 +106,10 @@ fn cmake_build() -> PathBuf {
 fn main() {
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
 
-    let lib_dir = if download_prebuilt(&out_dir) {
+    let lib_dir = if local_prebuilt(&out_dir) {
+        println!("cargo:warning=using local prebuilt llama libs from {}", env::var("LLAMA_LOCAL_LIBS").unwrap_or_default());
+        out_dir.clone()
+    } else if download_prebuilt(&out_dir) {
         println!("cargo:warning=using prebuilt llama libs");
         out_dir.clone()
     } else {
