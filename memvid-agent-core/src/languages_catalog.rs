@@ -188,9 +188,14 @@ pub fn download_language_resources(
             Ok(r) => r,
             Err(e) => {
                 if let Some(ref bar) = pb {
-                    bar.println(format!("  [warn] Failed to fetch {}: {}", resource.title, e));
+                    bar.println(format!(
+                        "  [warn] Failed to fetch {}: {}",
+                        resource.title, e
+                    ));
                 }
-                if let Some(ref bar) = pb { bar.inc(1); }
+                if let Some(ref bar) = pb {
+                    bar.inc(1);
+                }
                 continue;
             }
         };
@@ -211,7 +216,9 @@ pub fn download_language_resources(
             if let Some(ref bar) = pb {
                 bar.println(format!("  [skip] {} — unsupported", resource.title));
             }
-            if let Some(ref bar) = pb { bar.inc(1); }
+            if let Some(ref bar) = pb {
+                bar.inc(1);
+            }
             continue;
         }
 
@@ -226,7 +233,9 @@ pub fn download_language_resources(
             if let Some(ref bar) = pb {
                 bar.println(format!("  [skip] {} — too large", resource.title));
             }
-            if let Some(ref bar) = pb { bar.inc(1); }
+            if let Some(ref bar) = pb {
+                bar.inc(1);
+            }
             continue;
         }
 
@@ -237,7 +246,9 @@ pub fn download_language_resources(
                     if let Some(ref bar) = pb {
                         bar.println(format!("  [warn] Failed to read {}: {}", resource.title, e));
                     }
-                    if let Some(ref bar) = pb { bar.inc(1); }
+                    if let Some(ref bar) = pb {
+                        bar.inc(1);
+                    }
                     continue;
                 }
             };
@@ -253,7 +264,9 @@ pub fn download_language_resources(
                     if let Some(ref bar) = pb {
                         bar.println(format!("  [warn] Failed to read {}: {}", resource.title, e));
                     }
-                    if let Some(ref bar) = pb { bar.inc(1); }
+                    if let Some(ref bar) = pb {
+                        bar.inc(1);
+                    }
                     continue;
                 }
             };
@@ -273,7 +286,9 @@ pub fn download_language_resources(
                     if let Some(ref bar) = pb {
                         bar.println(format!("  [warn] {} — {}", resource.title, e));
                     }
-                    if let Some(ref bar) = pb { bar.inc(1); }
+                    if let Some(ref bar) = pb {
+                        bar.inc(1);
+                    }
                     continue;
                 }
             }
@@ -283,7 +298,9 @@ pub fn download_language_resources(
             if let Some(ref bar) = pb {
                 bar.println(format!("  [skip] {} — empty content", resource.title));
             }
-            if let Some(ref bar) = pb { bar.inc(1); }
+            if let Some(ref bar) = pb {
+                bar.inc(1);
+            }
             continue;
         }
 
