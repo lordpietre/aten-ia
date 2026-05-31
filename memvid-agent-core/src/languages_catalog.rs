@@ -365,21 +365,9 @@ fn strip_html(html: &str) -> String {
                     } else {
                         entity_buf.push(c);
                     }
-                } else if is_known_entity(entity_buf.as_str()) {
-                    let decoded = match entity_buf.as_str() {
-                        "amp" => "&",
-                        "lt" => "<",
-                        "gt" => ">",
-                        "quot" => "\"",
-                        "apos" => "'",
-                        "nbsp" => " ",
-                        _ => "",
-                    };
-                    result.push_str(decoded);
                 } else {
-                    flush_entity(&mut result, &mut entity_buf);
+                    result.push(c);
                 }
-                in_entity = false;
             }
             _ if in_entity => {
                 // Entity names are [A-Za-z0-9#]; anything else (or an overlong
