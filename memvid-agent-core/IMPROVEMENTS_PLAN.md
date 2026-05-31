@@ -1,14 +1,6 @@
-# Plan exhaustivo de mejoras y corrección de errores — memvid-agent-core
+# Plan exhaustivo de mejoras y corrección de errores — aten-ia
 
-Estado del documento: vivo. Marca `[x]` = implementado y con test en este repo; `[ ]` = propuesto.
-
-Leyenda de severidad: 🔴 crítico (pánico/corrupción) · 🟠 funcional (resultado incorrecto) · 🟡 calidad/UX · 🔵 mejora.
-
----
-
-## 0. Contexto
-
-`memvid-agent-core` es un agente LLM local (CPU, llama.cpp) con persistencia `.mv2`,
+`aten-ia` es un agente LLM local (CPU, llama.cpp) con persistencia `.mv2`,
 RAG por keywords, API OpenAI-compatible e ingesta multi-formato. Este plan recoge
 los defectos reales hallados leyendo el código y las mejoras de mayor valor, cada
 uno con su estrategia de test (unitario + pragmático).

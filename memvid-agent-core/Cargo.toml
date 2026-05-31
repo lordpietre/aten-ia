@@ -1,8 +1,11 @@
 [package]
-name = "memvid-agent-core"
+name = "aten-ia"
 version = "0.1.0"
 edition = "2024"
 repository = "https://github.com/lordpietre/aten-ia"
+
+[lib]
+name = "memvid_agent_core"
 
 [dependencies]
 memvid-core = "2.0.139"

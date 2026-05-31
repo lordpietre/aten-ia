@@ -1132,7 +1132,7 @@ fn read_line_prompt(prompt: &str) -> String {
 fn run_setup_wizard(config: &mut Config, catalog: &ModelsCatalog) -> Result<()> {
     println!();
     println!(
-        "{} Welcome to memvid-agent-core!",
+        "{} Welcome to aten-ia!",
         "━━━ Setup ━━━".bold().bright_green()
     );
     println!("  First-time setup — let's get you configured.");

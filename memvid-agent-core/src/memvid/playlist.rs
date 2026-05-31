@@ -23,7 +23,7 @@ impl Playlist {
             let mut mv =
                 memvid_core::Memvid::create(&core_path).context("Failed to create core.mv2")?;
             let identity = serde_json::json!({
-                "agent": "memvid-agent-core",
+                "agent": "aten-ia",
                 "version": env!("CARGO_PKG_VERSION"),
                 "created_at": chrono::Utc::now().to_rfc3339(),
             });

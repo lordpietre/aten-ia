@@ -33,7 +33,7 @@
     ]
   },
   "ingestion": {
-    "user_agent": "memvid-agent-core/0.1.0",
+    "user_agent": "aten-ia/0.1.0",
     "timeout_seconds": 30,
     "max_size_bytes": 5242880,
     "rate_limit_per_second": 2,

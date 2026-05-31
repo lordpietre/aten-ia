@@ -156,7 +156,7 @@ impl ApiServer {
                     "id": self.model_name,
                     "object": "model",
                     "created": 0,
-                    "owned_by": "memvid-agent-core"
+                    "owned_by": "aten-ia"
                 }]
             }),
         )

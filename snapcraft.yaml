@@ -1,4 +1,4 @@
-name: memvid-agent-core
+name: aten-ia
 version: "0.1.0"
 summary: Local LLM agent with persistent memory and RAG
 description: |
@@ -10,19 +10,19 @@ confinement: strict
 base: core22
 
 apps:
-  memvid-agent-core:
-    command: bin/memvid-agent-core
+  aten-ia:
+    command: bin/aten-ia
     plugs:
       - network
       - home
       - removable-media
 
 parts:
-  memvid-agent-core:
+  aten-ia:
     plugin: nil
     stage-packages:
       - libgomp1
     override-build: |
       mkdir -p "$SNAPCRAFT_PART_INSTALL/bin"
-      cp "$SNAPCRAFT_PROJECT_DIR/memvid-agent-core/target/release/memvid-agent-core" \
+      cp "$SNAPCRAFT_PROJECT_DIR/memvid-agent-core/target/release/aten-ia" \
          "$SNAPCRAFT_PART_INSTALL/bin/"

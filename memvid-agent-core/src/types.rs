@@ -170,7 +170,7 @@ pub struct IngestionConfig {
 impl Default for IngestionConfig {
     fn default() -> Self {
         Self {
-            user_agent: "memvid-agent-core/0.1.0".to_string(),
+            user_agent: "aten-ia/0.1.0".to_string(),
             timeout_seconds: 30,
             max_size_bytes: 5 * 1024 * 1024,
             rate_limit_per_second: 2,
@@ -357,7 +357,7 @@ mod tests {
     #[test]
     fn ingestion_config_defaults() {
         let config = IngestionConfig::default();
-        assert_eq!(config.user_agent, "memvid-agent-core/0.1.0");
+        assert_eq!(config.user_agent, "aten-ia/0.1.0");
         assert_eq!(config.timeout_seconds, 30);
         assert_eq!(config.max_size_bytes, 5 * 1024 * 1024);
         assert_eq!(config.rate_limit_per_second, 2);

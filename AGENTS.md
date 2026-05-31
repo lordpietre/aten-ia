@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Single Rust binary+lib crate in `memvid-agent-core/` — local LLM inference via bundled `llama-cpp-turboquant` CMake+bindgen, `.mv2` persistence (memvid-core v2), keyword RAG, OpenAI-compatible HTTP/1.1 API, multi-source ingestion.
+Single Rust binary+lib crate (`aten-ia`) in `memvid-agent-core/` — local LLM inference via bundled `llama-cpp-turboquant` CMake+bindgen, `.mv2` persistence (memvid-core v2), keyword RAG, OpenAI-compatible HTTP/1.1 API, multi-source ingestion.
 
 ## Commands (run from `memvid-agent-core/`)
 

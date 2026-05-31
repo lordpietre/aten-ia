@@ -65,28 +65,28 @@ jobs:
         run: LLAMA_LOCAL_LIBS=libs cargo build --release --verbose
 
       - name: Strip binary
-        run: strip target/release/memvid-agent-core
+        run: strip target/release/aten-ia
 
       - name: Package binary tar.gz
         run: |
-          cp target/release/memvid-agent-core memvid-agent-core
-          tar czf memvid-agent-core-${{ matrix.target }}.tar.gz memvid-agent-core
-          sha256sum memvid-agent-core-${{ matrix.target }}.tar.gz > memvid-agent-core-${{ matrix.target }}.tar.gz.sha256
+          cp target/release/aten-ia aten-ia
+          tar czf aten-ia-${{ matrix.target }}.tar.gz aten-ia
+          sha256sum aten-ia-${{ matrix.target }}.tar.gz > aten-ia-${{ matrix.target }}.tar.gz.sha256
 
       - name: Build .deb package
         run: |
           VERSION=${GITHUB_REF_NAME#v}
-          PKG_ROOT=debian/memvid-agent-core_${VERSION}_${{ matrix.deb_arch }}
+          PKG_ROOT=debian/aten-ia_${VERSION}_${{ matrix.deb_arch }}
           mkdir -p "$PKG_ROOT/DEBIAN"
           mkdir -p "$PKG_ROOT/usr/bin"
-          mkdir -p "$PKG_ROOT/usr/share/doc/memvid-agent-core"
+          mkdir -p "$PKG_ROOT/usr/share/doc/aten-ia"
 
-          cp target/release/memvid-agent-core "$PKG_ROOT/usr/bin/"
-          cp ../README.md "$PKG_ROOT/usr/share/doc/memvid-agent-core/"
-          cp ../AGENTS.md "$PKG_ROOT/usr/share/doc/memvid-agent-core/"
+          cp target/release/aten-ia "$PKG_ROOT/usr/bin/"
+          cp ../README.md "$PKG_ROOT/usr/share/doc/aten-ia/"
+          cp ../AGENTS.md "$PKG_ROOT/usr/share/doc/aten-ia/"
 
           cat > "$PKG_ROOT/DEBIAN/control" <<EOF
-          Package: memvid-agent-core
+          Package: aten-ia
           Version: ${VERSION}
           Architecture: ${{ matrix.deb_arch }}
           Maintainer: lordpietre <lordpietre@users.noreply.github.com>
@@ -97,12 +97,12 @@ jobs:
           Depends: libc6, libstdc++6, libgomp1
           EOF
 
-          gzip -9 -n "$PKG_ROOT/usr/share/doc/memvid-agent-core/README.md"
-          gzip -9 -n "$PKG_ROOT/usr/share/doc/memvid-agent-core/AGENTS.md"
+          gzip -9 -n "$PKG_ROOT/usr/share/doc/aten-ia/README.md"
+          gzip -9 -n "$PKG_ROOT/usr/share/doc/aten-ia/AGENTS.md"
 
           fakeroot dpkg-deb --build "$PKG_ROOT"
-          mv "debian/memvid-agent-core_${VERSION}_${{ matrix.deb_arch }}.deb" .
-          sha256sum "memvid-agent-core_${VERSION}_${{ matrix.deb_arch }}.deb" > "memvid-agent-core_${VERSION}_${{ matrix.deb_arch }}.deb.sha256"
+          mv "debian/aten-ia_${VERSION}_${{ matrix.deb_arch }}.deb" .
+          sha256sum "aten-ia_${VERSION}_${{ matrix.deb_arch }}.deb" > "aten-ia_${VERSION}_${{ matrix.deb_arch }}.deb.sha256"
 
       - name: Build snap package
         run: |
@@ -111,19 +111,19 @@ jobs:
           sudo snap install snapcraft --classic 2>/dev/null || sudo snap refresh snapcraft --classic
           cd ..
           sudo snapcraft --destructive-mode
-          mv "memvid-agent-core_${VERSION}_${{ matrix.deb_arch }}.snap" memvid-agent-core/
+          mv "aten-ia_${VERSION}_${{ matrix.deb_arch }}.snap" memvid-agent-core/
           cd memvid-agent-core
-          sha256sum "memvid-agent-core_${VERSION}_${{ matrix.deb_arch }}.snap" > "memvid-agent-core_${VERSION}_${{ matrix.deb_arch }}.snap.sha256"
+          sha256sum "aten-ia_${VERSION}_${{ matrix.deb_arch }}.snap" > "aten-ia_${VERSION}_${{ matrix.deb_arch }}.snap.sha256"
 
       - name: Upload release assets
         uses: softprops/action-gh-release@v2
         with:
           files: |
             llama-libs-${{ matrix.target }}.tar.gz
-            memvid-agent-core-${{ matrix.target }}.tar.gz
-            memvid-agent-core-${{ matrix.target }}.tar.gz.sha256
-            memvid-agent-core_*.deb
-            memvid-agent-core_*.deb.sha256
-            memvid-agent-core_*.snap
-            memvid-agent-core_*.snap.sha256
+            aten-ia-${{ matrix.target }}.tar.gz
+            aten-ia-${{ matrix.target }}.tar.gz.sha256
+            aten-ia_*.deb
+            aten-ia_*.deb.sha256
+            aten-ia_*.snap
+            aten-ia_*.snap.sha256
           fail_on_unmatched_files: false

@@ -1,4 +1,4 @@
-# memvid-agent-core
+# aten-ia
 
 Interactive AI agent CLI con inferencia LLM local vía [llama.cpp](https://github.com/ggml-org/llama.cpp) (TurboQuant fork) y persistencia en `.mv2` usando [memvid-core](https://crates.io/crates/memvid-core).
 
@@ -48,10 +48,10 @@ Si no existe un modelo GGUF en `config.json`, el agente descarga automáticament
 
 | Archivo | Plataforma |
 |---|---|
-| `memvid-agent-core-x86_64-unknown-linux-gnu.tar.gz` | Linux x86_64 |
-| `memvid-agent-core-aarch64-unknown-linux-gnu.tar.gz` | Linux ARM64 |
-| `memvid-agent-core_<version>_amd64.deb` | Debian/Ubuntu x86_64 |
-| `memvid-agent-core_<version>_arm64.deb` | Debian/Ubuntu ARM64 |
+| `aten-ia-x86_64-unknown-linux-gnu.tar.gz` | Linux x86_64 |
+| `aten-ia-aarch64-unknown-linux-gnu.tar.gz` | Linux ARM64 |
+| `aten-ia_<version>_amd64.deb` | Debian/Ubuntu x86_64 |
+| `aten-ia_<version>_arm64.deb` | Debian/Ubuntu ARM64 |
 
 Los `.deb` incluyen el binario + documentación. Dependencias: `libc6 libstdc++6 libgomp1`.
 

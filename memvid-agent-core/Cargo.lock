@@ -100,6 +100,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "aten-ia"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bindgen",
+ "chrono",
+ "cmake",
+ "colored",
+ "dotenvy",
+ "epub",
+ "indicatif",
+ "memvid-core",
+ "pdf-extract",
+ "regex",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "tracing",
+ "tracing-subscriber",
+ "ureq",
+ "uuid",
+]
+
+[[package]]
 name = "atomic-write-file"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1288,31 +1313,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "714098028fe011992e1c3962653c96b2d578c4b4bce9036e15ff220319b1e0e3"
 dependencies = [
  "libc",
-]
-
-[[package]]
-name = "memvid-agent-core"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "bindgen",
- "chrono",
- "cmake",
- "colored",
- "dotenvy",
- "epub",
- "indicatif",
- "memvid-core",
- "pdf-extract",
- "regex",
- "serde",
- "serde_json",
- "sha2",
- "tempfile",
- "tracing",
- "tracing-subscriber",
- "ureq",
- "uuid",
 ]
 
 [[package]]

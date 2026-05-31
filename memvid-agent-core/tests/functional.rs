@@ -1,7 +1,7 @@
 use std::path::Path;
 
 // ---------------------------------------------------------------------------
-// Functional tests for memvid-agent-core.
+// Functional tests for aten-ia.
 // All tests are isolated via tempfile::tempdir and do NOT require a GGUF model.
 // Only public APIs are used (no private functions).
 // ---------------------------------------------------------------------------
@@ -1703,7 +1703,7 @@ fn chunk_options_defaults_correct() {
 fn ingestion_config_defaults_correct() {
     use memvid_agent_core::types::IngestionConfig;
     let cfg = IngestionConfig::default();
-    assert_eq!(cfg.user_agent, "memvid-agent-core/0.1.0");
+    assert_eq!(cfg.user_agent, "aten-ia/0.1.0");
     assert_eq!(cfg.timeout_seconds, 30);
     assert_eq!(cfg.max_size_bytes, 5 * 1024 * 1024);
     assert_eq!(cfg.rate_limit_per_second, 2);
