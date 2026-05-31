@@ -112,6 +112,19 @@ fn kv_fidelity_rank(t: ggml_type) -> u8 {
 
 impl LlamaContext {
     #[allow(clippy::too_many_arguments)]
+    unsafe extern "C" fn noop_log(
+        _level: ggml_log_level,
+        _text: *const std::os::raw::c_char,
+        _user_data: *mut std::os::raw::c_void,
+    ) {
+    }
+
+    fn suppress_logs() {
+        unsafe {
+            llama_log_set(Some(Self::noop_log), std::ptr::null_mut());
+        }
+    }
+
     pub fn init(
         model_path: &str,
         n_ctx: u32,
@@ -122,6 +135,8 @@ impl LlamaContext {
         top_p: f32,
         temp: f32,
     ) -> Result<Self> {
+        Self::suppress_logs();
+
         unsafe {
             let prev = BACKEND_REFCOUNT.fetch_add(1, Ordering::SeqCst);
             if prev == 0 {

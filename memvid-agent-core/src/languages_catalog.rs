@@ -163,12 +163,34 @@ pub fn download_language_resources(
     max_resources: usize,
 ) -> Result<Vec<KnowledgeEntry>> {
     let mut entries: Vec<KnowledgeEntry> = Vec::new();
+    let total = lang.resources.len().min(max_resources) as u64;
+
+    let pb = if total > 0 {
+        let bar = indicatif::ProgressBar::new(total);
+        bar.set_style(
+            indicatif::ProgressStyle::default_bar()
+                .template("{msg:.green} [{bar:20.cyan/blue}] {pos}/{len}")
+                .expect("Invalid progress bar template")
+                .progress_chars("##-"),
+        );
+        bar.set_message(format!("learn {}", lang.name));
+        Some(bar)
+    } else {
+        None
+    };
 
     for resource in lang.resources.iter().take(max_resources) {
+        if let Some(ref bar) = pb {
+            bar.set_message(format!("learn {} — {}", lang.name, resource.title));
+        }
+
         let resp = match ureq::get(&resource.url).call() {
             Ok(r) => r,
             Err(e) => {
-                eprintln!("  [warn] Failed to fetch {}: {}", resource.title, e);
+                if let Some(ref bar) = pb {
+                    bar.println(format!("  [warn] Failed to fetch {}: {}", resource.title, e));
+                }
+                if let Some(ref bar) = pb { bar.inc(1); }
                 continue;
             }
         };
@@ -186,10 +208,10 @@ pub fn download_language_resources(
             content_type.contains("application/epub+zip") || content_type == "application/epub";
 
         if !is_text && !is_pdf && !is_epub {
-            eprintln!(
-                "  [skip] {} — unsupported type: {}",
-                resource.title, content_type
-            );
+            if let Some(ref bar) = pb {
+                bar.println(format!("  [skip] {} — unsupported", resource.title));
+            }
+            if let Some(ref bar) = pb { bar.inc(1); }
             continue;
         }
 
@@ -201,7 +223,10 @@ pub fn download_language_resources(
             .unwrap_or(0);
 
         if size > MAX_RESOURCE_BYTES {
-            eprintln!("  [skip] {} — too large: {} bytes", resource.title, size);
+            if let Some(ref bar) = pb {
+                bar.println(format!("  [skip] {} — too large", resource.title));
+            }
+            if let Some(ref bar) = pb { bar.inc(1); }
             continue;
         }
 
@@ -209,7 +234,10 @@ pub fn download_language_resources(
             let body = match resp.into_body().read_to_string() {
                 Ok(b) => b,
                 Err(e) => {
-                    eprintln!("  [warn] Failed to read {}: {}", resource.title, e);
+                    if let Some(ref bar) = pb {
+                        bar.println(format!("  [warn] Failed to read {}: {}", resource.title, e));
+                    }
+                    if let Some(ref bar) = pb { bar.inc(1); }
                     continue;
                 }
             };
@@ -222,7 +250,10 @@ pub fn download_language_resources(
             let bytes = match resp.into_body().read_to_vec() {
                 Ok(b) => b,
                 Err(e) => {
-                    eprintln!("  [warn] Failed to read {}: {}", resource.title, e);
+                    if let Some(ref bar) = pb {
+                        bar.println(format!("  [warn] Failed to read {}: {}", resource.title, e));
+                    }
+                    if let Some(ref bar) = pb { bar.inc(1); }
                     continue;
                 }
             };
@@ -239,14 +270,20 @@ pub fn download_language_resources(
                 Ok(content) => content,
                 Err(e) => {
                     let _ = std::fs::remove_file(&temp_path);
-                    eprintln!("  [warn] {} — {}", resource.title, e);
+                    if let Some(ref bar) = pb {
+                        bar.println(format!("  [warn] {} — {}", resource.title, e));
+                    }
+                    if let Some(ref bar) = pb { bar.inc(1); }
                     continue;
                 }
             }
         };
 
         if text.trim().is_empty() {
-            eprintln!("  [skip] {} — empty content", resource.title);
+            if let Some(ref bar) = pb {
+                bar.println(format!("  [skip] {} — empty content", resource.title));
+            }
+            if let Some(ref bar) = pb { bar.inc(1); }
             continue;
         }
 
@@ -276,7 +313,13 @@ pub fn download_language_resources(
             });
         }
 
-        eprintln!("  ✓ {} — {} chunks", resource.title, chunks.len());
+        if let Some(ref bar) = pb {
+            bar.inc(1);
+        }
+    }
+
+    if let Some(bar) = pb {
+        bar.finish_and_clear();
     }
 
     Ok(entries)

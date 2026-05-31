@@ -29,7 +29,17 @@ fn main() -> Result<()> {
     models::ensure_model(&config.model)?;
 
     let _lock = FileLock::acquire(&config.data_dir).expect("Failed to acquire data directory lock");
+
+    let spinner = indicatif::ProgressBar::new_spinner();
+    spinner.set_style(
+        indicatif::ProgressStyle::default_spinner()
+            .template("{spinner:.cyan} {msg}")
+            .expect("Invalid spinner template"),
+    );
+    spinner.set_message("Loading model…");
+    spinner.enable_steady_tick(std::time::Duration::from_millis(80));
     let agent = Arc::new(Mutex::new(Agent::init(&config)?));
+    spinner.finish_and_clear();
 
     let mut loaded_files: Vec<String> = Vec::new();
 
@@ -352,13 +362,6 @@ fn main() -> Result<()> {
                     continue;
                 }
             };
-
-            println!(
-                "{} Downloading documentation for {} ({} resources)…",
-                "↓".yellow(),
-                lang.name.bold(),
-                lang.resources.len()
-            );
 
             let max_resources = std::cmp::min(lang.resources.len(), 10);
             let entries = memvid_agent_core::languages_catalog::download_language_resources(
