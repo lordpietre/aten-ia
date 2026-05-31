@@ -9,8 +9,8 @@ use crate::prompt::{ChatTemplate, DEFAULT_DEVELOPER_PROMPT, PromptBuilder};
 use crate::retrieval::KnowledgeIndex;
 use crate::session::Session;
 use crate::types::{
-    ChunkOptions, ChunkStrategy, FetchedContent, IngestionConfig, KnowledgeEntry, Message,
-    MessageRole, WriterConfig,
+    ChunkOptions, ChunkStrategy, FeedResult, FetchedContent, IngestionConfig,
+    KnowledgeEntry, Message, MessageRole, WriterConfig,
 };
 use crate::web_fetcher::WebFetcher;
 use anyhow::Result;
@@ -265,6 +265,60 @@ impl Agent {
         });
 
         Ok((content, indexed))
+    }
+
+    pub fn fetch_and_ingest_feed(
+        &mut self,
+        url: &str,
+        ingestion: &IngestionConfig,
+        max_entries: usize,
+    ) -> Result<FeedResult> {
+        let mut fetcher = WebFetcher::new(ingestion);
+        let entries = crate::feeds::fetch_feed(url, &mut fetcher)?;
+        let total = entries.len();
+        let feed_title = entries.first().map(|_| url.to_string());
+
+        let mut indexed = 0usize;
+        let mut failures = Vec::new();
+
+        let chunk_opts = ChunkOptions {
+            max_size: ingestion.chunk_max_size,
+            overlap: ingestion.chunk_overlap,
+            strategy: ChunkStrategy::Paragraph,
+        };
+
+        for entry in entries.iter().take(max_entries) {
+            match fetcher.fetch_and_retry(&entry.url) {
+                Ok(content) => {
+                    let chunks = crate::chunker::chunk_text(&content.content, &chunk_opts, &entry.url);
+                    for chunk in &chunks {
+                        if self.store_knowledge_dedup(&chunk.source, &chunk.content)? {
+                            indexed += 1;
+                        }
+                    }
+                }
+                Err(e) => {
+                    failures.push(format!("{}: {:#}", entry.title, e));
+                }
+            }
+        }
+
+        self.session.push_message(Message {
+            role: MessageRole::System,
+            content: format!(
+                "Feed '{}' fetched — {} entries found, {} indexed, {} failed.",
+                url, total, indexed, failures.len()
+            ),
+            timestamp: Utc::now(),
+            tokens: None,
+        });
+
+        Ok(FeedResult {
+            feed_title,
+            entries_found: total,
+            entries_indexed: indexed,
+            failures,
+        })
     }
 
     pub fn process_url_batch(

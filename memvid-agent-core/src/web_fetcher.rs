@@ -107,7 +107,7 @@ impl WebFetcher {
         Err(last_error)
     }
 
-    fn throttle(&mut self) {
+    pub fn throttle(&mut self) {
         if self.min_interval > Duration::ZERO {
             let elapsed = self.last_request.elapsed();
             if elapsed < self.min_interval {

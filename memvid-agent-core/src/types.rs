@@ -85,6 +85,42 @@ pub struct FetchedContent {
     pub size_bytes: u64,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FeedEntry {
+    pub title: String,
+    pub url: String,
+    pub description: Option<String>,
+    pub published: Option<DateTime<Utc>>,
+    pub source_feed: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QueueEntry {
+    pub id: String,
+    pub url: String,
+    pub status: QueueStatus,
+    pub retries: u32,
+    pub error: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum QueueStatus {
+    Pending,
+    Processing,
+    Done,
+    Failed,
+}
+
+#[derive(Debug, Clone)]
+pub struct FeedResult {
+    pub feed_title: Option<String>,
+    pub entries_found: usize,
+    pub entries_indexed: usize,
+    pub failures: Vec<String>,
+}
+
 #[derive(Debug, Clone)]
 pub struct Chunk {
     pub content: String,

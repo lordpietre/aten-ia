@@ -5,6 +5,7 @@ use memvid_agent_core::api::ApiServer;
 use memvid_agent_core::books_catalog::BooksCatalog;
 use memvid_agent_core::config::Config;
 use memvid_agent_core::languages_catalog::LanguagesCatalog;
+use memvid_agent_core::queue::FeedQueue;
 use memvid_agent_core::models;
 use memvid_agent_core::models_catalog::{self, ModelsCatalog};
 use memvid_agent_core::utils::FileLock;
@@ -727,6 +728,150 @@ fn main() -> Result<()> {
                     eprintln!("{} Failed to fetch: {:#}", "✗".red(), e);
                 }
             }
+            continue;
+        }
+
+        if input_lower.starts_with("/feed ") {
+            let url = input
+                .strip_prefix("/feed ")
+                .or_else(|| input.strip_prefix("/FEED "))
+                .unwrap_or("")
+                .trim();
+            if url.is_empty() {
+                eprintln!("{} Usage: /feed <url>", "✗".red());
+                continue;
+            }
+
+            let spinner = indicatif::ProgressBar::new_spinner();
+            spinner.set_style(
+                indicatif::ProgressStyle::default_spinner()
+                    .template("{spinner:.cyan} {msg}")
+                    .expect("Invalid spinner template"),
+            );
+            spinner.set_message("Fetching feed…");
+            spinner.enable_steady_tick(std::time::Duration::from_millis(80));
+
+            let result = {
+                let mut a = agent.lock().unwrap();
+                a.fetch_and_ingest_feed(url, &config.ingestion, 20)
+            };
+
+            spinner.finish_and_clear();
+
+            match result {
+                Ok(stats) => {
+                    println!(
+                        "{} Feed: {}",
+                        "✓".green(),
+                        stats.feed_title.as_deref().unwrap_or(url).bold()
+                    );
+                    println!("  {} entries found: {}", "↳".dimmed(), stats.entries_found);
+                    println!("  {} entries indexed: {}", "↳".dimmed(), stats.entries_indexed);
+                    if !stats.failures.is_empty() {
+                        println!("  {} failures:", "↳".dimmed());
+                        for f in &stats.failures {
+                            eprintln!("    {} {}", "✗".red(), f);
+                        }
+                    }
+                }
+                Err(e) => {
+                    eprintln!("{} Failed to fetch feed: {:#}", "✗".red(), e);
+                }
+            }
+            continue;
+        }
+
+        if input_lower == "/queue" {
+            let queue = FeedQueue::new(&config.data_dir);
+            let stats = queue.stats();
+            if queue.len() == 0 {
+                println!("{} Queue is empty.", "ℹ".cyan());
+            } else {
+                println!("{} Feed Queue ({} total):", "ℹ".cyan(), queue.len());
+                println!("  {} pending:    {}", "↳".dimmed(), stats.pending);
+                println!("  {} processing: {}", "↳".dimmed(), stats.processing);
+                println!("  {} done:       {}", "↳".dimmed(), stats.done);
+                println!("  {} failed:     {}", "↳".dimmed(), stats.failed);
+            }
+            continue;
+        }
+
+        if input_lower.starts_with("/queue-add ") {
+            let url = input
+                .strip_prefix("/queue-add ")
+                .or_else(|| input.strip_prefix("/QUEUE-ADD "))
+                .unwrap_or("")
+                .trim();
+            if url.is_empty() {
+                eprintln!("{} Usage: /queue-add <url>", "✗".red());
+                continue;
+            }
+            let mut queue = FeedQueue::new(&config.data_dir);
+            match queue.add(url) {
+                Ok(()) => println!("{} Added to queue: {}", "✓".green(), url.dimmed()),
+                Err(e) => eprintln!("{} Failed to add: {:#}", "✗".red(), e),
+            }
+            continue;
+        }
+
+        if input_lower == "/queue-process" || input_lower == "/QUEUE-PROCESS" {
+            let spinner = indicatif::ProgressBar::new_spinner();
+            spinner.set_style(
+                indicatif::ProgressStyle::default_spinner()
+                    .template("{spinner:.cyan} {msg}")
+                    .expect("Invalid spinner template"),
+            );
+            spinner.set_message("Processing queue…");
+            spinner.enable_steady_tick(std::time::Duration::from_millis(80));
+
+            let pending: Vec<(String, String)> = {
+                let q = FeedQueue::new(&config.data_dir);
+                q.pending().into_iter().map(|e| (e.id.clone(), e.url.clone())).collect()
+            };
+            let total = pending.len();
+
+            if total == 0 {
+                spinner.finish_and_clear();
+                println!("{} No pending URLs in queue.", "ℹ".cyan());
+                continue;
+            }
+
+            let mut successes = 0usize;
+            let mut failures = 0usize;
+
+            for (id, url) in &pending {
+                {
+                    let mut q = FeedQueue::new(&config.data_dir);
+                    q.mark_processing(id)?;
+                }
+
+                let result = {
+                    let mut a = agent.lock().unwrap();
+                    a.fetch_and_ingest(url, &config.ingestion)
+                };
+
+                let mut q = FeedQueue::new(&config.data_dir);
+                match result {
+                    Ok(_) => {
+                        q.mark_done(id)?;
+                        successes += 1;
+                    }
+                    Err(e) => {
+                        q.mark_failed(id, &format!("{:#}", e))?;
+                        failures += 1;
+                    }
+                }
+            }
+
+            spinner.finish_and_clear();
+
+            println!(
+                "{} Queue processed: {} success, {} failed (of {} total)",
+                "✓".green(),
+                successes,
+                failures,
+                total
+            );
             continue;
         }
 
