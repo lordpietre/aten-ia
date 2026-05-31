@@ -5,11 +5,11 @@ Single Rust binary+lib crate (`aten-ia`) in `memvid-agent-core/` — local LLM i
 ## Commands (run from `memvid-agent-core/`)
 
 | Action | Command |
-|---|---|
+|---|---|---|
 | Build (first: ~30 min cmake+llama.cpp; subsequent: <1s) | `cargo build` |
 | Build release | `cargo build --release` |
 | Run (auto-downloads model if missing) | `cargo run` |
-| All tests (no GGUF needed) | `cargo test` |
+| All tests (no GGUF needed) | `cargo test -- --test-threads=1` |
 | Format check | `cargo fmt --all -- --check` |
 | Lint (lib only — CI uses `--lib`) | `cargo clippy --lib` |
 | System deps | `cmake libssl-dev clang libgomp1 fakeroot` |
@@ -17,6 +17,7 @@ Single Rust binary+lib crate (`aten-ia`) in `memvid-agent-core/` — local LLM i
 
 CI order: `build → test → fmt → clippy --lib` (`.github/workflows/ci.yml`).
 Build time: ~30 min first run, <5 min after cache warms (`Swatinem/rust-cache`).
+CI runs `cargo test -- --test-threads=1` to avoid `MODEL_PATH` env-var race between tests.
 
 **Prebuilt libs fallback chain** (in `build.rs`):
 1. `LLAMA_LOCAL_LIBS=/path` — copy `.a` files from local dir
@@ -47,6 +48,10 @@ Override download repo: `LLAMA_LIBS_REPO=user/repo`.
 - **Session flushes every 5 interactions** — `Session::flush()` → `MemvidWriter`
 - **KV cache type** is configurable: `model.kv_type_k` / `model.kv_type_v` (default `f16`; `turbo2/3/4` enable flash-attn automatically)
 - **All persistence is atomic**: write → fsync → rename → fsync(parent)
+- **`langauges_catalog::download_language_resources()`** shows a progress bar labelled `learn {name} — {resource}`
+- **llama.cpp verbose suppressed** at startup via `llama_log_set(noop_log)` in `context.rs`
+- **Model loading shows spinner** `"Loading model…"` during `Agent::init()`
+- **Chunker UTF-8 safe** — `floor_char_boundary()` on overlap to avoid panics on multi-byte chars
 - **`ingest <file>` auto-detects format** via `Format::from_extension()` (pdf/epub/md/html → text fallback)
 - **Env overrides**: `MODEL_PATH`, `MODEL_NAME`, `MODEL_CTX`, `MODEL_URL` (applied on config load)
 - **Default model**: `Qwen2.5-0.5B-Instruct` (`n_ctx: 8192`, `chat_template: chatml`)

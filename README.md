@@ -59,7 +59,7 @@ Los `.deb` incluyen el binario + documentación. Dependencias: `libc6 libstdc++6
 
 ```bash
 cd memvid-agent-core
-cargo test
+cargo test -- --test-threads=1   # env-vars race sin paralelismo
 ```
 
 ## Comandos disponibles
@@ -236,10 +236,12 @@ $DATA_DIR/
 - Buscador de knowledge indexado (`/SEARCH`)
 - Reindexado desde `.mv2` (`/REINDEX`)
 - API local compatible OpenAI con token auth
-- Descarga de documentación de lenguajes desde free-programming-books
+- Descarga de documentación de lenguajes desde free-programming-books con barra de progreso
 - `FileLock` para evitar instancias múltiples en el mismo `data_dir`
 - Extracción de texto de PDFs y EPUBs (`pdf-extract` + `epub`)
 - Detección automática de formato por extensión de archivo
+- Spinner visual durante la carga del modelo
+- Logs internos de llama.cpp suprimidos (no ensucian la terminal)
 
 ## Limitaciones actuales
 
