@@ -333,6 +333,9 @@ fn strip_html(html: &str) -> String {
             '>' if in_tag => in_tag = false,
             _ if !in_tag => {
                 if c == '&' {
+                    if in_entity {
+                        flush_entity(&mut result, &mut entity_buf);
+                    }
                     in_entity = true;
                     entity_buf.clear();
                 } else if in_entity {
@@ -386,11 +389,6 @@ fn strip_html(html: &str) -> String {
     // End of input with a still-open entity → it was a lone '&'.
     if in_entity {
         flush_entity(&mut result, &mut entity_buf);
-    }
-
-    if in_entity {
-        result.push('&');
-        result.push_str(&entity_buf);
     }
 
     let mut cleaned = String::with_capacity(result.len());
