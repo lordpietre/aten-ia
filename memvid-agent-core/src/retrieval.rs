@@ -64,6 +64,15 @@ impl KnowledgeIndex {
     }
 
     pub fn search(&self, query: &str, limit: usize) -> Vec<&KnowledgeEntry> {
+        self.search_with_filter(query, limit, None)
+    }
+
+    pub fn search_with_filter(
+        &self,
+        query: &str,
+        limit: usize,
+        source_filter: Option<&str>,
+    ) -> Vec<&KnowledgeEntry> {
         if query.is_empty() || self.entries.is_empty() {
             return Vec::new();
         }
@@ -75,37 +84,48 @@ impl KnowledgeIndex {
             return Vec::new();
         }
 
-        // Rank by (match_count desc, insertion_index desc) using a tuple sort.
-        // The previous formula `matches * 10000 + i` overflowed its bucket once
-        // there were >10000 entries: a 1-match late entry could tie a 2-match
-        // early one, corrupting the ranking. Separate keys avoid that entirely.
-        let mut scored: Vec<(usize, usize, &KnowledgeEntry)> = self
+        let mut scored: Vec<(i64, usize, &KnowledgeEntry)> = self
             .entries
             .iter()
             .enumerate()
-            .map(|(i, entry)| {
+            .filter_map(|(i, entry)| {
+                if let Some(filter) = source_filter {
+                    if !entry.source.to_lowercase().contains(&filter.to_lowercase()) {
+                        return None;
+                    }
+                }
+
                 let content_lower = entry.content.to_lowercase();
                 let source_lower = entry.source.to_lowercase();
                 let id_lower = entry.id.to_lowercase();
 
-                let matches: usize = query_words
-                    .iter()
-                    .map(|w| {
-                        content_lower.matches(w).count()
-                            + source_lower.matches(w).count()
-                            + id_lower.matches(w).count()
-                    })
-                    .sum();
+                // At least one query word must appear in the content.
+                if !query_words.iter().any(|w| content_lower.contains(w)) {
+                    return None;
+                }
 
-                (matches, i, entry)
-            })
-            .filter(|(_, _, e)| {
-                let content_lower = e.content.to_lowercase();
-                query_words.iter().any(|w| content_lower.contains(w))
+                let content_word_count = content_lower.split_whitespace().count().max(1);
+
+                let mut score: i64 = 0;
+                for w in &query_words {
+                    // Source matches: weight 4x
+                    let source_matches = source_lower.matches(w).count() as i64;
+                    score += source_matches * 4;
+
+                    // Content matches: normalised by length (blocks of ~200 words)
+                    let content_matches = content_lower.matches(w).count() as i64;
+                    let density_factor = (content_word_count + 99) / 200;
+                    score += (content_matches * 100) / density_factor.max(1) as i64;
+
+                    // ID matches: weight 0.5x
+                    let id_matches = id_lower.matches(w).count() as i64;
+                    score += id_matches;
+                }
+
+                Some((score, i, entry))
             })
             .collect();
 
-        // Higher match count first; ties broken by most-recently-added (higher i).
         scored.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| b.1.cmp(&a.1)));
         scored.truncate(limit);
         scored.into_iter().map(|(_, _, e)| e).collect()
@@ -121,6 +141,17 @@ impl KnowledgeIndex {
 
     pub fn entries(&self) -> &[KnowledgeEntry] {
         &self.entries
+    }
+
+    /// Add an entry only if no existing entry has the same source URL.
+    /// Returns `true` if added, `false` if the URL already exists.
+    pub fn add_entry_dedup_url(&mut self, entry: KnowledgeEntry) -> Result<bool> {
+        let exists = self.entries.iter().any(|e| e.source == entry.source);
+        if exists {
+            return Ok(false);
+        }
+        self.add_entry(entry)?;
+        Ok(true)
     }
 
     /// Remove all entries whose source starts with the given prefix.

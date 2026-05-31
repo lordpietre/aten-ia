@@ -377,6 +377,15 @@ impl Agent {
         self.knowledge_index.search(query, limit)
     }
 
+    pub fn search_knowledge_filtered(
+        &self,
+        query: &str,
+        limit: usize,
+        source_filter: Option<&str>,
+    ) -> Vec<&KnowledgeEntry> {
+        self.knowledge_index.search_with_filter(query, limit, source_filter)
+    }
+
     pub fn knowledge_count(&self) -> usize {
         self.knowledge_index.len()
     }

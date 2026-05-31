@@ -489,22 +489,47 @@ fn main() -> Result<()> {
         }
 
         if input_lower.starts_with("/search ") {
-            let query = input
+            let raw = input
                 .strip_prefix("/search ")
                 .or_else(|| input.strip_prefix("/SEARCH "))
                 .unwrap_or("")
-                .trim()
-                .to_string();
-            if query.is_empty() {
-                eprintln!("{} Usage: /search <query>", "✗".red());
+                .trim();
+            if raw.is_empty() {
+                eprintln!("{} Usage: /search <query> [from:<source>]", "✗".red());
                 continue;
             }
+            let (query, source_filter) = if let Some(pos) = raw.find(" from:") {
+                let q = raw[..pos].trim().to_string();
+                let filter = raw[pos + 6..].trim().to_string();
+                (q, Some(filter))
+            } else if let Some(pos) = raw.find(" FROM:") {
+                let q = raw[..pos].trim().to_string();
+                let filter = raw[pos + 6..].trim().to_string();
+                (q, Some(filter))
+            } else {
+                (raw.to_string(), None)
+            };
+
+            if query.is_empty() {
+                eprintln!("{} Usage: /search <query> [from:<source>]", "✗".red());
+                continue;
+            }
+
             let a = agent.lock().unwrap();
-            let results = a.search_knowledge(&query, 5);
+            let results = a.search_knowledge_filtered(&query, 5, source_filter.as_deref());
             if results.is_empty() {
                 println!("  No matching knowledge found.");
             } else {
-                println!("{} Search results for '{}':", "━━━".bold(), query.bold());
+                let display_query = if let Some(ref f) = source_filter {
+                    format!("{} (source: {})", query, f)
+                } else {
+                    query.clone()
+                };
+                println!(
+                    "{} Search results for '{}':",
+                    "━━━".bold(),
+                    display_query.bold()
+                );
                 for (i, entry) in results.iter().enumerate() {
                     let preview: String = entry.content.chars().take(120).collect();
                     println!("  {}. [{}] {}", (i + 1), entry.source.dimmed(), preview);
