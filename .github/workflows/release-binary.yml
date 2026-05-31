@@ -17,8 +17,10 @@ jobs:
         include:
           - target: x86_64-unknown-linux-gnu
             runner: ubuntu-latest
+            deb_arch: amd64
           - target: aarch64-unknown-linux-gnu
             runner: ubuntu-24.04-arm
+            deb_arch: arm64
     defaults:
       run:
         working-directory: memvid-agent-core
@@ -33,7 +35,7 @@ jobs:
           targets: ${{ matrix.target }}
 
       - name: Install system dependencies
-        run: sudo apt-get update && sudo apt-get install -y cmake libssl-dev clang libgomp1
+        run: sudo apt-get update && sudo apt-get install -y cmake libssl-dev clang libgomp1 fakeroot
 
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
@@ -44,11 +46,52 @@ jobs:
       - name: Strip binary
         run: strip target/release/memvid-agent-core
 
-      - name: Upload artifact
+      - name: Package tar.gz
+        run: |
+          cp target/release/memvid-agent-core memvid-agent-core
+          tar czf memvid-agent-core-${{ matrix.target }}.tar.gz memvid-agent-core
+          sha256sum memvid-agent-core-${{ matrix.target }}.tar.gz > memvid-agent-core-${{ matrix.target }}.tar.gz.sha256
+
+      - name: Build .deb package
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          PKG_ROOT=debian/memvid-agent-core_${VERSION}_${{ matrix.deb_arch }}
+          mkdir -p "$PKG_ROOT/DEBIAN"
+          mkdir -p "$PKG_ROOT/usr/bin"
+          mkdir -p "$PKG_ROOT/usr/share/doc/memvid-agent-core"
+
+          cp target/release/memvid-agent-core "$PKG_ROOT/usr/bin/"
+          cp ../README.md "$PKG_ROOT/usr/share/doc/memvid-agent-core/"
+          cp ../AGENTS.md "$PKG_ROOT/usr/share/doc/memvid-agent-core/"
+
+          cat > "$PKG_ROOT/DEBIAN/control" <<EOF
+Package: memvid-agent-core
+Version: ${VERSION}
+Architecture: ${{ matrix.deb_arch }}
+Maintainer: lordpietre <lordpietre@users.noreply.github.com>
+Description: Local LLM agent with persistent memory and RAG
+ Interactive AI agent CLI with local LLM inference via llama.cpp,
+ persistent conversations (.mv2), keyword RAG, OpenAI-compatible API,
+ and multi-source ingestion (PDF, EPUB, HTML, MD, TXT, URLs).
+Depends: libc6, libstdc++6, libgomp1
+EOF
+
+          gzip -9 -n "$PKG_ROOT/usr/share/doc/memvid-agent-core/README.md"
+          gzip -9 -n "$PKG_ROOT/usr/share/doc/memvid-agent-core/AGENTS.md"
+
+          fakeroot dpkg-deb --build "$PKG_ROOT"
+          mv "debian/memvid-agent-core_${VERSION}_${{ matrix.deb_arch }}.deb" .
+          sha256sum "memvid-agent-core_${VERSION}_${{ matrix.deb_arch }}.deb" > "memvid-agent-core_${VERSION}_${{ matrix.deb_arch }}.deb.sha256"
+
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: memvid-agent-core-${{ matrix.target }}
-          path: memvid-agent-core/target/release/memvid-agent-core
+          path: |
+            memvid-agent-core-${{ matrix.target }}.tar.gz
+            memvid-agent-core-${{ matrix.target }}.tar.gz.sha256
+            memvid-agent-core_*.deb
+            memvid-agent-core_*.deb.sha256
           if-no-files-found: error
 
   release:
@@ -58,23 +101,23 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
+
+      - name: Version
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts
 
-      - name: Package binaries
+      - name: Flatten artifacts
         run: |
           set -e
-          cd artifacts
-          for dir in memvid-agent-core-*/; do
-            name="${dir%/}"
-            cp "$dir/memvid-agent-core" .
-            tar czf "${name}.tar.gz" memvid-agent-core
-            sha256sum "${name}.tar.gz" > "${name}.tar.gz.sha256"
-            rm -f memvid-agent-core
-          done
-          ls -la
+          mkdir -p release
+          find artifacts -type f -exec cp {} release/ \;
+          ls -la release/
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
@@ -84,7 +127,32 @@ jobs:
           body: |
             ## memvid-agent-core ${{ github.ref_name }}
 
-            ### Binaries
-            - `memvid-agent-core-x86_64-unknown-linux-gnu.tar.gz` (Intel/AMD 64-bit)
-            - `memvid-agent-core-aarch64-unknown-linux-gnu.tar.gz` (ARM 64-bit)
-          files: artifacts/*.tar.gz*
+            Interactive AI agent CLI with **local LLM inference** via llama.cpp (CPU-only),
+            persistent conversations (.mv2), keyword RAG, OpenAI-compatible API,
+            and multi-source ingestion.
+
+            ### Downloads
+
+            | Package | Platform |
+            |---|---|
+            | \`.tar.gz\` — x86_64 | \`memvid-agent-core-x86_64-unknown-linux-gnu.tar.gz\` |
+            | \`.tar.gz\` — ARM64 | \`memvid-agent-core-aarch64-unknown-linux-gnu.tar.gz\` |
+            | \`.deb\` — amd64 | \`memvid-agent-core_${{ steps.version.outputs.version }}_amd64.deb\` |
+            | \`.deb\` — arm64 | \`memvid-agent-core_${{ steps.version.outputs.version }}_arm64.deb\` |
+
+            ### Quick start
+
+            ```bash
+            # Debian/Ubuntu
+            sudo dpkg -i memvid-agent-core_${{ steps.version.outputs.version }}_amd64.deb
+            memvid-agent-core
+
+            # Or from tarball
+            tar xzf memvid-agent-core-x86_64-unknown-linux-gnu.tar.gz
+            ./memvid-agent-core
+            ```
+
+            On first run it downloads a model automatically (~350 MB) and starts
+            an interactive REPL. See [README](https://github.com/lordpietre/aten-ia#readme)
+            for full documentation.
+          files: release/*
