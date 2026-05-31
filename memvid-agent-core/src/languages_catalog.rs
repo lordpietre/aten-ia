@@ -322,27 +322,48 @@ fn strip_html(html: &str) -> String {
             continue;
         }
         match c {
-            // A tag starts: any pending entity was a lone '&', emit it literally.
             '<' => {
                 if in_entity {
-                    flush_entity(&mut result, &mut entity_buf);
+                    result.push('&');
+                    result.push_str(&entity_buf);
                     in_entity = false;
                 }
                 in_tag = true;
             }
-            // A new '&' while parsing one means the previous '&' was literal.
-            '&' => {
-                if in_entity {
-                    flush_entity(&mut result, &mut entity_buf);
-                }
-                in_entity = true;
-                entity_buf.clear();
-            }
-            ';' if in_entity => {
-                if entity_buf.starts_with('#') {
-                    // Invalid numeric entities are dropped (unchanged behavior).
-                    if let Some(ch) = decode_numeric_entity(&entity_buf) {
-                        result.push(ch);
+            '>' if in_tag => in_tag = false,
+            _ if !in_tag => {
+                if c == '&' {
+                    in_entity = true;
+                    entity_buf.clear();
+                } else if in_entity {
+                    if c == ';' {
+                        if entity_buf.starts_with('#') {
+                            if let Some(ch) = decode_numeric_entity(&entity_buf) {
+                                result.push(ch);
+                            }
+                        } else if is_known_entity(entity_buf.as_str()) {
+                            let decoded = match entity_buf.as_str() {
+                                "amp" => "&",
+                                "lt" => "<",
+                                "gt" => ">",
+                                "quot" => "\"",
+                                "apos" => "'",
+                                "nbsp" => " ",
+                                _ => "",
+                            };
+                            result.push_str(decoded);
+                        } else {
+                            result.push('&');
+                            result.push_str(&entity_buf);
+                        }
+                        in_entity = false;
+                    } else if entity_buf.len() > 16 {
+                        result.push('&');
+                        result.push_str(&entity_buf);
+                        result.push(c);
+                        in_entity = false;
+                    } else {
+                        entity_buf.push(c);
                     }
                 } else if is_known_entity(entity_buf.as_str()) {
                     let decoded = match entity_buf.as_str() {
@@ -377,6 +398,11 @@ fn strip_html(html: &str) -> String {
     // End of input with a still-open entity → it was a lone '&'.
     if in_entity {
         flush_entity(&mut result, &mut entity_buf);
+    }
+
+    if in_entity {
+        result.push('&');
+        result.push_str(&entity_buf);
     }
 
     let mut cleaned = String::with_capacity(result.len());

@@ -6,24 +6,28 @@ Single Rust binary+lib crate — local LLM inference via bundled `llama-cpp-turb
 
 | Action | Command |
 |---|---|
-| Build | `cargo build` |
+| Build (first: ~30 min cmake+llama.cpp; subsequent: <1s) | `cargo build` |
 | Run (auto-downloads model if missing) | `cargo run` |
-| All tests | `cargo test` |
+| All tests (~455, no GGUF needed) | `cargo test` |
 | Format check | `cargo fmt --all -- --check` |
 | Lint (lib only — CI uses `--lib`) | `cargo clippy --lib` |
 | System deps | `cmake libssl-dev clang libgomp1` |
 | Build prebuilt libs release | `git tag v0.1.0 && git push --tags` (triggers `.github/workflows/release.yml`) |
 
 CI order: `build → test → fmt → clippy --lib` (`.github/workflows/ci.yml`).
+CI build time: ~30 min first run, <5 min after cache warms (`Swatinem/rust-cache` in both workflows).
+Integration tests: `tests/functional.rs` (1525 lines) + `tests/writer_integration.rs`.
 
 **Prebuilt libs**: `build.rs` first tries to download `llama-libs-{target}.tar.gz` from GitHub Releases. If unavailable (no release, network, or unmatched target), falls back to cmake compilation with `jobs(1)` to avoid OOM. Override download repo with `LLAMA_LIBS_REPO=user/repo`.
 
 ## Structure
 
 - **Entrypoints**: `src/main.rs` (binary REPL), `src/lib.rs` (library, used by tests + api.rs)
+- **Module decls** in `lib.rs` — 19 modules covering all subsystems
 - **Model catalog**: `src/models_catalog.json` — 20 models, loaded at runtime by `ModelsCatalog::load()`
-- **Config**: `config.json` — version 1, fields: `model`, `generation`, `api`, `languages`, `ingestion` (serde defaults for missing fields)
+- **Config**: `config.json` — version 1, fields: `model`, `generation`, `api`, `languages`, `ingestion` (serde defaults for missing fields; created by first-run wizard if absent)
 - **Persistence dir**: `memvid_data/` — `.mv2` segments + `knowledge_index.jsonl` + `manifest.json` + `.lock`
+- **FFI**: `wrapper.h` (at crate root) `#include`s `llama-cpp-turboquant/include/llama.h` → bindgen
 - **11 `.expect()` calls in main.rs** — all in `ProgressStyle::template()` calls (spinners + progress bar)
 
 ## Key details
@@ -46,6 +50,7 @@ CI order: `build → test → fmt → clippy --lib` (`.github/workflows/ci.yml`)
 - **`llama-cpp-turboquant/AGENTS.md`**: no AI-submitted PRs to upstream llama.cpp
 - **`FileLock::acquire()`** creates `data_dir/.lock` with PID — concurrent instances rejected
 - **`.env` loaded** via `dotenvy::dotenv().ok()` at startup (before config load)
-- **First run** triggers interactive setup wizard (model select, API config)
-- **Integration tests** (`tests/`) use tempdir, no GGUF model needed — run via `cargo test`
+- **First run** triggers interactive setup wizard (model select, API config, language docs)
+- **Integration tests** use `tempfile::tempdir()` + `LlamaContext::null()` — no GGUF model required
 - **`cargo clippy --lib`** only checks the library crate, not the binary (`main.rs`)
+- **Pending** (from `plan.md` F4–F6): RSS/Atom feeds, URL queue, semantic embeddings, streaming SSE, multi-threaded API, web UI
