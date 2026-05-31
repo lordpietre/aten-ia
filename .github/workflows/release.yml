@@ -123,11 +123,11 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            llama-libs-${{ matrix.target }}.tar.gz
-            aten-ia-${{ matrix.target }}.tar.gz
-            aten-ia-${{ matrix.target }}.tar.gz.sha256
-            aten-ia_*.deb
-            aten-ia_*.deb.sha256
-            aten-ia_*.snap
-            aten-ia_*.snap.sha256
+            memvid-agent-core/llama-libs-${{ matrix.target }}.tar.gz
+            memvid-agent-core/aten-ia-${{ matrix.target }}.tar.gz
+            memvid-agent-core/aten-ia-${{ matrix.target }}.tar.gz.sha256
+            memvid-agent-core/aten-ia_*.deb
+            memvid-agent-core/aten-ia_*.deb.sha256
+            memvid-agent-core/aten-ia_*.snap
+            memvid-agent-core/aten-ia_*.snap.sha256
           fail_on_unmatched_files: false
