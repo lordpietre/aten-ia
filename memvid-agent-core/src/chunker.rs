@@ -50,6 +50,7 @@ fn chunk_by_headings(text: &str, options: &ChunkOptions, source: &str) -> Vec<Ch
 
             let overlap_chars = options.overlap.min(current_section.len());
             let overlap_start = current_section.len().saturating_sub(overlap_chars);
+            let overlap_start = current_section.floor_char_boundary(overlap_start);
             let overlap_text = &current_section[overlap_start..];
             current_section = if let Some(pos) = overlap_text.rfind('\n') {
                 overlap_text[pos..].to_string()
