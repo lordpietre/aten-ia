@@ -1,0 +1,28 @@
+name: memvid-agent-core
+version: "0.1.0"
+summary: Local LLM agent with persistent memory and RAG
+description: |
+  Interactive AI agent CLI with local LLM inference via llama.cpp,
+  persistent conversations (.mv2), keyword RAG, OpenAI-compatible API,
+  and multi-source ingestion (PDF, EPUB, HTML, MD, TXT, URLs).
+grade: stable
+confinement: strict
+base: core22
+
+apps:
+  memvid-agent-core:
+    command: bin/memvid-agent-core
+    plugs:
+      - network
+      - home
+      - removable-media
+
+parts:
+  memvid-agent-core:
+    plugin: nil
+    stage-packages:
+      - libgomp1
+    override-build: |
+      mkdir -p "$SNAPCRAFT_PART_INSTALL/bin"
+      cp "$SNAPCRAFT_PROJECT_DIR/memvid-agent-core/target/release/memvid-agent-core" \
+         "$SNAPCRAFT_PART_INSTALL/bin/"

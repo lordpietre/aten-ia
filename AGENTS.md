@@ -13,7 +13,7 @@ Single Rust binary+lib crate in `memvid-agent-core/` — local LLM inference via
 | Format check | `cargo fmt --all -- --check` |
 | Lint (lib only — CI uses `--lib`) | `cargo clippy --lib` |
 | System deps | `cmake libssl-dev clang libgomp1 fakeroot` |
-| Prebuilt libs + binary + .deb release | `git tag v0.1.0 && git push --tags` (triggers `.github/workflows/release.yml` + `release-binary.yml`) |
+| Full release (libs + binary + .deb + .snap) | `git tag v0.1.0 && git push --tags` (triggers `.github/workflows/release.yml`) |
 
 CI order: `build → test → fmt → clippy --lib` (`.github/workflows/ci.yml`).
 Build time: ~30 min first run, <5 min after cache warms (`Swatinem/rust-cache`).
@@ -27,8 +27,7 @@ Override download repo: `LLAMA_LIBS_REPO=user/repo`.
 
 **CI checkout requires `submodules: recursive`** for `llama-cpp-turboquant/`.
 
-**Release binaries** built for `x86_64` (ubuntu-latest) and `aarch64` (ubuntu-24.04-arm).
-Prebuilt llama libs (`release.yml`) build the same matrix — `release-binary.yml` compiles the Rust crate and produces `.tar.gz` + `.deb` packages.
+**Release workflow** (`.github/workflows/release.yml`) builds the full matrix for `x86_64` and `aarch64` in a single pipeline: llama static libs → Rust binary → `.tar.gz` → `.deb` → `.snap`. All assets uploaded to the GitHub Release.
 
 ## Structure
 
