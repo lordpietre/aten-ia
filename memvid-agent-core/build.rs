@@ -15,9 +15,13 @@ fn repo_slug() -> String {
 }
 
 fn local_prebuilt(out_dir: &PathBuf) -> bool {
-    let Some(src) = env::var("LLAMA_LOCAL_LIBS").ok() else { return false };
+    let Some(src) = env::var("LLAMA_LOCAL_LIBS").ok() else {
+        return false;
+    };
     let src = PathBuf::from(src);
-    if !src.is_dir() { return false; }
+    if !src.is_dir() {
+        return false;
+    }
     let find = Command::new("find")
         .args([&src.to_string_lossy(), "-name", "*.a"])
         .output()
@@ -107,7 +111,10 @@ fn main() {
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
 
     let lib_dir = if local_prebuilt(&out_dir) {
-        println!("cargo:warning=using local prebuilt llama libs from {}", env::var("LLAMA_LOCAL_LIBS").unwrap_or_default());
+        println!(
+            "cargo:warning=using local prebuilt llama libs from {}",
+            env::var("LLAMA_LOCAL_LIBS").unwrap_or_default()
+        );
         out_dir.clone()
     } else if download_prebuilt(&out_dir) {
         println!("cargo:warning=using prebuilt llama libs");
