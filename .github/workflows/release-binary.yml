@@ -9,9 +9,16 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build-release:
-    name: Build release binary
-    runs-on: ubuntu-latest
+  build:
+    name: ${{ matrix.target }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            runner: ubuntu-latest
+          - target: aarch64-unknown-linux-gnu
+            runner: ubuntu-24.04-arm
     defaults:
       run:
         working-directory: memvid-agent-core
@@ -22,6 +29,8 @@ jobs:
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
 
       - name: Install system dependencies
         run: sudo apt-get update && sudo apt-get install -y cmake libssl-dev clang libgomp1
@@ -35,31 +44,37 @@ jobs:
       - name: Strip binary
         run: strip target/release/memvid-agent-core
 
-      - name: Upload binary artifact
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: memvid-agent-core-x86_64-linux
+          name: memvid-agent-core-${{ matrix.target }}
           path: memvid-agent-core/target/release/memvid-agent-core
           if-no-files-found: error
 
-  create-release:
+  release:
     name: Create GitHub Release
-    needs: build-release
+    needs: build
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - name: Download artifact
+      - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
-          name: memvid-agent-core-x86_64-linux
-          path: release/
+          path: artifacts
 
-      - name: Compress binary
-        run: tar czf memvid-agent-core-x86_64-linux.tar.gz -C release memvid-agent-core
-
-      - name: Generate checksum
-        run: sha256sum memvid-agent-core-x86_64-linux.tar.gz > memvid-agent-core-x86_64-linux.tar.gz.sha256
+      - name: Package binaries
+        run: |
+          set -e
+          cd artifacts
+          for dir in memvid-agent-core-*/; do
+            name="${dir%/}"
+            cp "$dir/memvid-agent-core" .
+            tar czf "${name}.tar.gz" memvid-agent-core
+            sha256sum "${name}.tar.gz" > "${name}.tar.gz.sha256"
+            rm -f memvid-agent-core
+          done
+          ls -la
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
@@ -69,7 +84,7 @@ jobs:
           body: |
             ## memvid-agent-core ${{ github.ref_name }}
 
-            Descarga: `memvid-agent-core-x86_64-linux.tar.gz`
-          files: |
-            memvid-agent-core-x86_64-linux.tar.gz
-            memvid-agent-core-x86_64-linux.tar.gz.sha256
+            ### Binaries
+            - `memvid-agent-core-x86_64-unknown-linux-gnu.tar.gz` (Intel/AMD 64-bit)
+            - `memvid-agent-core-aarch64-unknown-linux-gnu.tar.gz` (ARM 64-bit)
+          files: artifacts/*.tar.gz*
