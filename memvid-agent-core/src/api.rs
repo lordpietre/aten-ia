@@ -266,7 +266,7 @@ fn read_http_request(stream: &mut TcpStream) -> Result<HttpRequest> {
     }
 
     let request_str = String::from_utf8_lossy(&buf);
-    let header_end = request_str.find("\r\n\r\n").unwrap();
+    let header_end = request_str.find("\r\n\r\n").ok_or_else(|| anyhow::anyhow!("Invalid HTTP request: no header terminator"))?;
 
     let mut method = String::new();
     let mut path = String::new();

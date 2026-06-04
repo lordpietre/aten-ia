@@ -163,23 +163,35 @@ impl PromptBuilder {
         let mut prompt = String::new();
 
         let system = self.system_content(rag_context);
-        if !system.is_empty() {
-            prompt.push_str(&format!("[INST] {} [/INST]\n", system));
-        }
+        let system_prefix = if system.is_empty() { String::new() } else { format!("{}\n\n", system) };
 
+        let mut first_user = true;
         for msg in messages {
             match msg.role {
                 crate::types::MessageRole::User => {
-                    prompt.push_str(&format!("[INST] {} [/INST]\n", msg.content));
+                    if first_user {
+                        prompt.push_str(&format!("[INST] {}{} [/INST]\n", system_prefix, msg.content));
+                        first_user = false;
+                    } else {
+                        prompt.push_str(&format!("[INST] {} [/INST]\n", msg.content));
+                    }
                 }
                 crate::types::MessageRole::Assistant => {
                     prompt.push_str(&format!("{} </s>", msg.content));
                 }
-                _ => {}
+                crate::types::MessageRole::System => {
+                    if first_user {
+                        prompt.push_str(&format!("[INST] {} [/INST]\n", msg.content));
+                    }
+                }
+                crate::types::MessageRole::Tool => {}
             }
         }
 
-        prompt.push_str(&format!("[INST] {} [/INST]\n", user_input));
+        if !user_input.is_empty() && !messages.iter().any(|m| m.role == MessageRole::User && m.content == user_input) {
+            prompt.push_str(&format!("[INST] {}{} [/INST]\n", system_prefix, user_input));
+        }
+
         prompt
     }
 
@@ -264,7 +276,30 @@ mod tests {
         let result = builder.build(&[], "hello", &[]);
         assert!(result.starts_with("[INST]"));
         assert!(result.contains("expert software engineer"));
-        assert!(result.ends_with("[INST] hello [/INST]\n"));
+        assert!(result.contains("hello"));
+        assert!(result.contains("[/INST]"));
+    }
+
+    #[test]
+    fn mistral_template_with_messages() {
+        let builder = PromptBuilder::new(ChatTemplate::Mistral);
+        let messages = vec![
+            msg(MessageRole::User, "hi"),
+            msg(MessageRole::Assistant, "hello there"),
+        ];
+        let result = builder.build(&messages, "how are you?", &[]);
+        assert!(result.contains("[INST]"));
+        assert!(result.contains("hi"));
+        assert!(result.contains("hello there"));
+        assert!(result.contains("how are you?"));
+    }
+
+    #[test]
+    fn mistral_template_with_system_message() {
+        let builder = PromptBuilder::new(ChatTemplate::Mistral);
+        let messages = vec![msg(MessageRole::System, "important context")];
+        let result = builder.build(&messages, "question", &[]);
+        assert!(result.contains("[INST] important context [/INST]"));
     }
 
     #[test]

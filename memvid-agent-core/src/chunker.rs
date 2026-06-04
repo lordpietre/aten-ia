@@ -155,7 +155,13 @@ fn chunk_fixed(text: &str, options: &ChunkOptions, source: &str) -> Vec<Chunk> {
     let mut idx = 0u32;
 
     while start < text.len() {
-        let end = (start + max_size).min(text.len());
+        let mut end = (start + max_size).min(text.len());
+        end = text.floor_char_boundary(end);
+
+        if end <= start {
+            break;
+        }
+
         let chunk_text = &text[start..end];
 
         chunks.push(Chunk {
@@ -171,7 +177,12 @@ fn chunk_fixed(text: &str, options: &ChunkOptions, source: &str) -> Vec<Chunk> {
         }
 
         let advance = max_size.saturating_sub(overlap).max(1);
-        start += advance;
+        let next_start = start + advance;
+        let candidate = text.floor_char_boundary(next_start);
+        // candidate must be strictly past start to make progress.
+        // If floor_char_boundary rounds back to start (multi-byte edge case),
+        // fall back to end which is always a valid boundary.
+        start = if candidate > start { candidate } else { end };
     }
 
     chunks
@@ -487,8 +498,8 @@ mod tests {
         assert!(chunks.is_empty() || chunks.iter().all(|c| c.content.trim().is_empty()));
     }
 
-    #[test]
-    fn chunk_heading_mixed_levels() {
+#[test]
+fn chunk_heading_mixed_levels() {
         let text = "# H1\ncontent\n## H2\nmore\n### H3\ndetails";
         let opts = ChunkOptions {
             max_size: 200,
@@ -500,5 +511,25 @@ mod tests {
         assert_eq!(chunks[0].heading, Some("# H1".into()));
         assert_eq!(chunks[1].heading, Some("## H2".into()));
         assert_eq!(chunks[2].heading, Some("### H3".into()));
+    }
+
+    #[test]
+    fn chunk_fixed_multibyte_safe() {
+        let text = "ññññññññññ".to_string();
+        let byte_len = text.len();
+        assert!(byte_len > text.chars().count());
+        let max_size = (byte_len / 2).max(3);
+        let opts = ChunkOptions {
+            max_size,
+            overlap: 2,
+            strategy: ChunkStrategy::Fixed,
+        };
+        let chunks = chunk_text(&text, &opts, "multi");
+        for chunk in &chunks {
+            assert!(chunk.content.is_char_boundary(0));
+            assert!(chunk.content.is_char_boundary(chunk.content.len()));
+            let _ = chunk.content.chars().count();
+        }
+        assert!(!chunks.is_empty());
     }
 }

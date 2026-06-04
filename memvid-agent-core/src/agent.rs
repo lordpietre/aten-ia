@@ -276,7 +276,7 @@ impl Agent {
         let mut fetcher = WebFetcher::new(ingestion);
         let entries = crate::feeds::fetch_feed(url, &mut fetcher)?;
         let total = entries.len();
-        let feed_title = entries.first().map(|_| url.to_string());
+        let feed_title = entries.first().map(|e| e.title.clone()).or_else(|| Some(url.to_string()));
 
         let mut indexed = 0usize;
         let mut failures = Vec::new();

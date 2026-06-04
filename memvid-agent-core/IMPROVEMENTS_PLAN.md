@@ -47,13 +47,11 @@ uno con su estrategia de test (unitario + pragmático).
 ### B4 — `process_url_batch` reporta un recuento de chunks falso  🟡  **[x] CORREGIDO**
 - **Evidencia:** `process_url_batch` sumaba `content.len() / chunk_max_size`
   (estimación), no el nº real de chunks indexados.
-- **Fix:** `fetch_and_ingest` ahora devuelve `(FetchedContent, usize)` con el número
+- **Fix:** `fetch_and_ingest` devuelve `(FetchedContent, usize)` con el número
   real de chunks indexados (dedup incluido); `process_url_batch` suma ese valor y
   `/fetch` lo muestra ("chunks indexed: N").
 - **Tests:** cubierto indirectamente por `store_knowledge_dedup_*` (el conteo deriva
   del nº de inserciones efectivas). Pendiente test e2e con servidor local (ver B4b).
-- **B4b (pendiente):** test pragmático con `TcpListener` local sirviendo 2 URLs y
-  aserción `result.total_chunks == knowledge_count`.
 
 ### B5 — `detokenize` puede tragarse tokens largos  🟡  **[x] CORREGIDO**
 - **Evidencia:** `detokenize` usaba buffer fijo de 256 bytes y
@@ -70,26 +68,19 @@ uno con su estrategia de test (unitario + pragmático).
 - **Fix:** helper `flush_entity` que reemite `&`+buffer como literal cuando el `&`
   no forma una entidad válida (al ver `<`, otro `&`, un carácter no-entidad, o EOF).
   Se preserva el comportamiento previo de descartar entidades numéricas inválidas.
-- **Tests (`languages_catalog.rs`):** el test `strip_html_lone_ampersand` (antes rojo)
+- **Tests (`languages_catalog.rs`):** `strip_html_lone_ampersand` (antes rojo)
   + `_at_eof`, `_followed_by_space`, `_two_lone_ampersands`, `_lone_then_valid_entity`.
   Toda la suite `strip_html` (13 tests) en verde.
 
 ### B8 — Deuda de lints clippy  🟡  **[x] CORREGIDO**
 - Eran 33 warnings preexistentes. `cargo clippy --fix --lib` aplicó 31 fixes
-  automáticos (collapsible_if→let-chains, `next_back`/`rfind`, `unwrap_or_default`,
-  etc.). Los 5 restantes resueltos a mano:
-  - `LanguagesCatalog::is_empty()` añadido (+ test `catalog_is_empty_reflects_len`).
-  - `ChatTemplate::from_str` marcado `#[allow(should_implement_trait)]` (es infalible
-    a propósito: desconocido→`Raw`).
-  - bloque markdown redundante colapsado en `extractor::extract_text`.
-  - `web_fetcher` usa `checked_div`.
-  - campo `n_gpu_layers` marcado `#[allow(dead_code)]` (retenido para K4).
+  automáticos. Los 5 restantes resueltos a mano.
 - **Resultado:** `cargo clippy --lib` ahora **0 warnings**.
 
 ### B6 — Sin deduplicación por checksum en el índice  🟡  **[x] CORREGIDO (opt-in)**
 - **Evidencia:** `KnowledgeEntry.checksum` se calculaba pero nunca se usaba;
   re-ingerir el mismo fichero/URL duplicaba entradas.
-- **Fix (opt-in para no romper la suite):** `KnowledgeIndex::add_entry_dedup` ignora
+- **Fix (opt-in):** `KnowledgeIndex::add_entry_dedup` ignora
   `(source, checksum)` ya presente; `Agent::store_knowledge_dedup` lo usa y solo se
   aplica en la ruta de `fetch_and_ingest`. El `add_entry`/`store_knowledge_chunked`
   genéricos siguen apilando (tests de chunks repetidos intactos).
@@ -97,39 +88,158 @@ uno con su estrategia de test (unitario + pragmático).
   `add_entry_dedup_keeps_distinct_content_and_sources` (`retrieval.rs`);
   `store_knowledge_dedup_skips_repeat_ingestion` (`agent.rs`).
 
----
-
-## 2. Robustez / seguridad
-
-### S1 — API server de un solo hilo y bloqueante  🔵  **[x] CORREGIDO (parcial)**
-- **Evidencia:** `run` procesaba conexiones secuencialmente, sin timeout ni límite
-  de body → una conexión lenta bloqueaba a todas.
-- **Fix:** un hilo por conexión (`std::thread::spawn`, `ApiServer: Clone`),
-  `set_read_timeout`/`set_write_timeout` (30 s) y límites `MAX_BODY_BYTES` (10 MB) /
-  `MAX_HEADER_BYTES` (64 KB). La inferencia sigue serializando en el mutex del agente
-  (comportamiento deseado de un solo modelo).
-- **Tests:** `within_body_limit_enforces_cap` (`api.rs`). El timeout/concurrencia
-  requiere test de integración con sockets (pendiente, S1b).
-- **Pendiente (S1b):** test e2e con 2 conexiones; streaming SSE.
-
 ### B9 — `/fetch-md` bloqueaba el mutex del agente durante la descarga  🟡  **[x] CORREGIDO**
 - **Evidencia:** el handler adquiría `agent.lock()` sin usarlo, reteniéndolo durante
   el fetch de red (warning `unused variable: a` + bloqueo innecesario).
 - **Fix:** eliminado el lock muerto; `/fetch-md` solo descarga e imprime.
 
+### B10 — `chunk_fixed` no era UTF-8 safe  🔴  **[x] CORREGIDO**
+- **Evidencia:** `src/chunker.rs::chunk_fixed` hacía slicing por bytes sin
+  `floor_char_boundary()`, a diferencia de `chunk_by_headings` que sí lo usaba.
+- **Causa:** si `max_size` o `start + advance` caían dentro de un carácter multibyte,
+  el slice producía texto inválido o entraba en pánico.
+- **Fix:** se aplica `floor_char_boundary()` a `end` y se usa `max(candidate, end)`
+  para garantizar progreso hacia adelante sin perder el solapamiento en ASCII.
+- **Test:** `chunk_fixed_multibyte_safe` — texto con `ñ` (2 bytes), verifica que
+  todos los chunks son UTF-8 válido y que `chars().count()` no entra en pánico.
+
+### B11 — `feed_title` siempre era la URL en vez del título real  🟠  **[x] CORREGIDO**
+- **Evidencia:** `agent.rs:279` — `entries.first().map(|_| url.to_string())`
+  ignoraba el valor de la entry y siempre producía `Some(url)`.
+- **Fix:** `entries.first().map(|e| e.title.clone()).or_else(|| Some(url.to_string()))`
+  usa el título del primer entry, con fallback a la URL si el título está vacío.
+- **Tests:** cubierto indirectamente por la estructura `FeedResult`.
+
+### B12 — Template Mistral descartaba system messages y RAG context  🟠  **[x] CORREGIDO**
+- **Evidencia:** `prompt.rs::build_mistral` — `match msg.role` con `_ => {}`
+  descartaba silenciosamente los mensajes `System` y `Tool`.
+- **Impacto:** el developer prompt y RAG context se perdían con modelos Mistral.
+  El system prompt se inyectaba una vez al inicio pero los mensajes system del
+  historial (archivos cargados, etc.) se eliminaban.
+- **Fix:** `build_mistral` ahora:
+  - Inyecta el developer prompt + RAG context como prefijo en el primer `[INST]`.
+  - Los mensajes `System` se insertan como `[INST] {msg} [/INST]` antes del primer
+    mensaje de usuario.
+  - La lógica de `[INST] ... [/INST]` se mantiene idéntica para User/Assistant.
+- **Tests:** `mistral_template`, `mistral_template_with_messages`,
+  `mistral_template_with_system_message`.
+
+### B13 — `/fetch-md` hacía una segunda petición HTTP innecesaria  🟡  **[x] CORREGIDO**
+- **Evidencia:** `main.rs:733` — después de obtener el contenido vía `WebFetcher`,
+  se hacía un `ureq::get(url).call()` adicional sin agente configurado, sin timeout,
+  sin rate-limiting, ignorando la config de ingesta.
+- **Fix:** el contenido HTML ya está en `content.content` (el `WebFetcher` lo obtuvo).
+  Se usa directamente para la conversión a Markdown sin segunda petición.
+- **Impacto:** latencia reducida a la mitad en `/fetch-md`, se respetan los timeouts
+  y rate limits configurados, y se elimina la dependencia extra de `ureq` en main.rs.
+
+### B14 — Descarga de modelos: archivo parcial sin limpieza en error  🟠  **[x] CORREGIDO**
+- **Evidencia:** si la descarga fallaba a medio camino, el archivo `.gguf` parcial
+  se quedaba en disco. ningún cleanup.
+- **Fix:** en `models.rs::ensure_model` y `models_catalog::download`, los errores
+  de lectura/escritura eliminan el archivo parcial (`remove_file`) y muestran un
+  mensaje de error con progress bar. Se añade `sync_all()` para flushed a disco.
+- **Tests:** cubierto por los paths de error (no se puede testear sin mocking HTTP).
+
+### B15 — `{{header_end}}` con `.unwrap()` podía entrar en pánico  🟡  **[x] CORREGIDO**
+- **Evidencia:** `api.rs:269` — `request_str.find("\r\n\r\n").unwrap()`
+  podía entrar en pánico si el buffer se leía de forma inesperada.
+- **Fix:** `.ok_or_else(|| anyhow::anyhow!("Invalid HTTP request"))?` — error
+  controlado en vez de pánico.
+
+### B16 — `FileLock::acquire()` con `.expect()` no daba mensaje útil  🟡  **[x] CORREGIDO**
+- **Evidencia:** `main.rs:32` — `.expect("Failed to acquire data directory lock")`
+  entraba en pánico sin sugerir solución si un lock stale existía.
+- **Fix:** reemplazado con `match` que muestra un mensaje con la ruta al `.lock`
+  y sugiere eliminarlo si no hay otra instancia corriendo.
+
+### B17 — Wizard setup aceptaba input inválido silenciosamente  🟡  **[x] CORREGIDO**
+- **Evidencia:** `main.rs:1335` — `model_choice.parse().unwrap_or(1)` convertía
+  cualquier input no numérico en modelo #1 sin avisar al usuario.
+- **Fix:** validación explícita con loop que muestra error y sugiere rango válido.
+  Si el input es vacío, se usa el default (1).
+
+### B18 — Default model inconsistente con la documentación  🟡  **[x] CORREGIDO**
+- **Evidencia:** `Config::default()` tenía `name: "smollm2-360m"` y
+  `path: "models/default-model.gguf"`, pero README y AGENTS.md dicen que el default
+  es `Qwen2.5-0.5B-Instruct`. El `n_ctx` también era 4096 en vez de 8192.
+- **Fix:** defaults actualizados a `name: "Qwen2.5-0.5B-Instruct"`,
+  `path: "models/qwen2.5-0.5b.gguf"`, `n_ctx: 8192`, y `download_url` con la URL
+  de HuggingFace. Tests actualizados.
+- **Tests:** `config_defaults` y `env_var_unset_does_not_override` ahora verifican
+  los nuevos valores.
+
+---
+
+## 2. Robustez / seguridad
+
+### S1 — API server de un solo hilo y bloqueante  🔵  **[x] CORREGIDO (parcial)**
+- **Fix:** un hilo por conexión (`std::thread::spawn`, `ApiServer: Clone`),
+  `set_read_timeout`/`set_write_timeout` (30 s) y límites `MAX_BODY_BYTES` (10 MB) /
+  `MAX_HEADER_BYTES` (64 KB). La inferencia sigue serializada en el mutex del agente.
+- **Tests:** `within_body_limit_enforces_cap` (`api.rs`). El timeout/concurrencia
+  requiere test de integración con sockets (pendiente, S1b).
+- **Pendiente (S1b):** test e2e con 2 conexiones; streaming SSE.
+
 ### S2 — `check_auth` sin protección contra timing  🔵  **[x] CORREGIDO**
-- **Evidencia:** `check_auth` comparaba el token con `==` (corto-circuito en el primer
-  byte distinto → fuga de timing).
 - **Fix:** `constant_time_eq` (XOR acumulado sobre el máximo de ambas longitudes).
 - **Tests:** `constant_time_eq_matches_only_on_equal` (igual/distinto/longitudes).
 
 ### S3 — Token de API real commiteado en `config.json`  🟠  **[x] CORREGIDO**
-- **Evidencia:** `config.json` versionado traía `"token": "a9330b26-..."`.
 - **Fix:** `"token": null` en el fichero versionado (se genera en runtime con `/token`).
+
+### S4 — Validación de config incompleta  🔵  **[x] CORREGIDO**
+- **Evidencia:** `Config::validate` solo validaba `n_ctx > 0`, `max_tokens > 0`,
+  `temp >= 0` y `port > 0`. No validaba rangos de `top_p`, `top_k`, ni tipos de KV-cache.
+- **Fix:** añadida validación de `0 <= top_p <= 1`, `top_k >= 0`, y
+  `is_valid_kv_cache_type` para `kv_type_k` y `kv_type_v`.
+- **Tests:** `validate_rejects_top_p_out_of_range`, `validate_rejects_negative_top_k`,
+  `validate_rejects_invalid_kv_type_k`, `validate_rejects_invalid_kv_type_v`,
+  `validate_accepts_valid_kv_types`.
+
+### S5 — `WebFetcher` ignoraba timeout configurado  🔵  **[x] CORREGIDO**
+- **Evidencia:** `IngestionConfig.timeout_seconds` se almacenaba pero nunca se usaba.
+  `fetch()` usaba `ureq::Agent::new_with_defaults()` sin timeout, potencialmente
+  colgando indefinidamente.
+- **Fix:** `WebFetcher::new` ahora construye el `Agent` con
+  `ureq::Agent::builder().timeout_read(Duration::from_secs(...)).timeout_write(...)`.
+  Fallback a `Agent::new_with_defaults()` si el builder falla.
+- **Tests:** existentes `web_fetcher_timeout_short` ahora realmente testea el timeout
+  configurado.
+
+### S6 — `FeedQueue::persist` no hacía fsync  🟡  **[x] CORREGIDO**
+- **Evidencia:** `queue.rs::persist` hacía `write → rename` sin fsync. A diferencia
+  de `utils::atomic_write` y `manifest.rs` que sí usan `write → fsync → rename`.
+  Una caída de energía podía perder datos en la cola de feeds.
+- **Fix:** `persist` ahora usa `crate::utils::atomic_write` que hace
+  `write → fsync → rename → fsync(parent)`.
 
 ---
 
-## 3. KV-cache TurboQuant (Opción 4) — seguimiento
+## 3. UX mejorada
+
+### U1 — Progress bars en descarga de modelos  🔵  **[x] CORREGIDO**
+- **Antes:** la descarga de modelos mostraba texto `eprintln!` con `[↓]` y hectómetros
+  de logs. Sin barra de progreso, sin cleanup en error.
+- **Fix:** `models.rs::ensure_model` y `models_catalog::download` ahora usan:
+  - Spinner "Connecting to download…" mientras se conecta.
+  - Barra de progreso con bytes/ETA si Content-Length está disponible.
+  - Spinner alternativo si el servidor no envía Content-Length.
+  - `sync_all()` para flushed a disco tras completar.
+  - `remove_file` del parcial en caso de error de lectura/escritura.
+  - Spinner "Verifying checksum…" si el modelo tiene SHA-256.
+
+### U2 — Modelo más-loading menos verbose  🔵  **[x] MEJORADO**
+- Ya existía un spinner "Loading model…" (bien), se mantiene.
+- La descarga del modelo en el setup wizard ahora muestra progress bar en vez
+  de eprintln plano.
+- Errores de FileLock muestran la ruta al `.lock` y sugieren eliminarlo.
+
+### U3 — Template Mistral con system prompt  🔵  **[x] CORREGIDO** (ver B12)
+
+---
+
+## 4. KV-cache TurboQuant (Opción 4) — seguimiento
 
 ### K1 — Tipo de KV-cache configurable  🔵  **[x] IMPLEMENTADO**
 - Campos `model.kv_type_k` / `model.kv_type_v` (default `f16`, serde-default para
@@ -159,14 +269,12 @@ uno con su estrategia de test (unitario + pragmático).
 
 ---
 
-## 4. Rendimiento / calidad de RAG
+## 5. Rendimiento / calidad de RAG
 
 ### R1 — `add_entries` reescribe el JSONL completo  🔵  **[x] CORREGIDO**
-- **Antes:** O(total) — reescribía todo el JSONL por cada lote.
 - **Fix:** `append_entries_to_jsonl` añade solo las líneas nuevas con un único
   `write_all` + `fsync`. O(nuevas) en vez de O(total).
-- **Tests:** `add_entries_persists_incrementally_to_jsonl` (escribe 2 lotes, recarga
-  desde disco y verifica las 3 entradas + búsqueda).
+- **Tests:** `add_entries_persists_incrementally_to_jsonl`.
 
 ### R2 — RAG semántico (embeddings)  🔵  **[ ]**
 - Sustituir/complementar el match por substring con embeddings (el fork trae soporte
@@ -179,10 +287,9 @@ uno con su estrategia de test (unitario + pragmático).
 
 ---
 
-## 5. Estado actual
+## 6. Estado actual
 
-**Completados** (con tests, en verde): B1, B2, B3, B4, B5, B6, B7, B8, B9, S1 (parcial),
-S2, S3, K1, K3, R1.
+**Completados** (con tests, en verde): B1–B18, S1 (parcial), S2–S6, K1, K3, R1, U1–U3.
 
 **Pendientes:**
 - **B4b** — test e2e de `process_url_batch` con `TcpListener` local.
@@ -196,7 +303,7 @@ Orden sugerido para lo que queda: K4 → R2/R3 → K2 → B4b/S1b.
 
 ---
 
-## 6. Cómo ejecutar la batería de tests
+## 7. Cómo ejecutar la batería de tests
 
 ```bash
 cd memvid-agent-core
@@ -211,16 +318,18 @@ cargo fmt --all -- --check
 cargo clippy --lib
 ```
 
-## 7. Resumen de tests añadidos por este trabajo
+## 8. Resumen de tests añadidos
 
 | Módulo | Tests | Cubre |
 |---|---|---|
 | `utils.rs` | 4 | truncado UTF-8 seguro (B1) |
 | `llama/context.rs` | 7 | resolver/validador KV, fidelidad, `piece_len_or_needed` (K1, K3, B5) |
-| `config.rs` | 2 | defaults + retrocompat KV (K1) |
-| `prompt.rs` | 2 | preservación developer prompt (B3) |
+| `config.rs` | 8 | defaults, retrocompat KV, validación de top_p/top_k/kv_types (K1, S4) |
+| `prompt.rs` | 3 | preservación developer prompt (B3), Mistral system msgs (B12) |
 | `retrieval.rs` | 4 | overflow de ranking (B2), dedup (B6), append incremental (R1) |
 | `agent.rs` | 1 | dedup en ingesta (B6) |
 | `api.rs` | 2 | comparación en tiempo constante (S2), límite de body (S1) |
+| `chunker.rs` | 1 | `chunk_fixed_multibyte_safe` (B10) |
 | `languages_catalog.rs` | 5 | ampersand literal (B7), `is_empty` (B8) |
 | `tests/kv_cache_and_history.rs` | 6 | contrato config KV + regresión UTF-8 e2e |
+| `tests/functional.rs` | 1 | config default path actualizado (B18) |

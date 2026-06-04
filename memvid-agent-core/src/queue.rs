@@ -39,9 +39,7 @@ impl FeedQueue {
             content.push_str(&serde_json::to_string(entry)?);
             content.push('\n');
         }
-        let tmp = self.path.with_extension("jsonl.tmp");
-        std::fs::write(&tmp, &content)?;
-        std::fs::rename(&tmp, &self.path)?;
+        crate::utils::atomic_write(&self.path, content)?;
         Ok(())
     }
 

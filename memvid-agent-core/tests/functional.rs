@@ -40,7 +40,7 @@ fn config_creates_default_when_missing() {
     let cfg = memvid_agent_core::config::Config::load_or_create_with_path(&config_path).unwrap();
     assert!(config_path.exists());
     assert_eq!(cfg.version, 1);
-    assert_eq!(cfg.model.path, "models/default-model.gguf");
+    assert_eq!(cfg.model.path, "models/qwen2.5-0.5b.gguf");
     assert!(!cfg.api.enabled);
     assert!(cfg.languages.installed.is_empty());
 }

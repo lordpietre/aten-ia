@@ -87,14 +87,14 @@ impl Default for Config {
             developer_mode: true,
             developer_prompt: None,
             model: ModelConfig {
-                path: "models/default-model.gguf".to_string(),
-                name: "smollm2-360m".to_string(),
-                n_ctx: 4096,
+                path: "models/qwen2.5-0.5b.gguf".to_string(),
+                name: "Qwen2.5-0.5B-Instruct".to_string(),
+                n_ctx: 8192,
                 n_gpu_layers: 0,
                 chat_template: "chatml".to_string(),
                 kv_type_k: default_kv_cache_type(),
                 kv_type_v: default_kv_cache_type(),
-                download_url: None,
+                download_url: Some("https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf".to_string()),
                 sha256: None,
             },
             generation: GenerationConfig {
@@ -163,7 +163,25 @@ impl Config {
             self.generation.temp >= 0.0,
             "generation.temp must be >= 0.0"
         );
+        anyhow::ensure!(
+            self.generation.top_p >= 0.0 && self.generation.top_p <= 1.0,
+            "generation.top_p must be between 0.0 and 1.0"
+        );
+        anyhow::ensure!(
+            self.generation.top_k >= 0,
+            "generation.top_k must be >= 0"
+        );
         anyhow::ensure!(self.api.port > 0, "api.port must be > 0");
+        anyhow::ensure!(
+            crate::llama::context::is_valid_kv_cache_type(&self.model.kv_type_k),
+            "model.kv_type_k '{}' is not a valid KV cache type",
+            self.model.kv_type_k
+        );
+        anyhow::ensure!(
+            crate::llama::context::is_valid_kv_cache_type(&self.model.kv_type_v),
+            "model.kv_type_v '{}' is not a valid KV cache type",
+            self.model.kv_type_v
+        );
         Ok(())
     }
 
@@ -203,8 +221,8 @@ mod tests {
     fn config_defaults() {
         let cfg = Config::default();
         assert_eq!(cfg.version, 1);
-        assert_eq!(cfg.model.path, "models/default-model.gguf");
-        assert_eq!(cfg.model.n_ctx, 4096);
+        assert_eq!(cfg.model.path, "models/qwen2.5-0.5b.gguf");
+        assert_eq!(cfg.model.n_ctx, 8192);
         assert_eq!(cfg.model.n_gpu_layers, 0);
         assert_eq!(cfg.model.chat_template, "chatml");
         assert_eq!(cfg.model.kv_type_k, "f16");
@@ -369,8 +387,8 @@ mod tests {
     fn env_var_unset_does_not_override() {
         let mut cfg = Config::default();
         cfg.apply_env_overrides();
-        assert_eq!(cfg.model.path, "models/default-model.gguf");
-        assert_eq!(cfg.model.name, "smollm2-360m");
+        assert_eq!(cfg.model.path, "models/qwen2.5-0.5b.gguf");
+        assert_eq!(cfg.model.name, "Qwen2.5-0.5B-Instruct");
     }
 
     #[test]
@@ -391,6 +409,42 @@ mod tests {
     fn validate_accepts_zero_temp() {
         let mut cfg = Config::default();
         cfg.generation.temp = 0.0;
+        assert!(cfg.validate().is_ok());
+    }
+
+    #[test]
+    fn validate_rejects_top_p_out_of_range() {
+        let mut cfg = Config::default();
+        cfg.generation.top_p = 1.5;
+        assert!(cfg.validate().is_err());
+    }
+
+    #[test]
+    fn validate_rejects_negative_top_k() {
+        let mut cfg = Config::default();
+        cfg.generation.top_k = -1;
+        assert!(cfg.validate().is_err());
+    }
+
+    #[test]
+    fn validate_rejects_invalid_kv_type_k() {
+        let mut cfg = Config::default();
+        cfg.model.kv_type_k = "invalid".to_string();
+        assert!(cfg.validate().is_err());
+    }
+
+    #[test]
+    fn validate_rejects_invalid_kv_type_v() {
+        let mut cfg = Config::default();
+        cfg.model.kv_type_v = "invalid".to_string();
+        assert!(cfg.validate().is_err());
+    }
+
+    #[test]
+    fn validate_accepts_valid_kv_types() {
+        let mut cfg = Config::default();
+        cfg.model.kv_type_k = "f16".to_string();
+        cfg.model.kv_type_v = "turbo3".to_string();
         assert!(cfg.validate().is_ok());
     }
 

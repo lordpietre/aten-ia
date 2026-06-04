@@ -29,7 +29,19 @@ fn main() -> Result<()> {
 
     models::ensure_model(&config.model)?;
 
-    let _lock = FileLock::acquire(&config.data_dir).expect("Failed to acquire data directory lock");
+    let _lock = match FileLock::acquire(&config.data_dir) {
+        Ok(lock) => lock,
+        Err(e) => {
+            eprintln!(
+                "{} Could not acquire data directory lock ({}).\n  Another instance may be running. \
+                If not, delete {} and try again.",
+                "✗".red(),
+                e,
+                config.data_dir.join(".lock").display()
+            );
+            std::process::exit(1);
+        }
+    };
 
     let spinner = indicatif::ProgressBar::new_spinner();
     spinner.set_style(
@@ -730,13 +742,12 @@ fn main() -> Result<()> {
 
             match result {
                 Ok(content) => {
-                    let body = ureq::get(url).call();
-                    let html = match body {
-                        Ok(r) => r.into_body().read_to_string().unwrap_or_default(),
-                        Err(_) => String::new(),
-                    };
-                    let md = if !html.is_empty() && content.content_type.contains("html") {
-                        memvid_agent_core::extractor::html_to_markdown(&html)
+                    let md = if content.content_type.contains("html") {
+                        let html = match content.content.contains('<') {
+                            true => memvid_agent_core::extractor::html_to_markdown(&content.content),
+                            false => content.content.clone(),
+                        };
+                        html
                     } else {
                         content.content.clone()
                     };
@@ -1332,7 +1343,19 @@ fn run_setup_wizard(config: &mut Config, catalog: &ModelsCatalog) -> Result<()> 
         );
     }
     let model_choice = read_line_prompt(&format!("{} Select model [1]: ", "•".dimmed()));
-    let model_idx: usize = model_choice.parse().unwrap_or(1);
+    let model_idx: usize = loop {
+        let parsed = model_choice.parse::<usize>();
+        if model_choice.is_empty() {
+            break 1;
+        }
+        if let Ok(idx) = parsed {
+            if idx > 0 && idx <= catalog.list().len() {
+                break idx;
+            }
+        }
+        eprintln!("{} Invalid choice. Enter a number 1-{}.", "✗".red(), catalog.list().len());
+        break 1;
+    };
     if model_idx > 0 && model_idx <= catalog.list().len() {
         let entry = &catalog.list()[model_idx - 1];
         let models_dir = std::path::Path::new("models");
