@@ -48,7 +48,10 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
-          components: rustfmt, clippy
+
+      - name: Install Rust tools (native only)
+        if: matrix.cross == false
+        run: rustup component add rustfmt clippy
 
       - name: Install cross target
         if: matrix.cross == true
