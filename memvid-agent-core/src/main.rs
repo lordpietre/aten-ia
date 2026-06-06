@@ -8,12 +8,14 @@ use memvid_agent_core::languages_catalog::LanguagesCatalog;
 use memvid_agent_core::models;
 use memvid_agent_core::models_catalog::{self, ModelsCatalog};
 use memvid_agent_core::queue::FeedQueue;
+use memvid_agent_core::shutdown;
 use memvid_agent_core::utils::FileLock;
 use std::sync::{Arc, Mutex};
 
 fn main() -> Result<()> {
     dotenvy::dotenv().ok();
     tracing_subscriber::fmt::init();
+    shutdown::install_handlers();
 
     let config_path = std::path::Path::new("config.json");
     let is_first_run = !config_path.exists();
@@ -33,7 +35,7 @@ fn main() -> Result<()> {
         Ok(lock) => lock,
         Err(e) => {
             eprintln!(
-                "{} Could not acquire data directory lock ({}).\n  Another instance may be running. \
+                "{} Could not acquire data directory lock ({}).\n  Another aten-ia instance may be running. \
                 If not, delete {} and try again.",
                 "✗".red(),
                 e,
@@ -76,6 +78,9 @@ fn main() -> Result<()> {
     }
 
     loop {
+        if shutdown::is_shutdown_requested() {
+            break;
+        }
         let input = match read_line() {
             Some(s) => s,
             None => break,
@@ -1079,20 +1084,42 @@ fn main() -> Result<()> {
     }
 
     eprintln!();
-    eprintln!("{} Bye!", "●".bright_green());
+    if shutdown::is_shutdown_requested() {
+        eprintln!("{} Shutting down aten-ia…", "●".bright_yellow());
+    } else {
+        eprintln!("{} Bye!", "●".bright_green());
+    }
     Ok(())
 }
 
 fn read_line() -> Option<String> {
     use std::io::Write;
+    use std::sync::mpsc;
+
     let prompt = format!("{} ", ">".green());
     print!("{}", prompt);
     std::io::stdout().flush().ok()?;
-    let mut buf = String::new();
-    if std::io::stdin().read_line(&mut buf).ok()? == 0 {
-        return None;
+
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        let mut buf = String::new();
+        let result = std::io::stdin().read_line(&mut buf);
+        let _ = tx.send(result.map(|n| (n, buf)));
+    });
+
+    loop {
+        match rx.recv_timeout(std::time::Duration::from_millis(200)) {
+            Ok(Ok((0, _))) => return None,
+            Ok(Ok((_, buf))) => return Some(buf),
+            Ok(Err(_)) => return None,
+            Err(mpsc::RecvTimeoutError::Timeout) => {
+                if shutdown::is_shutdown_requested() {
+                    return None;
+                }
+            }
+            Err(mpsc::RecvTimeoutError::Disconnected) => return None,
+        }
     }
-    Some(buf)
 }
 
 fn print_startup_help() {

@@ -1,4 +1,5 @@
 use crate::agent::Agent;
+use crate::shutdown;
 use crate::types::{Message, MessageRole};
 use anyhow::Result;
 use chrono::Utc;
@@ -60,14 +61,11 @@ impl ApiServer {
         let addr = format!("{}:{}", self.host, self.port);
         let listener = TcpListener::bind(&addr)?;
         eprintln!("[api] Listening on http://{}", addr);
-        listener.set_nonblocking(false)?;
+        listener.set_nonblocking(true)?;
 
-        for stream in listener.incoming() {
-            match stream {
-                Ok(stream) => {
-                    // One thread per connection: a slow client can't block others
-                    // during the read phase. Inference still serializes on the
-                    // agent mutex, which is the intended single-model behavior.
+        while !shutdown::is_shutdown_requested() {
+            match listener.accept() {
+                Ok((stream, _)) => {
                     let server = self.clone();
                     std::thread::spawn(move || {
                         if let Err(e) = server.handle_one(stream) {
@@ -75,9 +73,17 @@ impl ApiServer {
                         }
                     });
                 }
-                Err(e) => eprintln!("[api] Connection error: {}", e),
+                Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                    std::thread::sleep(std::time::Duration::from_millis(100));
+                }
+                Err(e) => {
+                    if !shutdown::is_shutdown_requested() {
+                        eprintln!("[api] Connection error: {}", e);
+                    }
+                }
             }
         }
+        eprintln!("[api] Server shutting down.");
         Ok(())
     }
 

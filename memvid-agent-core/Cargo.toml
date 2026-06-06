@@ -20,6 +20,7 @@ sha2 = "0.10"
 ureq = { version = "3", features = ["rustls"] }
 indicatif = "0.17"
 colored = "3"
+libc = "0.2"
 dotenvy = "0.15"
 regex = "1"
 pdf-extract = "0.10"

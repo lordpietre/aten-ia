@@ -1,5 +1,5 @@
 use std::env;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 fn repo_slug() -> String {
@@ -179,11 +179,24 @@ fn main() {
     println!("cargo:rustc-link-lib=static=ggml");
     println!("cargo:rustc-link-lib=static=ggml-base");
 
-    println!("cargo:rustc-link-lib=stdc++");
+    let portable = env::var("ATEN_PORTABLE").unwrap_or_default() == "1";
+    if portable {
+        println!("cargo:warning=portable mode: static linking stdc++ and gomp");
+        let gcc_lib_dir = if target.contains("aarch64") {
+            "/usr/lib/gcc-cross/aarch64-linux-gnu/9"
+        } else {
+            "/usr/lib/gcc/x86_64-linux-gnu/9"
+        };
+        println!("cargo:rustc-link-search=native={}", gcc_lib_dir);
+        println!("cargo:rustc-link-lib=static=stdc++");
+        println!("cargo:rustc-link-lib=static=gomp");
+    } else {
+        println!("cargo:rustc-link-lib=stdc++");
+        println!("cargo:rustc-link-lib=gomp");
+    }
     println!("cargo:rustc-link-lib=pthread");
     println!("cargo:rustc-link-lib=m");
     println!("cargo:rustc-link-lib=dl");
-    println!("cargo:rustc-link-lib=gomp");
 
     let mut bindgen_builder = bindgen::Builder::default()
         .header("wrapper.h")

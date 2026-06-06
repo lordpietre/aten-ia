@@ -112,6 +112,7 @@ dependencies = [
  "epub",
  "feed-rs",
  "indicatif",
+ "libc",
  "memvid-core",
  "pdf-extract",
  "regex",

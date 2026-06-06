@@ -16,6 +16,7 @@ pub mod prompt;
 pub mod queue;
 pub mod retrieval;
 pub mod session;
+pub mod shutdown;
 pub mod types;
 pub mod utils;
 pub mod web_fetcher;

@@ -13,6 +13,11 @@ jobs:
   build:
     name: ${{ matrix.target }}
     runs-on: ${{ matrix.runner }}
+    container:
+      image: ubuntu:20.04
+      env:
+        DEBIAN_FRONTEND: noninteractive
+        TZ: Etc/UTC
     permissions:
       contents: write
     strategy:
@@ -34,17 +39,20 @@ jobs:
 
       - name: Install system dependencies (x86_64)
         if: matrix.cross == false
-        run: sudo apt-get update && sudo apt-get install -y cmake libssl-dev clang libgomp-dev fakeroot
+        run: |
+          apt-get update
+          apt-get install -y build-essential cmake libssl-dev clang libclang-dev libgomp-dev fakeroot curl git pkg-config
 
       - name: Install system dependencies (aarch64 cross)
         if: matrix.cross == true
         run: |
-          sudo apt-get update
-          sudo apt-get install -y cmake libssl-dev clang fakeroot gcc-aarch64-linux-gnu g++-aarch64-linux-gnu libgomp-dev:aarch64
-          sudo sed -i 's/^# deb/deb/' /etc/apt/sources.list /etc/apt/sources.list.d/*.list 2>/dev/null || true
-          sudo dpkg --add-architecture arm64
-          sudo apt-get update
-          sudo apt-get install -y libgomp-dev:aarch64 libstdc++-dev-arm64-cross
+          apt-get update
+          apt-get install -y build-essential cmake libssl-dev clang libclang-dev fakeroot curl git pkg-config \
+            gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+          sed -i 's/^# deb/deb/' /etc/apt/sources.list /etc/apt/sources.list.d/*.list 2>/dev/null || true
+          dpkg --add-architecture arm64
+          apt-get update
+          apt-get install -y libgomp-dev:arm64
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -108,12 +116,15 @@ jobs:
 
       - name: Build release binary (native x86_64)
         if: matrix.cross == false
+        env:
+          ATEN_PORTABLE: "1"
         run: LLAMA_LOCAL_LIBS=libs cargo build --release --target ${{ matrix.target }} --verbose
 
       - name: Build release binary (cross aarch64)
         if: matrix.cross == true
         env:
           CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
+          ATEN_PORTABLE: "1"
         run: LLAMA_LOCAL_LIBS=libs cargo build --release --target ${{ matrix.target }} --verbose
 
       - name: Strip binary
@@ -123,6 +134,18 @@ jobs:
           else
             strip target/${{ matrix.target }}/release/aten-ia
           fi
+
+      - name: Validate binary compatibility
+        if: matrix.cross == false
+        run: |
+          echo "==> Checking glibc version requirement..."
+          MAX_GLIBC=$(objdump -T target/${{ matrix.target }}/release/aten-ia | grep -oP 'GLIBC_\K[0-9.]+' | sort -V | tail -1)
+          echo "Maximum glibc version required: GLIBC_$MAX_GLIBC"
+          if [ "$(printf '%s\n' "2.31" "$MAX_GLIBC" | sort -V | tail -1)" != "2.31" ]; then
+            echo "::error::Binary requires glibc newer than 2.31 (Ubuntu 20.04)"
+            exit 1
+          fi
+          echo "✓ Binary is compatible with Ubuntu 20.04+ (glibc 2.31+)"
 
       - name: Package binary tar.gz
         run: |
@@ -151,7 +174,7 @@ jobs:
            Interactive AI agent CLI with local LLM inference via llama.cpp,
            persistent conversations (.mv2), keyword RAG, OpenAI-compatible API,
            and multi-source ingestion (PDF, EPUB, HTML, MD, TXT, URLs).
-          Depends: libc6, libstdc++6, libgomp1
+          Depends: libc6 (>= 2.31)
           DSC
           sed -i "s/VERSION_PLACEHOLDER/${VERSION}/" "$PKG_ROOT/DEBIAN/control"
           sed -i "s/ARCH_PLACEHOLDER/${{ matrix.deb_arch }}/" "$PKG_ROOT/DEBIAN/control"
@@ -163,19 +186,6 @@ jobs:
           mv "debian/aten-ia_${VERSION}_${{ matrix.deb_arch }}.deb" .
           sha256sum "aten-ia_${VERSION}_${{ matrix.deb_arch }}.deb" > "aten-ia_${VERSION}_${{ matrix.deb_arch }}.deb.sha256"
 
-      - name: Build snap package (x86_64 only)
-        if: matrix.cross == false
-        continue-on-error: true
-        run: |
-          VERSION=${GITHUB_REF_NAME#v}
-          sed -i "s/^version:.*/version: \"${VERSION}\"/" ../snapcraft.yaml
-          sudo snap install snapcraft --classic 2>/dev/null || sudo snap refresh snapcraft --classic
-          cd ..
-          sudo snapcraft --destructive-mode
-          mv "aten-ia_${VERSION}_${{ matrix.deb_arch }}.snap" memvid-agent-core/
-          cd memvid-agent-core
-          sha256sum "aten-ia_${VERSION}_${{ matrix.deb_arch }}.snap" > "aten-ia_${VERSION}_${{ matrix.deb_arch }}.snap.sha256"
-
       - name: Upload release assets
         uses: softprops/action-gh-release@v2
         with:
@@ -185,6 +195,4 @@ jobs:
             memvid-agent-core/aten-ia-${{ matrix.target }}.tar.gz.sha256
             memvid-agent-core/aten-ia_*.deb
             memvid-agent-core/aten-ia_*.deb.sha256
-            memvid-agent-core/aten-ia_*.snap
-            memvid-agent-core/aten-ia_*.snap.sha256
           fail_on_unmatched_files: false

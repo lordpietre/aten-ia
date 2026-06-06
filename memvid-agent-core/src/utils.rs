@@ -37,6 +37,19 @@ pub struct FileLock {
 impl FileLock {
     pub fn acquire(data_dir: &Path) -> Result<Self> {
         let path = data_dir.join(".lock");
+        if path.exists() {
+            if let Ok(content) = std::fs::read_to_string(&path) {
+                let parts: Vec<&str> = content.split_whitespace().collect();
+                let pid_str = parts.last().unwrap_or(&"");
+                if let Ok(pid) = pid_str.parse::<u32>() {
+                    let proc_path = format!("/proc/{}", pid);
+                    if std::path::Path::new(&proc_path).exists() {
+                        anyhow::bail!("Another aten-ia instance is already running (PID {})", pid);
+                    }
+                }
+            }
+            std::fs::remove_file(&path).ok();
+        }
         let file = std::fs::File::create_new(&path).with_context(|| {
             format!(
                 "Another instance is already running in {}",
@@ -44,7 +57,7 @@ impl FileLock {
             )
         })?;
         use std::io::Write;
-        writeln!(&file, "{}", std::process::id())?;
+        writeln!(&file, "aten-ia {}", std::process::id())?;
         file.sync_all()?;
         Ok(Self { path })
     }
@@ -221,7 +234,9 @@ mod tests {
         {
             let _lock = FileLock::acquire(dir.path()).unwrap();
             let content = std::fs::read_to_string(dir.path().join(".lock")).unwrap();
-            let pid: u32 = content.trim().parse().unwrap();
+            let parts: Vec<&str> = content.trim().split_whitespace().collect();
+            assert_eq!(parts[0], "aten-ia");
+            let pid: u32 = parts[1].parse().unwrap();
             assert_eq!(pid, std::process::id());
         }
     }

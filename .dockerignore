@@ -1,0 +1,11 @@
+.git
+.github
+memvid-agent-core/target
+memvid-agent-core/models
+*.gguf
+*.tar.gz
+*.deb
+*.snap
+*.md
+!README.md
+!AGENTS.md
