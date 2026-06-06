@@ -492,10 +492,18 @@ fn main() -> Result<()> {
             let port = config.api.port;
             let token = config.api.token.clone();
 
+            // With token: bind to 0.0.0.0 so remote access is possible.
+            // Without token: keep configured host (default 127.0.0.1) for safety.
+            let bind_host = if token.is_some() {
+                "0.0.0.0".to_string()
+            } else {
+                host.clone()
+            };
+
             println!(
                 "{} API server starting on http://{}:{}",
                 "●".bright_green(),
-                host,
+                bind_host,
                 port
             );
             if let Some(ref t) = token {
@@ -506,7 +514,7 @@ fn main() -> Result<()> {
             }
 
             std::thread::spawn(move || {
-                let server = ApiServer::new(api_agent, model_name, host, port, token);
+                let server = ApiServer::new(api_agent, model_name, bind_host, port, token);
                 if let Err(e) = server.run() {
                     eprintln!("[api] Server error: {}", e);
                 }
