@@ -219,7 +219,11 @@ jobs:
 
       - name: Build .deb package
         run: |
-          VERSION=${GITHUB_REF_NAME#v}
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            VERSION="0.0.0-$(git rev-parse --short HEAD)"
+          fi
           PKG_ROOT="debian/aten-ia_${VERSION}_${{ matrix.deb_arch }}"
           mkdir -p "$PKG_ROOT/DEBIAN"
           mkdir -p "$PKG_ROOT/usr/bin"
@@ -248,7 +252,20 @@ jobs:
           mv "debian/aten-ia_${VERSION}_${{ matrix.deb_arch }}.deb" .
           sha256sum "aten-ia_${VERSION}_${{ matrix.deb_arch }}.deb" > "aten-ia_${VERSION}_${{ matrix.deb_arch }}.deb.sha256"
 
+      - name: Upload build artifacts (non-tag)
+        if: github.ref_type != 'tag'
+        uses: actions/upload-artifact@v4
+        with:
+          name: aten-ia-${{ matrix.target }}-${{ github.sha }}
+          path: |
+            memvid-agent-core/aten-ia-${{ matrix.target }}.tar.gz
+            memvid-agent-core/aten-ia-${{ matrix.target }}.tar.gz.sha256
+            memvid-agent-core/aten-ia_*.deb
+            memvid-agent-core/aten-ia_*.deb.sha256
+          if-no-files-found: warn
+
       - name: Upload release assets
+        if: github.ref_type == 'tag'
         uses: softprops/action-gh-release@v3
         with:
           files: |
