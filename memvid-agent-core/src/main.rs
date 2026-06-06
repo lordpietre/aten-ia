@@ -5,9 +5,9 @@ use memvid_agent_core::api::ApiServer;
 use memvid_agent_core::books_catalog::BooksCatalog;
 use memvid_agent_core::config::Config;
 use memvid_agent_core::languages_catalog::LanguagesCatalog;
-use memvid_agent_core::queue::FeedQueue;
 use memvid_agent_core::models;
 use memvid_agent_core::models_catalog::{self, ModelsCatalog};
+use memvid_agent_core::queue::FeedQueue;
 use memvid_agent_core::utils::FileLock;
 use std::sync::{Arc, Mutex};
 
@@ -744,7 +744,9 @@ fn main() -> Result<()> {
                 Ok(content) => {
                     let md = if content.content_type.contains("html") {
                         let html = match content.content.contains('<') {
-                            true => memvid_agent_core::extractor::html_to_markdown(&content.content),
+                            true => {
+                                memvid_agent_core::extractor::html_to_markdown(&content.content)
+                            }
                             false => content.content.clone(),
                         };
                         html
@@ -802,7 +804,11 @@ fn main() -> Result<()> {
                         stats.feed_title.as_deref().unwrap_or(url).bold()
                     );
                     println!("  {} entries found: {}", "↳".dimmed(), stats.entries_found);
-                    println!("  {} entries indexed: {}", "↳".dimmed(), stats.entries_indexed);
+                    println!(
+                        "  {} entries indexed: {}",
+                        "↳".dimmed(),
+                        stats.entries_indexed
+                    );
                     if !stats.failures.is_empty() {
                         println!("  {} failures:", "↳".dimmed());
                         for f in &stats.failures {
@@ -862,7 +868,10 @@ fn main() -> Result<()> {
 
             let pending: Vec<(String, String)> = {
                 let q = FeedQueue::new(&config.data_dir);
-                q.pending().into_iter().map(|e| (e.id.clone(), e.url.clone())).collect()
+                q.pending()
+                    .into_iter()
+                    .map(|e| (e.id.clone(), e.url.clone()))
+                    .collect()
             };
             let total = pending.len();
 
@@ -1353,7 +1362,11 @@ fn run_setup_wizard(config: &mut Config, catalog: &ModelsCatalog) -> Result<()> 
                 break idx;
             }
         }
-        eprintln!("{} Invalid choice. Enter a number 1-{}.", "✗".red(), catalog.list().len());
+        eprintln!(
+            "{} Invalid choice. Enter a number 1-{}.",
+            "✗".red(),
+            catalog.list().len()
+        );
         break 1;
     };
     if model_idx > 0 && model_idx <= catalog.list().len() {

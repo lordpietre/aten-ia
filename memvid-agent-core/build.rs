@@ -14,7 +14,7 @@ fn repo_slug() -> String {
     "lordpietre/aten-ia".to_string()
 }
 
-fn local_prebuilt(out_dir: &PathBuf) -> bool {
+fn local_prebuilt(out_dir: &Path) -> bool {
     let Some(src) = env::var("LLAMA_LOCAL_LIBS").ok() else {
         return false;
     };
@@ -89,26 +89,75 @@ fn download_prebuilt(out_dir: &PathBuf) -> bool {
     }
 }
 
-fn cmake_build() -> PathBuf {
-    // Limit to 1 job to avoid OOM on low-RAM machines
-    unsafe { std::env::set_var("CMAKE_BUILD_PARALLEL_LEVEL", "1") };
+fn is_cross_compiling(target: &str, host: &str) -> bool {
+    target != host
+}
 
-    let dst = cmake::Config::new("llama-cpp-turboquant")
-        .define("LLAMA_BUILD_TOOLS", "OFF")
-        .define("LLAMA_BUILD_EXAMPLES", "OFF")
-        .define("LLAMA_BUILD_TESTS", "OFF")
-        .define("LLAMA_BUILD_SERVER", "OFF")
-        .define("BUILD_SHARED_LIBS", "OFF")
-        .define("GGML_CUDA", "OFF")
-        .define("GGML_METAL", "OFF")
-        .define("GGML_VULKAN", "OFF")
-        .profile("Release")
-        .build();
+fn cmake_toolchain_path(out_dir: &PathBuf, target: &str) -> PathBuf {
+    let toolchain = out_dir.join("cross-toolchain.cmake");
+    let (triplet, arch) = if target.contains("aarch64") {
+        ("aarch64-linux-gnu", "arm64")
+    } else {
+        ("x86_64-linux-gnu", "x86_64")
+    };
+    let content = format!(
+        r#"
+set(CMAKE_SYSTEM_NAME Linux)
+set(CMAKE_SYSTEM_PROCESSOR {arch})
+set(CMAKE_C_COMPILER {triplet}-gcc)
+set(CMAKE_CXX_COMPILER {triplet}-g++)
+set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
+set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
+set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
+"#,
+        arch = arch,
+        triplet = triplet
+    );
+    std::fs::write(&toolchain, content).expect("Failed to write cross-toolchain file");
+    toolchain
+}
+
+fn cmake_build() -> PathBuf {
+    let target = env::var("TARGET").unwrap_or_default();
+    let host = env::var("HOST").unwrap_or_default();
+    let cross = is_cross_compiling(&target, &host);
+
+    let parallel = env::var("CMAKE_BUILD_PARALLEL_LEVEL").unwrap_or_else(|_| "2".to_string());
+    unsafe { std::env::set_var("CMAKE_BUILD_PARALLEL_LEVEL", &parallel) };
+
+    let mut config = cmake::Config::new("llama-cpp-turboquant");
+    config.define("LLAMA_BUILD_TOOLS", "OFF");
+    config.define("LLAMA_BUILD_EXAMPLES", "OFF");
+    config.define("LLAMA_BUILD_TESTS", "OFF");
+    config.define("LLAMA_BUILD_SERVER", "OFF");
+    config.define("BUILD_SHARED_LIBS", "OFF");
+    config.define("GGML_CUDA", "OFF");
+    config.define("GGML_METAL", "OFF");
+    config.define("GGML_VULKAN", "OFF");
+    config.define("GGML_NATIVE", "OFF");
+
+    if target.contains("aarch64") {
+        config.define("GGML_CPU_ARM_ARCH", "armv8-a+dotprod");
+    }
+
+    if cross {
+        let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
+        let toolchain_path = cmake_toolchain_path(&out_dir, &target);
+        config.define(
+            "CMAKE_TOOLCHAIN_FILE",
+            toolchain_path.to_string_lossy().to_string(),
+        );
+    }
+
+    let dst = config.profile("Release").build();
     dst.join("lib")
 }
 
 fn main() {
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
+    let target = env::var("TARGET").unwrap_or_default();
+    let host = env::var("HOST").unwrap_or_default();
+    let cross = is_cross_compiling(&target, &host);
 
     let lib_dir = if local_prebuilt(&out_dir) {
         println!(
@@ -136,7 +185,7 @@ fn main() {
     println!("cargo:rustc-link-lib=dl");
     println!("cargo:rustc-link-lib=gomp");
 
-    let bindings = bindgen::Builder::default()
+    let mut bindgen_builder = bindgen::Builder::default()
         .header("wrapper.h")
         .clang_arg("-I./llama-cpp-turboquant/include")
         .clang_arg("-I./llama-cpp-turboquant/ggml/include")
@@ -146,7 +195,13 @@ fn main() {
         .allowlist_var("GGML_TYPE_.*")
         .allowlist_type("ggml_type")
         .allowlist_type("llama_.*")
-        .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
+        .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()));
+
+    if cross {
+        bindgen_builder = bindgen_builder.clang_arg(format!("--target={}", target));
+    }
+
+    let bindings = bindgen_builder
         .generate()
         .expect("Unable to generate bindings");
 

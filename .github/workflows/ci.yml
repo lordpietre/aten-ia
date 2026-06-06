@@ -11,34 +11,63 @@ env:
 
 jobs:
   build-and-test:
+    name: ${{ matrix.target }}
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: memvid-agent-core
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            cross: false
+          - target: aarch64-unknown-linux-gnu
+            cross: true
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
+
+      - name: Install system dependencies (x86_64)
+        if: matrix.cross == false
+        run: sudo apt-get update && sudo apt-get install -y cmake libssl-dev clang libgomp-dev
+
+      - name: Install system dependencies (aarch64 cross)
+        if: matrix.cross == true
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake libssl-dev clang gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+          sudo dpkg --add-architecture arm64
+          sudo apt-get update
+          sudo apt-get install -y libgomp-dev:arm64 libstdc++-dev-arm64-cross
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
+          targets: ${{ matrix.target }}
           components: rustfmt, clippy
-
-      - name: Install system dependencies
-        run: sudo apt-get update && sudo apt-get install -y cmake libssl-dev clang libgomp1
 
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
 
-      - name: Build
+      - name: Build (native x86_64)
+        if: matrix.cross == false
         run: cargo build --verbose
 
-      - name: Test
+      - name: Build (cross aarch64)
+        if: matrix.cross == true
+        env:
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
+        run: cargo build --verbose --target aarch64-unknown-linux-gnu
+
+      - name: Test (native only)
+        if: matrix.cross == false
         run: cargo test --verbose -- --test-threads=1
 
       - name: Check formatting
+        if: matrix.cross == false
         run: cargo fmt --all -- --check
 
-      - name: Clippy
+      - name: Clippy (native)
+        if: matrix.cross == false
         run: cargo clippy --lib

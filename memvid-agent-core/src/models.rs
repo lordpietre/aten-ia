@@ -51,7 +51,11 @@ pub fn ensure_model(model_config: &crate::config::ModelConfig) -> Result<()> {
                 .expect("Invalid progress bar template")
                 .progress_chars("##-"),
         );
-        pb.set_message(format!("Downloading {} ({:.1} MB)", model_config.name, total as f64 / 1_048_576.0));
+        pb.set_message(format!(
+            "Downloading {} ({:.1} MB)",
+            model_config.name,
+            total as f64 / 1_048_576.0
+        ));
 
         let mut out = std::fs::File::create(path).context("Failed to create model file")?;
         let mut downloaded: u64 = 0;

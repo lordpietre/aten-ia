@@ -9,8 +9,8 @@ use crate::prompt::{ChatTemplate, DEFAULT_DEVELOPER_PROMPT, PromptBuilder};
 use crate::retrieval::KnowledgeIndex;
 use crate::session::Session;
 use crate::types::{
-    ChunkOptions, ChunkStrategy, FeedResult, FetchedContent, IngestionConfig,
-    KnowledgeEntry, Message, MessageRole, WriterConfig,
+    ChunkOptions, ChunkStrategy, FeedResult, FetchedContent, IngestionConfig, KnowledgeEntry,
+    Message, MessageRole, WriterConfig,
 };
 use crate::web_fetcher::WebFetcher;
 use anyhow::Result;
@@ -276,7 +276,10 @@ impl Agent {
         let mut fetcher = WebFetcher::new(ingestion);
         let entries = crate::feeds::fetch_feed(url, &mut fetcher)?;
         let total = entries.len();
-        let feed_title = entries.first().map(|e| e.title.clone()).or_else(|| Some(url.to_string()));
+        let feed_title = entries
+            .first()
+            .map(|e| e.title.clone())
+            .or_else(|| Some(url.to_string()));
 
         let mut indexed = 0usize;
         let mut failures = Vec::new();
@@ -290,7 +293,8 @@ impl Agent {
         for entry in entries.iter().take(max_entries) {
             match fetcher.fetch_and_retry(&entry.url) {
                 Ok(content) => {
-                    let chunks = crate::chunker::chunk_text(&content.content, &chunk_opts, &entry.url);
+                    let chunks =
+                        crate::chunker::chunk_text(&content.content, &chunk_opts, &entry.url);
                     for chunk in &chunks {
                         if self.store_knowledge_dedup(&chunk.source, &chunk.content)? {
                             indexed += 1;
@@ -307,7 +311,10 @@ impl Agent {
             role: MessageRole::System,
             content: format!(
                 "Feed '{}' fetched — {} entries found, {} indexed, {} failed.",
-                url, total, indexed, failures.len()
+                url,
+                total,
+                indexed,
+                failures.len()
             ),
             timestamp: Utc::now(),
             tokens: None,
@@ -383,7 +390,8 @@ impl Agent {
         limit: usize,
         source_filter: Option<&str>,
     ) -> Vec<&KnowledgeEntry> {
-        self.knowledge_index.search_with_filter(query, limit, source_filter)
+        self.knowledge_index
+            .search_with_filter(query, limit, source_filter)
     }
 
     pub fn knowledge_count(&self) -> usize {

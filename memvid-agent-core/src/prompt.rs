@@ -1,4 +1,4 @@
-use crate::types::Message;
+use crate::types::{Message, MessageRole};
 
 pub const DEFAULT_DEVELOPER_PROMPT: &str = "You are an expert software engineer. You help users write, debug, and understand code. You are fluent in all programming languages. If the user asks about a specific language, provide examples and explanations.";
 
@@ -163,14 +163,21 @@ impl PromptBuilder {
         let mut prompt = String::new();
 
         let system = self.system_content(rag_context);
-        let system_prefix = if system.is_empty() { String::new() } else { format!("{}\n\n", system) };
+        let system_prefix = if system.is_empty() {
+            String::new()
+        } else {
+            format!("{}\n\n", system)
+        };
 
         let mut first_user = true;
         for msg in messages {
             match msg.role {
                 crate::types::MessageRole::User => {
                     if first_user {
-                        prompt.push_str(&format!("[INST] {}{} [/INST]\n", system_prefix, msg.content));
+                        prompt.push_str(&format!(
+                            "[INST] {}{} [/INST]\n",
+                            system_prefix, msg.content
+                        ));
                         first_user = false;
                     } else {
                         prompt.push_str(&format!("[INST] {} [/INST]\n", msg.content));
@@ -188,7 +195,11 @@ impl PromptBuilder {
             }
         }
 
-        if !user_input.is_empty() && !messages.iter().any(|m| m.role == MessageRole::User && m.content == user_input) {
+        if !user_input.is_empty()
+            && !messages
+                .iter()
+                .any(|m| m.role == MessageRole::User && m.content == user_input)
+        {
             prompt.push_str(&format!("[INST] {}{} [/INST]\n", system_prefix, user_input));
         }
 

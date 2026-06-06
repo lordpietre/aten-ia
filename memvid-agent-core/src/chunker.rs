@@ -1,5 +1,16 @@
 use crate::types::{Chunk, ChunkOptions, ChunkStrategy};
 
+fn floor_char_boundary(s: &str, i: usize) -> usize {
+    if i >= s.len() {
+        return s.len();
+    }
+    let mut j = i;
+    while j > 0 && !s.is_char_boundary(j) {
+        j -= 1;
+    }
+    j
+}
+
 pub fn chunk_text(text: &str, options: &ChunkOptions, source: &str) -> Vec<Chunk> {
     match options.strategy {
         ChunkStrategy::Heading => chunk_by_headings(text, options, source),
@@ -50,7 +61,7 @@ fn chunk_by_headings(text: &str, options: &ChunkOptions, source: &str) -> Vec<Ch
 
             let overlap_chars = options.overlap.min(current_section.len());
             let overlap_start = current_section.len().saturating_sub(overlap_chars);
-            let overlap_start = current_section.floor_char_boundary(overlap_start);
+            let overlap_start = floor_char_boundary(&current_section, overlap_start);
             let overlap_text = &current_section[overlap_start..];
             current_section = if let Some(pos) = overlap_text.rfind('\n') {
                 overlap_text[pos..].to_string()
@@ -156,7 +167,7 @@ fn chunk_fixed(text: &str, options: &ChunkOptions, source: &str) -> Vec<Chunk> {
 
     while start < text.len() {
         let mut end = (start + max_size).min(text.len());
-        end = text.floor_char_boundary(end);
+        end = floor_char_boundary(text, end);
 
         if end <= start {
             break;
@@ -178,7 +189,7 @@ fn chunk_fixed(text: &str, options: &ChunkOptions, source: &str) -> Vec<Chunk> {
 
         let advance = max_size.saturating_sub(overlap).max(1);
         let next_start = start + advance;
-        let candidate = text.floor_char_boundary(next_start);
+        let candidate = floor_char_boundary(text, next_start);
         // candidate must be strictly past start to make progress.
         // If floor_char_boundary rounds back to start (multi-byte edge case),
         // fall back to end which is always a valid boundary.
@@ -498,8 +509,8 @@ mod tests {
         assert!(chunks.is_empty() || chunks.iter().all(|c| c.content.trim().is_empty()));
     }
 
-#[test]
-fn chunk_heading_mixed_levels() {
+    #[test]
+    fn chunk_heading_mixed_levels() {
         let text = "# H1\ncontent\n## H2\nmore\n### H3\ndetails";
         let opts = ChunkOptions {
             max_size: 200,

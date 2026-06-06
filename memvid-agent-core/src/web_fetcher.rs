@@ -17,11 +17,10 @@ impl WebFetcher {
             .checked_div(config.rate_limit_per_second)
             .unwrap_or(0);
 
-        let agent = ureq::Agent::builder()
-            .timeout_read(Duration::from_secs(config.timeout_seconds))
-            .timeout_write(Duration::from_secs(config.timeout_seconds))
-            .build()
-            .unwrap_or_else(|_| ureq::Agent::new_with_defaults());
+        let agent_config = ureq::config::Config::builder()
+            .timeout_global(Some(Duration::from_secs(config.timeout_seconds)))
+            .build();
+        let agent = ureq::Agent::new_with_config(agent_config);
 
         Self {
             agent,

@@ -12,7 +12,7 @@ Single Rust binary+lib crate (`aten-ia`) in `memvid-agent-core/` — local LLM i
 | All tests (no GGUF needed) | `cargo test -- --test-threads=1` |
 | Format check | `cargo fmt --all -- --check` |
 | Lint (lib only — CI uses `--lib`) | `cargo clippy --lib` |
-| System deps (build) | `cmake libssl-dev clang libgomp1` |
+| System deps (build) | `cmake libssl-dev clang libgomp-dev` |
 | System deps (+ packaging) | …also `fakeroot` |
 
 CI order: `build → test → fmt → clippy --lib` (`.github/workflows/ci.yml`).
@@ -21,13 +21,13 @@ CI runs `cargo test -- --test-threads=1` to avoid `MODEL_PATH` env-var race betw
 **Prebuilt libs fallback chain** (in `build.rs`):
 1. `LLAMA_LOCAL_LIBS=/path` — copy `.a` files from local dir
 2. Download `llama-libs-{target}.tar.gz` from GitHub Releases
-3. CMake build with `CMAKE_BUILD_PARALLEL_LEVEL=1` to avoid OOM
+3. CMake build (parallel level via `CMAKE_BUILD_PARALLEL_LEVEL`, default 2)
 
 Override download repo: `LLAMA_LIBS_REPO=user/repo`.
 
-**CI checkout requires `submodules: recursive`** for `llama-cpp-turboquant/`.
+**Cross-compilation**: `build.rs` detects `TARGET` vs `HOST`. If different, generates a CMake cross-toolchain and passes `--target` to bindgen. ARM64 builds use `GGML_CPU_ARM_ARCH=armv8-a+dotprod` and `GGML_NATIVE=OFF`.
 
-**Release** (`git tag v0.1.0 && git push --tags`) triggers `.github/workflows/release.yml`: builds `x86_64` + `aarch64` → llama static libs → Rust binary → `.tar.gz` → `.deb` → `.snap`.
+**Release** (`git tag v0.1.0 && git push --tags`) triggers `.github/workflows/release.yml`: cross-compiles `aarch64` on `ubuntu-latest` with `gcc-aarch64-linux-gnu` + native build for `x86_64` → llama static libs → Rust binary → `.tar.gz` → `.deb` → `.snap`.
 
 ## Structure
 
@@ -41,7 +41,7 @@ Override download repo: `LLAMA_LIBS_REPO=user/repo`.
 
 ## Gotchas
 
-- **Rust edition 2024** (min 1.95.0) — no `rust-toolchain.toml`; must install manually
+- **Rust edition 2024** (min 1.85.0) — `rust-toolchain.toml` pins channel; install via `rustup`
 - **`cargo clippy --lib`** only checks the library crate, not `main.rs`
 - **`--test-threads=1`** required; parallel tests race on `MODEL_PATH` env var
 - **First build** takes ~30 min (compiles llama.cpp from source); subsequent <1s if cached

@@ -28,14 +28,18 @@ pub fn parse_feed_xml(xml: &str, source_url: &str) -> Result<Vec<FeedEntry>> {
         .entries
         .into_iter()
         .filter_map(|entry| {
-            let url = entry.links.iter().find(|l| l.rel.as_deref() == Some("alternate"))
+            let url = entry
+                .links
+                .iter()
+                .find(|l| l.rel.as_deref() == Some("alternate"))
                 .or_else(|| entry.links.first())
                 .and_then(|l| {
                     let href = l.href.trim().to_string();
                     if href.is_empty() { None } else { Some(href) }
                 })?;
 
-            let title = entry.title
+            let title = entry
+                .title
                 .and_then(|t| t.content.trim().to_string().into())
                 .unwrap_or_else(|| "Untitled".to_string());
 
@@ -80,7 +84,10 @@ mod tests {
         assert_eq!(entries.len(), 2);
         assert_eq!(entries[0].title, "First Post");
         assert_eq!(entries[0].url, "https://example.com/1");
-        assert_eq!(entries[0].description.as_deref(), Some("Description of first post"));
+        assert_eq!(
+            entries[0].description.as_deref(),
+            Some("Description of first post")
+        );
         assert!(entries[0].published.is_some());
         assert_eq!(entries[1].title, "Second Post");
         assert_eq!(entries[1].url, "https://example.com/2");

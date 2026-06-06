@@ -167,10 +167,7 @@ impl Config {
             self.generation.top_p >= 0.0 && self.generation.top_p <= 1.0,
             "generation.top_p must be between 0.0 and 1.0"
         );
-        anyhow::ensure!(
-            self.generation.top_k >= 0,
-            "generation.top_k must be >= 0"
-        );
+        anyhow::ensure!(self.generation.top_k >= 0, "generation.top_k must be >= 0");
         anyhow::ensure!(self.api.port > 0, "api.port must be > 0");
         anyhow::ensure!(
             crate::llama::context::is_valid_kv_cache_type(&self.model.kv_type_k),

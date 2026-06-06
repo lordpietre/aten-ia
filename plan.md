@@ -304,4 +304,54 @@ El pipeline se integra con:
 
 ---
 
+---
+
+## Estado CI/Build — Compilación x86_64 + aarch64
+
+Ver **IMPROVEMENTS_PLAN.md §9** para el detalle completo de cada issue (C1–C12).
+
+| ID | Sev | Issue | Estado |
+|---|---|---|---|
+| C1 | 🔴 | Runner `ubuntu-24.04-arm` no existe en GitHub Free — ARM release nunca se ejecuta | ❌ |
+| C2 | 🟠 | CI sin cobertura ARM64 — errores ARM solo se detectan en release | ❌ |
+| C3 | 🟠 | `.deb` control file: línea `and multi-source` sin espacio inicial | ❌ |
+| C4 | 🟠 | CMake sin `-DGGML_CPU_ARM_ARCH`; binario ARM puede SIGILL en otras CPUs | ❌ |
+| C5 | 🟠 | `bindgen` sin `--target` para cross-compilation → ABI mismatches | ❌ |
+| C6 | 🟡 | `download_prebuilt` siempre falla en CI (no hay releases) → 30+ min build | ❌ |
+| C7 | 🟡 | `submodules: recursive` sin `.gitmodules`; directiva no-op | ❌ |
+| C8 | 🟡 | Sin `rust-toolchain.toml`; AGENTS.md dice 1.95.0 (real: 1.85.0) | ❌ |
+| C9 | 🟡 | Falta `libgomp-dev` en release.yml | ❌ |
+| C10 | 🟡 | Snap `core22` en host Ubuntu 24.04 (glibc mismatch) | ❌ |
+| C11 | 🟡 | `cargo build --release` sin `--target` en release workflow | ❌ |
+| C12 | 🟡 | `CMAKE_BUILD_PARALLEL_LEVEL=1` → builds de 30+ min en CI | ❌ |
+
+### Estrategia recomendada para ARM64 (C1)
+
+**Opción A — Cross-compilation en `ubuntu-latest` (recomendada):**
+
+```yaml
+- target: aarch64-unknown-linux-gnu
+  runner: ubuntu-latest
+  deb_arch: arm64
+```
+
+Pasos adicionales:
+1. `sudo apt-get install gcc-aarch64-linux-gnu g++-aarch64-linux-gnu`
+2. CMake cross-file con `CMAKE_C_COMPILER=aarch64-linux-gnu-gcc`
+3. `rustup target add aarch64-unknown-linux-gnu`
+4. `CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc`
+5. `cargo build --release --target aarch64-unknown-linux-gnu`
+6. Path del binario: `target/aarch64-unknown-linux-gnu/release/aten-ia`
+
+**Opción B — QEMU emulation:**
+- Usar `docker/setup-qemu-action` + contenedor ARM64.
+- Más lento (~45 min build) pero sin configuración extra.
+- No requiere toolchain cross.
+
+**Opción C — GitHub Larger runners:**
+- Pagar por minutos ARM (coste variable).
+- Lo más simple pero con coste recurrente.
+
+---
+
 *Documento mantenido en `plan.md`. Última actualización: Junio 2026.*

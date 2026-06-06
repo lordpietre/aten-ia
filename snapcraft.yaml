@@ -7,7 +7,7 @@ description: |
   and multi-source ingestion (PDF, EPUB, HTML, MD, TXT, URLs).
 grade: stable
 confinement: strict
-base: core22
+base: core24
 
 apps:
   aten-ia:

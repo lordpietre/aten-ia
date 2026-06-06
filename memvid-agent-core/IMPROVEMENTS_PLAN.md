@@ -291,7 +291,7 @@ uno con su estrategia de test (unitario + pragmático).
 
 **Completados** (con tests, en verde): B1–B18, S1 (parcial), S2–S6, K1, K3, R1, U1–U3.
 
-**Pendientes:**
+**Pendientes (bugs/features):**
 - **B4b** — test e2e de `process_url_batch` con `TcpListener` local.
 - **S1b** — test e2e de concurrencia/timeout de la API + streaming SSE.
 - **K2** — de-vendorizar el fork a submódulo.
@@ -299,7 +299,189 @@ uno con su estrategia de test (unitario + pragmático).
 - **R2** — RAG semántico (embeddings).
 - **R3** — normalización/pesos en `search`.
 
+**Pendientes (CI/Build x86+ARM):**
+- **C1** 🔴 — Runner `ubuntu-24.04-arm` no existe en GitHub Free.
+- **C2** 🟠 — CI sin cobertura ARM64.
+- **C3** 🟠 — `.deb` control file línea sin espacio.
+- **C4** 🟠 — CMake sin flags de arquitectura ARM (binario no portable).
+- **C5** 🟠 — bindgen sin `--target` para cross-compilation.
+- **C6** 🟡 — `download_prebuilt` siempre falla en CI.
+- **C7** 🟡 — `submodules: recursive` sin `.gitmodules`.
+- **C8** 🟡 — Sin `rust-toolchain.toml`; AGENTS.md dice 1.95.0 (real: 1.85.0).
+- **C9** 🟡 — Falta `libgomp-dev` en release.yml.
+- **C10** 🟡 — Snap `core22` en host 24.04.
+- **C11** 🟡 — `--target` no pasado a `cargo build`.
+- **C12** 🟡 — `CMAKE_BUILD_PARALLEL_LEVEL=1` causa builds de 30+ min.
+
+Orden sugerido: C1+C4+C5 → C3 → C8 → C9 → C6+C12 → C2 → C7 → C11 → C10.
+
 Orden sugerido para lo que queda: K4 → R2/R3 → K2 → B4b/S1b.
+
+---
+
+## 9. CI/Build — Compilación x86_64 y aarch64
+
+### C1 — Runner `ubuntu-24.04-arm` no existe en GitHub Free  🔴  **[ ]**
+- **Evidencia:** `release.yml:25` — `runner: ubuntu-24.04-arm`.
+- **Causa:** GitHub Actions no ofrece runners ARM gratuitos. Ese label solo funciona
+  con GitHub Team/Enterprise y "Larger runners" (pago por minuto). En repos free,
+  el job se cuelga indefinidamente esperando un runner que no existe.
+- **Impacto:** la release ARM64 **nunca se ejecuta**.
+- **Fix (3 opciones):**
+  1. **Cross-compilation en `ubuntu-latest`:** instalar `gcc-aarch64-linux-gnu`,
+     pasar `--target aarch64-unknown-linux-gnu` a cargo, y construir las libs
+     estáticas con un toolchain cross cmake. Más complejo pero gratis.
+  2. **QEMU emulation en `ubuntu-latest`:** usar `docker/setup-qemu-action` +
+     `docker/build-push-action` para compilar en emulación ARM. Lento (~45 min)
+     pero funciona sin pago.
+  3. **GitHub Larger runners:** pagar por minutos ARM. Lo más simple pero con coste.
+- **Recomendado:** Opción 1 (cross-compilation) + cache de libs precompiladas.
+
+### C2 — CI solo testa x86_64, sin cobertura ARM  🟠  **[ ]**
+- **Evidencia:** `ci.yml:14` — `runs-on: ubuntu-latest`.
+- **Causa:** No hay matrix de targets. Errores ARM-only se detectan solo en release.
+- **Fix:** Añadir un job de CI ARM64 (con cross-compilation o QEMU) que ejecute al
+  menos `cargo check --target aarch64-unknown-linux-gnu` + `cargo clippy --lib`.
+
+### C3 — `.deb` control file con línea sin espacio inicial  🟠  **[ ]**
+- **Evidencia:** `release.yml:100` — la línea `and multi-source ingestion...` en el
+  heredoc del `DEBIAN/control` queda sin espacio inicial tras el stripping de YAML.
+- **Causa:** En Debian control format, las líneas de continuación en `Description`
+  DEBEN empezar con un espacio. Sin él, `dpkg-deb` rechaza el paquete o lo genera
+  malformado.
+- **Fix:** Añadir un espacio extra en la línea afectada para que YAML preserve un
+  espacio al inicio. Cambiar:
+  ```
+            and multi-source ingestion (PDF, EPUB, HTML, MD, TXT, URLs).
+  ```
+  a:
+  ```
+             and multi-source ingestion (PDF, EPUB, HTML, MD, TXT, URLs).
+  ```
+  (11 espacios en vez de 10, para que al stripping quede ` and un-source...` con
+  un espacio inicial).
+
+### C4 — CMake no recibe flags de arquitectura ARM64; binario no portable  🟠  **[ ]**
+- **Evidencia:** `release.yml:48-58` y `build.rs:96-107` — no se pasa
+  `-DGGML_CPU_ARM_ARCH` ni `-DGGML_NATIVE=OFF`.
+- **Causa:** `GGML_NATIVE` default es ON. Cmake compila con `-mcpu=native`,
+  generando instrucciones específicas del runner ARM (dotprod, i8mm, etc.). El
+  binario puede SIGILL en otras CPUs ARM64 que no tengan esas extensiones.
+- **Fix:**
+  - En `release.yml`, pasar `-DGGML_CPU_ARM_ARCH=armv8-a+dotprod` para builds ARM.
+  - En `build.rs`, detectar `TARGET` y pasar la flag correspondiente:
+    ```rust
+    let target = env::var("TARGET").unwrap_or_default();
+    if target.starts_with("aarch64") {
+        cmake_config.define("GGML_CPU_ARM_ARCH", "armv8-a+dotprod");
+    }
+    ```
+
+### C5 — `bindgen` no recibe `--target` para cross-compilation  🟠  **[ ]**
+- **Evidencia:** `build.rs:139-151` — `bindgen::Builder` sin `--target`.
+- **Causa:** Al cross-compilar (build en x86_64, target aarch64), bindgen genera
+  FFI bindings para la arquitectura del host, no del target. Los tamaños de
+  struct y alineación pueden diferir entre architectures, causando ABI mismatches
+  y crashes en runtime.
+- **Impacto:** solo afecta si se usa cross-compilation (fix de C1 opción 1).
+- **Fix:**
+  ```rust
+  let target = env::var("TARGET").unwrap_or_default();
+  let host = env::var("HOST").unwrap_or_default();
+  let mut builder = bindgen::Builder::default()
+      .header("wrapper.h")
+      .clang_arg("-I./llama-cpp-turboquant/include")
+      .clang_arg("-I./llama-cpp-turboquant/ggml/include");
+  if target != host {
+      builder = builder.clang_arg(format!("--target={}", target));
+  }
+  ```
+
+### C6 — `download_prebuilt` siempre falla en CI (no hay releases)  🟡  **[ ]**
+- **Evidencia:** `build.rs:47-51` — URL con `/latest/download/` devuelve 404 si no
+  hay releases previas.
+- **Causa:** Diseño circular: la release workflow crea los `.tar.gz`, pero CI
+  (pre-merge) nunca puede usarlos porque no existen todavía. Siempre cae a
+  `cmake_build()` con `CMAKE_BUILD_PARALLEL_LEVEL=1` (= 1 thread).
+- **Impacto:** CI tarda 30+ minutos en cada run por compilación secuencial de
+  llama.cpp.
+- **Fix (2 opciones):**
+  1. Guardar las libs precompiladas como CI cache (workflow `build-cache.yml` que
+     se ejecuta al crear un release y guarda en GitHub Actions Cache).
+  2. Subir las libs como asset de release y hacer que CI descargue de la última
+     release tag en vez de `/latest/download/`.
+
+### C7 — `submodules: recursive` sin `.gitmodules`  🟡  **[ ]**
+- **Evidencia:** `ci.yml:21`, `release.yml:33` — `submodules: recursive`.
+- **Causa:** No existe `.gitmodules`. `llama-cpp-turboquant` está embebido como
+  archivos regulares (no como submodule). La directiva es no-op.
+- **Impacto:** ningún fallo de build, pero la directiva es confusa y AGENTS.md
+  dice incorrectamente que se requiere.
+- **Fix:** Eliminar `submodules: recursive` de ambos workflows y corregir
+  AGENTS.md. Alternativamente, convertir `llama-cpp-turboquant` a submódulo
+  real (pendiente K2).
+
+### C8 — No existe `rust-toolchain.toml`; edition 2024 requiere >= 1.85  🟡  **[ ]**
+- **Evidencia:** `Cargo.toml:4` — `edition = "2024"`. Sin `rust-toolchain.toml`.
+- **Causa:** edition 2024 requiere Rust >= 1.85.0. Los desarrolladores con Rust
+  más antiguo obtienen errores confusos. `dtolnay/rust-toolchain@stable` en CI
+  instala la versión más reciente, pero localmente no hay garantía.
+- **Fix:** Crear `memvid-agent-core/rust-toolchain.toml`:
+  ```toml
+  [toolchain]
+  channel = "1.85.0"
+  ```
+  Y corregir AGENTS.md (dice "min 1.95.0" pero el mínimo real es 1.85.0).
+
+### C9 — `.deb` no instala `libgomp-dev` para compilación  🟡  **[ ]**
+- **Evidencia:** `release.yml:36` — instala `libgomp1` pero no `libgomp-dev`.
+- **Causa:** cmake `find_package(OpenMP)` puede requerir los headers de desarrollo.
+  En la práctica, el build usa `-fopenmp` de GCC y enlaza dinámicamente, pero
+  si OpenMP no se detecta, llama.cpp compila sin OpenMP y el performance se
+  degrada significativamente.
+- **Fix:** Añadir `libgomp-dev` a `apt-get install` en `release.yml`.
+
+### C10 — Snap con `core22` en host Ubuntu 24.04  🟡  **[ ]**
+- **Evidencia:** `snapcraft.yaml:10` — `base: core22`. Release workflow usa
+  Ubuntu 24.04 (host) con `destructive-mode`.
+- **Causa:** glibc 2.39 (host 24.04) vs glibc 2.35 (core22 base). El snap puede
+  enlazar contra glibc 2.39 y luego no ejecutarse en sistemas con glibc 2.35.
+- **Fix:** Cambiar a `base: core24` o construir en un contenedor con Ubuntu 22.04.
+
+### C11 — `--target` no pasado a `cargo build` en release  🟡  **[ ] BUG menor**
+- **Evidencia:** `release.yml:68` — `cargo build --release` sin `--target`.
+- **Causa:** Funciona para builds nativos, pero inconsistente con
+  `targets: ${{ matrix.target }}` instalado en el step de Rust.
+- **Impacto:** sin efecto actual (nativo), pero confuso. Si se añade cross-compilation,
+  los paths de `strip` y packaging deben usar `target/<triple>/release/`.
+- **Fix:** Cambiar a `cargo build --release --target ${{ matrix.target }}` y ajustar
+  los paths de packaging consecuentemente.
+
+### C12 — `CMAKE_BUILD_PARALLEL_LEVEL=1` causa builds de 30+ min en CI  🟡  **[ ]**
+- **Evidencia:** `build.rs:94` — `unsafe { std::env::set_var("CMAKE_BUILD_PARALLEL_LEVEL", "1") }`.
+- **Causa:** Previene OOM en máquinas con ~8 GB RAM. En GitHub runners (16 GB),
+  puede usar 2-4 threads y reducir el tiempo de build de 30 min a ~10 min.
+- **Fix:** Hacer el parallel level configurable:
+  ```rust
+  let jobs = env::var("CMAKE_BUILD_PARALLEL_LEVEL").unwrap_or_else(|_| "2".to_string());
+  unsafe { std::env::set_var("CMAKE_BUILD_PARALLEL_LEVEL", &jobs) };
+  ```
+  Y en CI, establecer `CMAKE_BUILD_PARALLEL_LEVEL=4` en el env del step.
+
+---
+
+### Plan de implementación CI/Build (orden sugerido)
+
+1. **C1+C4+C5** — Release ARM64 funcional: elegir estrategia (cross-compilation o
+   QEMU o larger runners), añadir flags cmake ARM, añadir `--target` a bindgen.
+2. **C3** — Fix inmediato del `.deb` control file (1 línea).
+3. **C8** — Añadir `rust-toolchain.toml` (1 archivo).
+4. **C9** — Añadir `libgomp-dev` a release.yml.
+5. **C6+C12** — Cache de libs precompiladas + paralelismo cmake configurable.
+6. **C2** — Añadir job ARM64 en CI (depende de C1).
+7. **C7** — Limpiar `submodules: recursive` + actualizar AGENTS.md.
+8. **C11** — Añadir `--target` a cargo build + ajustar paths.
+9. **C10** — Snap `base: core24` o contenedor.
 
 ---
 

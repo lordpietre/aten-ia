@@ -42,7 +42,11 @@ impl ModelsCatalog {
     pub fn download(entry: &ModelEntry, target_dir: &Path) -> Result<PathBuf> {
         let target_path = target_dir.join(format!("{}.gguf", entry.id));
         if target_path.exists() {
-            eprintln!("  {} Model already exists at {}", "✓".green(), target_path.display());
+            eprintln!(
+                "  {} Model already exists at {}",
+                "✓".green(),
+                target_path.display()
+            );
             return Ok(target_path);
         }
 
@@ -88,7 +92,8 @@ impl ModelsCatalog {
                 total as f64 / 1_048_576.0
             ));
 
-            let mut out = std::fs::File::create(&target_path).context("Failed to create model file")?;
+            let mut out =
+                std::fs::File::create(&target_path).context("Failed to create model file")?;
             let mut downloaded: u64 = 0;
             let mut buf = [0u8; 65536];
             let mut reader = resp.into_body().into_reader();
@@ -128,7 +133,8 @@ impl ModelsCatalog {
             pb.set_message(format!("Downloading {}…", entry.name));
             pb.enable_steady_tick(std::time::Duration::from_millis(80));
 
-            let mut out = std::fs::File::create(&target_path).context("Failed to create model file")?;
+            let mut out =
+                std::fs::File::create(&target_path).context("Failed to create model file")?;
             let mut buf = [0u8; 65536];
             let mut reader = resp.into_body().into_reader();
 

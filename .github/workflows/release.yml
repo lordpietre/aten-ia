@@ -21,19 +21,30 @@ jobs:
           - target: x86_64-unknown-linux-gnu
             runner: ubuntu-latest
             deb_arch: amd64
+            cross: false
           - target: aarch64-unknown-linux-gnu
-            runner: ubuntu-24.04-arm
+            runner: ubuntu-latest
             deb_arch: arm64
+            cross: true
     defaults:
       run:
         working-directory: memvid-agent-core
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
 
-      - name: Install system dependencies
-        run: sudo apt-get update && sudo apt-get install -y cmake libssl-dev clang libgomp1 fakeroot
+      - name: Install system dependencies (x86_64)
+        if: matrix.cross == false
+        run: sudo apt-get update && sudo apt-get install -y cmake libssl-dev clang libgomp-dev fakeroot
+
+      - name: Install system dependencies (aarch64 cross)
+        if: matrix.cross == true
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake libssl-dev clang fakeroot gcc-aarch64-linux-gnu g++-aarch64-linux-gnu libgomp-dev:aarch64
+          sudo sed -i 's/^# deb/deb/' /etc/apt/sources.list /etc/apt/sources.list.d/*.list 2>/dev/null || true
+          sudo dpkg --add-architecture arm64
+          sudo apt-get update
+          sudo apt-get install -y libgomp-dev:aarch64 libstdc++-dev-arm64-cross
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -42,8 +53,11 @@ jobs:
 
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
 
-      - name: Build llama.cpp static libs
+      - name: Build llama.cpp static libs (native x86_64)
+        if: matrix.cross == false
         run: |
           cmake -B build -S llama-cpp-turboquant \
             -DLLAMA_BUILD_TOOLS=OFF \
@@ -54,8 +68,36 @@ jobs:
             -DGGML_CUDA=OFF \
             -DGGML_METAL=OFF \
             -DGGML_VULKAN=OFF \
+            -DGGML_NATIVE=OFF \
             -DCMAKE_BUILD_TYPE=Release
-          cmake --build build --config Release -j2
+          cmake --build build --config Release -j$(nproc)
+
+      - name: Build llama.cpp static libs (cross aarch64)
+        if: matrix.cross == true
+        run: |
+          cat > cross-toolchain.cmake <<'EOF'
+          set(CMAKE_SYSTEM_NAME Linux)
+          set(CMAKE_SYSTEM_PROCESSOR arm64)
+          set(CMAKE_C_COMPILER aarch64-linux-gnu-gcc)
+          set(CMAKE_CXX_COMPILER aarch64-linux-gnu-g++)
+          set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
+          set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
+          set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
+          EOF
+          cmake -B build -S llama-cpp-turboquant \
+            -DCMAKE_TOOLCHAIN_FILE=cross-toolchain.cmake \
+            -DLLAMA_BUILD_TOOLS=OFF \
+            -DLLAMA_BUILD_EXAMPLES=OFF \
+            -DLLAMA_BUILD_TESTS=OFF \
+            -DLLAMA_BUILD_SERVER=OFF \
+            -DBUILD_SHARED_LIBS=OFF \
+            -DGGML_CUDA=OFF \
+            -DGGML_METAL=OFF \
+            -DGGML_VULKAN=OFF \
+            -DGGML_NATIVE=OFF \
+            -DGGML_CPU_ARM_ARCH=armv8-a+dotprod \
+            -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --config Release -j$(nproc)
 
       - name: Package llama static libs
         run: |
@@ -64,15 +106,27 @@ jobs:
           tar -czf llama-libs-${{ matrix.target }}.tar.gz -C libs .
           ls -lh llama-libs-${{ matrix.target }}.tar.gz
 
-      - name: Build release binary
-        run: LLAMA_LOCAL_LIBS=libs cargo build --release --verbose
+      - name: Build release binary (native x86_64)
+        if: matrix.cross == false
+        run: LLAMA_LOCAL_LIBS=libs cargo build --release --target ${{ matrix.target }} --verbose
+
+      - name: Build release binary (cross aarch64)
+        if: matrix.cross == true
+        env:
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
+        run: LLAMA_LOCAL_LIBS=libs cargo build --release --target ${{ matrix.target }} --verbose
 
       - name: Strip binary
-        run: strip target/release/aten-ia
+        run: |
+          if [ "${{ matrix.cross }}" = "true" ]; then
+            aarch64-linux-gnu-strip target/${{ matrix.target }}/release/aten-ia
+          else
+            strip target/${{ matrix.target }}/release/aten-ia
+          fi
 
       - name: Package binary tar.gz
         run: |
-          cp target/release/aten-ia aten-ia
+          cp target/${{ matrix.target }}/release/aten-ia aten-ia
           tar czf aten-ia-${{ matrix.target }}.tar.gz aten-ia
           sha256sum aten-ia-${{ matrix.target }}.tar.gz > aten-ia-${{ matrix.target }}.tar.gz.sha256
 
@@ -84,21 +138,23 @@ jobs:
           mkdir -p "$PKG_ROOT/usr/bin"
           mkdir -p "$PKG_ROOT/usr/share/doc/aten-ia"
 
-          cp target/release/aten-ia "$PKG_ROOT/usr/bin/"
+          cp target/${{ matrix.target }}/release/aten-ia "$PKG_ROOT/usr/bin/"
           cp ../README.md "$PKG_ROOT/usr/share/doc/aten-ia/"
           cp ../AGENTS.md "$PKG_ROOT/usr/share/doc/aten-ia/"
 
-          cat > "$PKG_ROOT/DEBIAN/control" <<EOF
+          cat > "$PKG_ROOT/DEBIAN/control" <<'DSC'
           Package: aten-ia
-          Version: ${VERSION}
-          Architecture: ${{ matrix.deb_arch }}
+          Version: VERSION_PLACEHOLDER
+          Architecture: ARCH_PLACEHOLDER
           Maintainer: lordpietre <lordpietre@users.noreply.github.com>
           Description: Local LLM agent with persistent memory and RAG
            Interactive AI agent CLI with local LLM inference via llama.cpp,
            persistent conversations (.mv2), keyword RAG, OpenAI-compatible API,
            and multi-source ingestion (PDF, EPUB, HTML, MD, TXT, URLs).
           Depends: libc6, libstdc++6, libgomp1
-          EOF
+          DSC
+          sed -i "s/VERSION_PLACEHOLDER/${VERSION}/" "$PKG_ROOT/DEBIAN/control"
+          sed -i "s/ARCH_PLACEHOLDER/${{ matrix.deb_arch }}/" "$PKG_ROOT/DEBIAN/control"
 
           gzip -9 -n "$PKG_ROOT/usr/share/doc/aten-ia/README.md"
           gzip -9 -n "$PKG_ROOT/usr/share/doc/aten-ia/AGENTS.md"
@@ -107,7 +163,8 @@ jobs:
           mv "debian/aten-ia_${VERSION}_${{ matrix.deb_arch }}.deb" .
           sha256sum "aten-ia_${VERSION}_${{ matrix.deb_arch }}.deb" > "aten-ia_${VERSION}_${{ matrix.deb_arch }}.deb.sha256"
 
-      - name: Build snap package
+      - name: Build snap package (x86_64 only)
+        if: matrix.cross == false
         continue-on-error: true
         run: |
           VERSION=${GITHUB_REF_NAME#v}
