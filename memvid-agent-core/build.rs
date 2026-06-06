@@ -112,18 +112,26 @@ fn cmake_toolchain_path(out_dir: &PathBuf, target: &str) -> PathBuf {
     } else {
         ("x86_64-linux-gnu", "x86_64")
     };
+    let march = if target.contains("aarch64") {
+        " -march=armv8-a+dotprod"
+    } else {
+        ""
+    };
     let content = format!(
         r#"
 set(CMAKE_SYSTEM_NAME Linux)
 set(CMAKE_SYSTEM_PROCESSOR {arch})
 set(CMAKE_C_COMPILER {triplet}-gcc)
 set(CMAKE_CXX_COMPILER {triplet}-g++)
+set(CMAKE_C_FLAGS "${{CMAKE_C_FLAGS}}{march}")
+set(CMAKE_CXX_FLAGS "${{CMAKE_CXX_FLAGS}}{march}")
 set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
 set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
 set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
 "#,
         arch = arch,
-        triplet = triplet
+        triplet = triplet,
+        march = march,
     );
     std::fs::write(&toolchain, content).expect("Failed to write cross-toolchain file");
     toolchain
