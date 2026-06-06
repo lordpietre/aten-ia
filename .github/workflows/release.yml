@@ -35,7 +35,7 @@ jobs:
       run:
         working-directory: memvid-agent-core
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install system dependencies (x86_64)
         if: matrix.cross == false
@@ -246,7 +246,7 @@ jobs:
           sha256sum "aten-ia_${VERSION}_${{ matrix.deb_arch }}.deb" > "aten-ia_${VERSION}_${{ matrix.deb_arch }}.deb.sha256"
 
       - name: Upload release assets
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: |
             memvid-agent-core/aten-ia-${{ matrix.target }}.tar.gz
