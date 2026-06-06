@@ -84,7 +84,7 @@ jobs:
           set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
           EOF
           cmake -B build -S llama-cpp-turboquant \
-            -DCMAKE_TOOLCHAIN_FILE=llama-cpp-turboquant/cross-toolchain.cmake \
+            -DCMAKE_TOOLCHAIN_FILE="$PWD/llama-cpp-turboquant/cross-toolchain.cmake" \
             -DLLAMA_BUILD_TOOLS=OFF \
             -DLLAMA_BUILD_EXAMPLES=OFF \
             -DLLAMA_BUILD_TESTS=OFF \
