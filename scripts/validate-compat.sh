@@ -77,6 +77,7 @@ ALL_OK=true
 check_compat "Ubuntu 20.04 LTS" "2.31" || ALL_OK=false
 check_compat "Ubuntu 22.04 LTS" "2.35" || ALL_OK=false
 check_compat "Ubuntu 24.04 LTS" "2.39" || ALL_OK=false
+check_compat "Ubuntu 26.04 LTS" "2.41" || ALL_OK=false
 check_compat "Debian 12 (bookworm)" "2.36" || ALL_OK=false
 check_compat "Debian 13 (trixie)" "2.38" || ALL_OK=false
 

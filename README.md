@@ -45,6 +45,7 @@ Construye un binario portable en un contenedor Ubuntu 20.04 (glibc 2.31), compat
 | Ubuntu | 20.04 LTS | 2.31 | Compatible |
 | Ubuntu | 22.04 LTS | 2.35 | Compatible |
 | Ubuntu | 24.04 LTS | 2.39 | Compatible |
+| Ubuntu | 26.04 LTS | 2.41 | Compatible |
 | Debian | 12 (bookworm) | 2.36 | Compatible |
 | Debian | 13 (trixie) | 2.38 | Compatible |
 

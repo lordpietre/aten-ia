@@ -10,8 +10,11 @@
 
 Permitir que el binario `aten-ia` se ejecute en sistemas Linux con versiones antiguas de glibc:
 - **Ubuntu 20.04 LTS** (Focal): glibc 2.31
+- **Ubuntu 22.04 LTS** (Jammy): glibc 2.35
+- **Ubuntu 24.04 LTS** (Noble): glibc 2.39
+- **Ubuntu 26.04 LTS** (Plucky): glibc 2.41
 - **Debian 12** (Bookworm): glibc 2.36
-- **CentOS/RHEL 8**: glibc 2.28
+- **Debian 13** (Trixie): glibc 2.38
 
 ## 2. Contexto Actual
 
@@ -289,7 +292,11 @@ if [ "$(printf '%s\n' "2.31" "$MAX_GLIBC" | sort -V | tail -1)" != "2.31" ]; the
 fi
 
 echo "✓ Binary is compatible with Ubuntu 20.04+ (glibc 2.31+)"
+echo "✓ Binary is compatible with Ubuntu 22.04+ (glibc 2.35+)"
+echo "✓ Binary is compatible with Ubuntu 24.04+ (glibc 2.39+)"
+echo "✓ Binary is compatible with Ubuntu 26.04+ (glibc 2.41+)"
 echo "✓ Binary is compatible with Debian 12+ (glibc 2.36+)"
+echo "✓ Binary is compatible with Debian 13+ (glibc 2.38+)"
 ```
 
 ## 7. Plan de Implementación
@@ -356,7 +363,7 @@ echo "✓ Binary is compatible with Debian 12+ (glibc 2.36+)"
 
 ## 10. Métricas de Éxito
 
-1. **Compatibilidad**: 100% de éxito en Ubuntu 20.04, Debian 12, CentOS 8
+1. **Compatibilidad**: 100% de éxito en Ubuntu 20.04/22.04/24.04/26.04, Debian 12/13
 2. **Rendimiento**: <5% degradación vs binario dinámico
 3. **Tamaño**: <250MB (objetivo: 200MB)
 4. **Build time**: <45 minutos en GitHub Actions
