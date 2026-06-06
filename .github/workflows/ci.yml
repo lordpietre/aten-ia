@@ -50,6 +50,10 @@ jobs:
           targets: ${{ matrix.target }}
           components: rustfmt, clippy
 
+      - name: Install cross target
+        if: matrix.cross == true
+        run: rustup target add ${{ matrix.target }}
+
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
         with:
