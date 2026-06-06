@@ -49,7 +49,7 @@ jobs:
             libssl-dev \
             clang \
             libclang-dev \
-            libgomp-dev \
+            libgcc-9-dev \
             fakeroot \
             curl \
             git \
