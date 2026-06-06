@@ -1797,3 +1797,193 @@ fn msg(role: &str, content: &str) -> memvid_agent_core::types::Message {
         tokens: None,
     }
 }
+
+// ---------------------------------------------------------------------------
+// Regression tests for identified potential failures
+// ---------------------------------------------------------------------------
+
+#[test]
+fn chunker_max_size_zero_returns_empty() {
+    use memvid_agent_core::chunker::{ChunkOptions, ChunkStrategy, chunk_text};
+    let opts = ChunkOptions {
+        max_size: 0,
+        overlap: 0,
+        strategy: ChunkStrategy::Fixed,
+    };
+    let result = chunk_text("hello world", &opts, "test");
+    assert!(result.is_empty(), "max_size=0 should return empty chunks");
+}
+
+#[test]
+fn chunker_max_size_zero_paragraph_strategy() {
+    use memvid_agent_core::chunker::{ChunkOptions, ChunkStrategy, chunk_text};
+    let opts = ChunkOptions {
+        max_size: 0,
+        overlap: 0,
+        strategy: ChunkStrategy::Paragraph,
+    };
+    let result = chunk_text("hello\n\nworld", &opts, "test");
+    assert!(
+        result.is_empty(),
+        "max_size=0 Paragraph should return empty chunks"
+    );
+}
+
+#[test]
+fn chunker_max_size_zero_heading_strategy() {
+    use memvid_agent_core::chunker::{ChunkOptions, ChunkStrategy, chunk_text};
+    let opts = ChunkOptions {
+        max_size: 0,
+        overlap: 0,
+        strategy: ChunkStrategy::Heading,
+    };
+    let result = chunk_text("# Title\nhello\n\nworld", &opts, "test");
+    assert!(
+        result.is_empty(),
+        "max_size=0 Heading should return empty chunks"
+    );
+}
+
+#[test]
+fn chunker_unicode_cjk() {
+    use memvid_agent_core::chunker::{ChunkOptions, ChunkStrategy, chunk_text};
+    let opts = ChunkOptions {
+        max_size: 10,
+        overlap: 2,
+        strategy: ChunkStrategy::Fixed,
+    };
+    let text = "漢字テスト漢字テスト漢字テスト";
+    let result = chunk_text(text, &opts, "test");
+    assert!(!result.is_empty());
+    for chunk in &result {
+        let _ = chunk.content;
+    }
+}
+
+#[test]
+fn chunker_emoji_compound() {
+    use memvid_agent_core::chunker::{ChunkOptions, ChunkStrategy, chunk_text};
+    let opts = ChunkOptions {
+        max_size: 10,
+        overlap: 2,
+        strategy: ChunkStrategy::Fixed,
+    };
+    let text = "hello 🇧🇷 world 🇧🇷 test";
+    let result = chunk_text(text, &opts, "test");
+    assert!(!result.is_empty());
+}
+
+#[test]
+fn chunker_overlap_greater_than_max_size() {
+    use memvid_agent_core::chunker::{ChunkOptions, ChunkStrategy, chunk_text};
+    let opts = ChunkOptions {
+        max_size: 5,
+        overlap: 50,
+        strategy: ChunkStrategy::Paragraph,
+    };
+    let text = "hello world this is a test of overlap handling";
+    let result = chunk_text(text, &opts, "test");
+    assert!(
+        !result.is_empty(),
+        "overlap > max_size should still produce output"
+    );
+}
+
+#[test]
+fn retrieval_remove_by_empty_prefix_removes_all() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut index = memvid_agent_core::retrieval::KnowledgeIndex::load(dir.path()).unwrap();
+    use chrono::Utc;
+    use memvid_agent_core::types::KnowledgeEntry;
+    use uuid::Uuid;
+
+    for src in &["src1", "src2", "src3"] {
+        let entry = KnowledgeEntry {
+            id: Uuid::new_v4().to_string(),
+            source: src.to_string(),
+            content: format!("content from {}", src),
+            timestamp: Utc::now(),
+            checksum: format!("{:x}", sha2::Sha256::digest(src.as_bytes())),
+        };
+        index.add_entry(entry).unwrap();
+    }
+    assert_eq!(index.len(), 3);
+
+    let removed = index.remove_by_source_prefix("").unwrap();
+    assert_eq!(removed, 3);
+    assert_eq!(index.len(), 0);
+}
+
+#[test]
+fn config_json_wrong_types_returns_error() {
+    let dir = tempfile::tempdir().unwrap();
+    let config_path = dir.path().join("config.json");
+    let bad_json = r#"{
+        "version": 1,
+        "data_dir": "data",
+        "developer_mode": false,
+        "developer_prompt": null,
+        "model": { "path": "a.gguf", "name": "test", "n_ctx": "not_a_number", "n_gpu_layers": 0, "chat_template": "chatml" },
+        "generation": { "top_k": 40, "top_p": 0.95, "temp": 0.8, "max_tokens": 2048 },
+        "api": { "enabled": false, "host": "127.0.0.1", "port": 8787, "token": null },
+        "languages": { "installed": [] }
+    }"#;
+    std::fs::write(&config_path, bad_json).unwrap();
+    let result = memvid_agent_core::config::Config::load_or_create_with_path(&config_path);
+    assert!(
+        result.is_err(),
+        "Config with wrong types should fail to parse"
+    );
+}
+
+#[test]
+fn config_json_corrupt_returns_error() {
+    let dir = tempfile::tempdir().unwrap();
+    let config_path = dir.path().join("config.json");
+    std::fs::write(&config_path, "{{{{not json").unwrap();
+    let result = memvid_agent_core::config::Config::load_or_create_with_path(&config_path);
+    assert!(result.is_err(), "Corrupt JSON should fail");
+}
+
+#[test]
+fn session_estimate_tokens_does_not_panic_on_large() {
+    let text = "a".repeat(1_000_000);
+    let tokens = memvid_agent_core::session::estimate_tokens(&text);
+    assert!(tokens > 0);
+}
+
+#[test]
+fn utils_file_lock_identifies_as_aten_ia() {
+    let dir = tempfile::tempdir().unwrap();
+    {
+        let _lock = memvid_agent_core::utils::FileLock::acquire(dir.path()).unwrap();
+        let content = std::fs::read_to_string(dir.path().join(".lock")).unwrap();
+        let parts: Vec<&str> = content.trim().split_whitespace().collect();
+        assert_eq!(parts[0], "aten-ia", "Lock file should identify as aten-ia");
+        let pid: u32 = parts[1].parse().unwrap();
+        assert_eq!(pid, std::process::id());
+    }
+}
+
+#[test]
+fn utils_file_lock_stale_detection() {
+    let dir = tempfile::tempdir().unwrap();
+    let lock_path = dir.path().join(".lock");
+    std::fs::write(&lock_path, "aten-ia 999999999").unwrap();
+    let lock = memvid_agent_core::utils::FileLock::acquire(dir.path());
+    assert!(
+        lock.is_ok(),
+        "Stale lock from dead PID should be reclaimable"
+    );
+}
+
+#[test]
+fn shutdown_flag_default_is_not_requested() {
+    assert!(!memvid_agent_core::shutdown::is_shutdown_requested());
+}
+
+#[test]
+fn shutdown_request_sets_flag() {
+    memvid_agent_core::shutdown::request_shutdown();
+    assert!(memvid_agent_core::shutdown::is_shutdown_requested());
+}

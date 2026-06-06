@@ -153,6 +153,38 @@ fn cmake_build() -> PathBuf {
     dst.join("lib")
 }
 
+fn merge_ggml_libs(lib_dir: &Path) {
+    let merged = lib_dir.join("libggml-merged.a");
+    if merged.exists() {
+        return;
+    }
+    let ggml_cpu = lib_dir.join("libggml-cpu.a");
+    let ggml = lib_dir.join("libggml.a");
+    let ggml_base = lib_dir.join("libggml-base.a");
+    let mri_script = format!(
+        "CREATE {merged}\nADDLIB {cpu}\nADDLIB {ggml}\nADDLIB {base}\nSAVE\nEND\n",
+        merged = merged.display(),
+        cpu = ggml_cpu.display(),
+        ggml = ggml.display(),
+        base = ggml_base.display(),
+    );
+    use std::io::Write;
+    let mut child = Command::new("ar")
+        .arg("-M")
+        .current_dir(lib_dir)
+        .stdin(std::process::Stdio::piped())
+        .spawn()
+        .expect("failed to spawn ar -M");
+    {
+        let stdin = child.stdin.as_mut().expect("stdin pipe");
+        stdin
+            .write_all(mri_script.as_bytes())
+            .expect("write mri script");
+    }
+    let status = child.wait().expect("wait for ar -M");
+    assert!(status.success(), "ar -M (MRI merge) failed");
+}
+
 fn main() {
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
     let target = env::var("TARGET").unwrap_or_default();
@@ -172,12 +204,12 @@ fn main() {
         cmake_build()
     };
 
+    merge_ggml_libs(&lib_dir);
+
     println!("cargo:rustc-link-search=native={}", lib_dir.display());
     println!("cargo:rustc-link-lib=static=llama");
     println!("cargo:rustc-link-lib=static=llama-common");
-    println!("cargo:rustc-link-lib=static=ggml-cpu");
-    println!("cargo:rustc-link-lib=static=ggml");
-    println!("cargo:rustc-link-lib=static=ggml-base");
+    println!("cargo:rustc-link-lib=static=ggml-merged");
 
     let portable = env::var("ATEN_PORTABLE").unwrap_or_default() == "1";
     if portable {

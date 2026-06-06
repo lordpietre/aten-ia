@@ -1012,7 +1012,13 @@ fn main() -> Result<()> {
             }
 
             let mut parts = rest.split_whitespace();
-            let lang = parts.next().unwrap();
+            let lang = match parts.next() {
+                Some(l) => l,
+                None => {
+                    eprintln!("{} Usage: /download-books <language> [limit]", "✗".red());
+                    continue;
+                }
+            };
             let limit: usize = parts.next().and_then(|s| s.parse().ok()).unwrap_or(10);
 
             println!(

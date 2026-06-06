@@ -479,7 +479,7 @@ mod tests {
         with_env_var("MODEL_CTX", "not-a-number", || {
             let mut cfg = Config::default();
             cfg.apply_env_overrides();
-            assert_eq!(cfg.model.n_ctx, 4096);
+            assert_eq!(cfg.model.n_ctx, 8192);
         });
     }
 

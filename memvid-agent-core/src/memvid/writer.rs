@@ -114,9 +114,8 @@ impl MemvidWriter {
             filename: self
                 .current_segment_path
                 .file_name()
-                .expect("segment path has no file name")
-                .to_string_lossy()
-                .to_string(),
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_else(|| "segment.dat".to_string()),
             created_at: first_batch.timestamp,
             size_bytes: temp_size,
             message_count: total_messages,
@@ -200,9 +199,8 @@ impl MemvidWriter {
             id: first.id.clone(),
             filename: seg_path
                 .file_name()
-                .expect("segment path has no file name")
-                .to_string_lossy()
-                .to_string(),
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_else(|| "knowledge.dat".to_string()),
             created_at: first.timestamp,
             size_bytes: temp_size,
             message_count: entries.len() as u32,
