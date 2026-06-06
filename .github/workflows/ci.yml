@@ -32,7 +32,7 @@ jobs:
         run: |
           sudo apt-get update -y
           sudo apt-get install -y --no-install-recommends \
-            cmake libssl-dev clang libclang-dev libgomp-dev
+            cmake libssl-dev clang libclang-dev gcc
 
       - name: Install system dependencies (aarch64 cross)
         if: matrix.cross == true
