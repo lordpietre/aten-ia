@@ -1,4 +1,5 @@
-use crate::types::{Chunk, ChunkOptions, ChunkStrategy};
+use crate::types::Chunk;
+pub use crate::types::{ChunkOptions, ChunkStrategy};
 
 fn floor_char_boundary(s: &str, i: usize) -> usize {
     if i >= s.len() {
@@ -20,6 +21,9 @@ pub fn chunk_text(text: &str, options: &ChunkOptions, source: &str) -> Vec<Chunk
 }
 
 fn chunk_by_headings(text: &str, options: &ChunkOptions, source: &str) -> Vec<Chunk> {
+    if options.max_size == 0 {
+        return Vec::new();
+    }
     let lines: Vec<&str> = text.lines().collect();
     let mut chunks: Vec<Chunk> = Vec::new();
     let mut current_section = String::new();
@@ -92,6 +96,9 @@ fn chunk_by_headings(text: &str, options: &ChunkOptions, source: &str) -> Vec<Ch
 }
 
 fn chunk_by_paragraphs(text: &str, options: &ChunkOptions, source: &str) -> Vec<Chunk> {
+    if options.max_size == 0 {
+        return Vec::new();
+    }
     let paragraphs: Vec<&str> = text
         .split('\n')
         .map(|l| l.trim())

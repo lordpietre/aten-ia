@@ -216,11 +216,14 @@ fn find_gcc_static_lib_dir(target: &str) -> Option<String> {
     }
     let fallbacks: Vec<String> = if target.contains("aarch64") {
         [
-            "/usr/lib/gcc-cross/aarch64-linux-gnu",
-            "/usr/lib/gcc/aarch64-linux-gnu/9",
-            "/usr/lib/gcc/aarch64-linux-gnu/10",
-            "/usr/lib/gcc/aarch64-linux-gnu/11",
-            "/usr/lib/gcc/aarch64-linux-gnu/12",
+            "/usr/lib/gcc-cross/aarch64-linux-gnu/9",
+            "/usr/lib/gcc-cross/aarch64-linux-gnu/10",
+            "/usr/lib/gcc-cross/aarch64-linux-gnu/11",
+            "/usr/lib/gcc-cross/aarch64-linux-gnu/12",
+            "/usr/lib/gcc-cross/aarch64-linux-gnu/13",
+            "/usr/lib/gcc-cross/aarch64-linux-gnu/14",
+            "/usr/lib/gcc-cross/aarch64-linux-gnu/15",
+            "/usr/lib/gcc-cross/aarch64-linux-gnu/16",
         ]
         .iter()
         .map(|s| s.to_string())

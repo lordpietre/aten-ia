@@ -717,7 +717,8 @@ fn prompt_mistral_template() {
     let result = builder.build(&[], "hello", &[]);
     assert!(result.starts_with("[INST]"));
     assert!(result.contains("expert software engineer"));
-    assert!(result.ends_with("[INST] hello [/INST]\n"));
+    assert!(result.contains("[INST] You are an expert software engineer."));
+    assert!(result.ends_with("[/INST]\n"));
 }
 
 #[test]
@@ -1411,7 +1412,9 @@ fn file_lock_contains_pid() {
     {
         let _lock = FileLock::acquire(dir.path()).unwrap();
         let content = std::fs::read_to_string(dir.path().join(".lock")).unwrap();
-        let pid: u32 = content.trim().parse().unwrap();
+        let parts: Vec<&str> = content.trim().split_whitespace().collect();
+        assert_eq!(parts[0], "aten-ia");
+        let pid: u32 = parts[1].parse().unwrap();
         assert_eq!(pid, std::process::id());
     }
 }
@@ -1895,6 +1898,7 @@ fn retrieval_remove_by_empty_prefix_removes_all() {
     let mut index = memvid_agent_core::retrieval::KnowledgeIndex::load(dir.path()).unwrap();
     use chrono::Utc;
     use memvid_agent_core::types::KnowledgeEntry;
+    use sha2::Digest;
     use uuid::Uuid;
 
     for src in &["src1", "src2", "src3"] {
