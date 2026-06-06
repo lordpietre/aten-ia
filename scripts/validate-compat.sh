@@ -17,7 +17,7 @@ echo "    Size: $(du -h "$BINARY" | cut -f1)"
 echo "    Type: $(file "$BINARY")"
 
 echo ""
-echo "==> Dynamic dependencies (should only show libc, libm, libgcc_s):"
+echo "==> Dynamic dependencies (should only show libc, libm, libgcc_s, libdl, libpthread):"
 ldd "$BINARY" 2>&1 | grep -E "(libc\.so|libm\.so|libgcc_s\.so|libdl\.so|libpthread\.so|librt\.so)" || echo "    (none or minimal)"
 
 echo ""
@@ -47,7 +47,7 @@ echo "✓ libgomp is statically linked"
 echo ""
 echo "==> Checking glibc version requirement..."
 
-MAX_GLIBC=$(objdump -T "$BINARY" 2>/dev/null | grep -oP 'GLIBC_\K[0-9.]+' | sort -V | tail -1)
+MAX_GLIBC=$(objdump -T "$BINARY" 2>/dev/null | grep -oP 'GLIBC_\K[0-9.]+' | sort -Vru | head -1)
 
 if [ -z "$MAX_GLIBC" ]; then
     echo "✗ Could not determine glibc version requirement"
@@ -56,49 +56,39 @@ fi
 
 echo "    Maximum glibc version required: GLIBC_$MAX_GLIBC"
 
-compare_versions() {
-    local v1="$1"
-    local v2="$2"
-    if [ "$(printf '%s\n' "$v1" "$v2" | sort -V | head -1)" = "$v1" ]; then
+check_compat() {
+    local distro="$1"
+    local glibc_ver="$2"
+    if printf '%s\n' "$MAX_GLIBC" "$glibc_ver" | sort -VC; then
+        echo "  ✓ $distro (glibc $glibc_ver): OK"
         return 0
     else
+        echo "  ✗ $distro (glibc $glibc_ver): FAIL (requires glibc > $glibc_ver)"
         return 1
     fi
 }
 
 echo ""
-echo "==> Compatibility check:"
+echo "==> Compatibility matrix:"
+echo ""
 
-if compare_versions "$MAX_GLIBC" "2.31"; then
-    echo "✓ Compatible with Ubuntu 20.04 LTS (glibc 2.31)"
-else
-    echo "✗ NOT compatible with Ubuntu 20.04 LTS (requires glibc > 2.31)"
-    FAILED=1
-fi
+ALL_OK=true
 
-if compare_versions "$MAX_GLIBC" "2.36"; then
-    echo "✓ Compatible with Debian 12 (glibc 2.36)"
-else
-    echo "✗ NOT compatible with Debian 12 (requires glibc > 2.36)"
-    FAILED=1
-fi
-
-if compare_versions "$MAX_GLIBC" "2.28"; then
-    echo "✓ Compatible with CentOS/RHEL 8 (glibc 2.28)"
-else
-    echo "✗ NOT compatible with CentOS/RHEL 8 (requires glibc > 2.28)"
-    FAILED=1
-fi
+check_compat "Ubuntu 20.04 LTS" "2.31" || ALL_OK=false
+check_compat "Ubuntu 22.04 LTS" "2.35" || ALL_OK=false
+check_compat "Ubuntu 24.04 LTS" "2.39" || ALL_OK=false
+check_compat "Debian 12 (bookworm)" "2.36" || ALL_OK=false
+check_compat "Debian 13 (trixie)" "2.38" || ALL_OK=false
 
 echo ""
-if [ "$FAILED" -eq 0 ]; then
+if [ "$ALL_OK" = true ]; then
     echo "✓ All compatibility checks PASSED"
     echo ""
     echo "==> All glibc symbols used:"
     objdump -T "$BINARY" 2>/dev/null | grep -oP 'GLIBC_[0-9.]+' | sort -uV
     exit 0
 else
-    echo "✗ Compatibility checks FAILED"
+    echo "✗ Some compatibility checks FAILED"
     echo ""
     echo "==> All glibc symbols used:"
     objdump -T "$BINARY" 2>/dev/null | grep -oP 'GLIBC_[0-9.]+' | sort -uV

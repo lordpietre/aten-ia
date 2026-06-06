@@ -17,6 +17,7 @@ jobs:
       run:
         working-directory: memvid-agent-core
     strategy:
+      fail-fast: false
       matrix:
         include:
           - target: x86_64-unknown-linux-gnu
@@ -28,13 +29,13 @@ jobs:
 
       - name: Install system dependencies (x86_64)
         if: matrix.cross == false
-        run: sudo apt-get update && sudo apt-get install -y cmake libssl-dev clang libgomp-dev
+        run: sudo apt-get update && sudo apt-get install -y cmake libssl-dev clang libclang-dev libgomp-dev
 
       - name: Install system dependencies (aarch64 cross)
         if: matrix.cross == true
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake libssl-dev clang gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+          sudo apt-get install -y cmake libssl-dev clang libclang-dev gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
           sudo dpkg --add-architecture arm64
           sudo apt-get update
           sudo apt-get install -y libgomp-dev:arm64 libstdc++-dev-arm64-cross
@@ -50,18 +51,73 @@ jobs:
         with:
           key: ${{ matrix.target }}
 
+      - name: Build llama.cpp static libs (native x86_64)
+        if: matrix.cross == false
+        run: |
+          cmake -B build -S llama-cpp-turboquant \
+            -DLLAMA_BUILD_TOOLS=OFF \
+            -DLLAMA_BUILD_EXAMPLES=OFF \
+            -DLLAMA_BUILD_TESTS=OFF \
+            -DLLAMA_BUILD_SERVER=OFF \
+            -DBUILD_SHARED_LIBS=OFF \
+            -DGGML_CUDA=OFF \
+            -DGGML_METAL=OFF \
+            -DGGML_VULKAN=OFF \
+            -DGGML_NATIVE=OFF \
+            -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --config Release -j$(nproc)
+
+      - name: Build llama.cpp static libs (cross aarch64)
+        if: matrix.cross == true
+        run: |
+          cat > cross-toolchain.cmake <<'EOF'
+          set(CMAKE_SYSTEM_NAME Linux)
+          set(CMAKE_SYSTEM_PROCESSOR arm64)
+          set(CMAKE_C_COMPILER aarch64-linux-gnu-gcc)
+          set(CMAKE_CXX_COMPILER aarch64-linux-gnu-g++)
+          set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
+          set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
+          set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
+          EOF
+          cmake -B build -S llama-cpp-turboquant \
+            -DCMAKE_TOOLCHAIN_FILE=cross-toolchain.cmake \
+            -DLLAMA_BUILD_TOOLS=OFF \
+            -DLLAMA_BUILD_EXAMPLES=OFF \
+            -DLLAMA_BUILD_TESTS=OFF \
+            -DLLAMA_BUILD_SERVER=OFF \
+            -DBUILD_SHARED_LIBS=OFF \
+            -DGGML_CUDA=OFF \
+            -DGGML_METAL=OFF \
+            -DGGML_VULKAN=OFF \
+            -DGGML_NATIVE=OFF \
+            -DGGML_CPU_ARM_ARCH=armv8-a+dotprod \
+            -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --config Release -j$(nproc)
+
+      - name: Package llama static libs
+        run: |
+          mkdir -p llama-libs
+          find build -name "*.a" -exec cp {} llama-libs/ \;
+          echo "==> Packaged static libs:"
+          ls -lh llama-libs/
+
       - name: Build (native x86_64)
         if: matrix.cross == false
+        env:
+          LLAMA_LOCAL_LIBS: llama-libs
         run: cargo build --verbose
 
       - name: Build (cross aarch64)
         if: matrix.cross == true
         env:
+          LLAMA_LOCAL_LIBS: llama-libs
           CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
         run: cargo build --verbose --target aarch64-unknown-linux-gnu
 
       - name: Test (native only)
         if: matrix.cross == false
+        env:
+          LLAMA_LOCAL_LIBS: llama-libs
         run: cargo test --verbose -- --test-threads=1
 
       - name: Check formatting
@@ -70,4 +126,6 @@ jobs:
 
       - name: Clippy (native)
         if: matrix.cross == false
+        env:
+          LLAMA_LOCAL_LIBS: llama-libs
         run: cargo clippy --lib

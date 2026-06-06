@@ -1,17 +1,18 @@
 # aten-ia
 
-Interactive AI agent CLI con inferencia LLM local via [llama.cpp](https://github.com/ggml-org/llama.cpp) (fork TurboQuant), persistencia `.mv2` con [memvid-core](https://crates.io/crates/memvid-core), RAG por keywords, API OpenAI-compatible e ingesta multi-formato.
+Agente de IA interactivo CLI con inferencia LLM local via [llama.cpp](https://github.com/ggml-org/llama.cpp) (fork TurboQuant), persistencia `.mv2` ([memvid-core](https://crates.io/crates/memvid-core)), RAG por keywords, API OpenAI-compatible e ingesta multi-formato.
 
-## Quick start
+## Inicio rapido
 
 ### Requisitos
 
-- **Rust** >= 1.85.0 (edition 2024, usar `rust-toolchain.toml`)
-- **System deps**: `cmake libssl-dev clang libgomp-dev` (build) | `fakeroot` (packaging)
+- **Rust** >= 1.85.0 (edition 2024, via `rust-toolchain.toml`)
+- **System deps (build)**: `cmake libssl-dev clang libgomp-dev`
+- **System deps (packaging)**: + `fakeroot`
 
-### Build & run
+### Build y ejecucion
 
-La primera compilacion tarda ~30 min (compila llama.cpp desde fuente). Las siguientes son <1s si hay cache.
+La primera compilacion tarda ~30 min (compila llama.cpp desde fuente). Posteriores <1s con cache.
 
 ```bash
 cd memvid-agent-core
@@ -19,16 +20,33 @@ cargo build
 cargo run
 ```
 
-En el primer lanzamiento aparece un wizard interactivo para elegir modelo, directorio de datos y configuracion API. Si no existe un modelo GGUF, se descarga automaticamente `Qwen2.5-0.5B-Instruct` (~350 MB) con barra de progreso.
+El primer lanzamiento muestra un wizard interactivo para elegir modelo, directorio de datos y config API. Si no existe un modelo GGUF, se descarga automaticamente `Qwen2.5-0.5B-Instruct` (~350 MB) con barra de progreso.
 
-Para compilar en CI sin modelo (solo tests, sin GGUF):
+### Tests
+
 ```bash
-cargo test --lib -- --test-threads=1
+cd memvid-agent-core
+cargo test -- --test-threads=1    # todos los tests
+cargo test --lib -- --test-threads=1  # solo unit (mas rapido)
+cargo fmt --all -- --check
+cargo clippy --lib
 ```
 
-### Build portable (compatible con Ubuntu 20.04+ / Debian 12+)
+Los tests de integracion usan `tempfile::tempdir()` + `LlamaContext::null()` — no necesitan archivo GGUF.
 
-Para construir un binario portable compatible con glibc 2.31+ (Ubuntu 20.04, Debian 12):
+Ver [`PLAN_TESTS.md`](PLAN_TESTS.md) para el plan detallado de tests y fallos potenciales identificados.
+
+## Build portable
+
+Construye un binario portable en un contenedor Ubuntu 20.04 (glibc 2.31), compatible con las siguientes distribuciones:
+
+| Distribucion | Version | glibc | Compatibilidad |
+|---|---|---|---|
+| Ubuntu | 20.04 LTS | 2.31 | Compatible |
+| Ubuntu | 22.04 LTS | 2.35 | Compatible |
+| Ubuntu | 24.04 LTS | 2.39 | Compatible |
+| Debian | 12 (bookworm) | 2.36 | Compatible |
+| Debian | 13 (trixie) | 2.38 | Compatible |
 
 ```bash
 ./scripts/build-portable.sh
@@ -36,10 +54,20 @@ Para construir un binario portable compatible con glibc 2.31+ (Ubuntu 20.04, Deb
 ```
 
 Requiere Docker. El binario resultante:
-- Compatible con Ubuntu 20.04+ (glibc 2.31+)
-- Compatible con Debian 12+ (glibc 2.36+)
+
+- glibc maximo requerido: GLIBC_2.31
 - `libstdc++` y `libgomp` estaticamente linkeados
-- Solo depende de `libc.so.6`, `libm.so.6`, `libgcc_s.so.1`, `libpthread.so.0`, `libdl.so.2`
+- Solo depende de: `libc.so.6`, `libm.so.6`, `libgcc_s.so.1`, `libpthread.so.0`, `libdl.so.2`
+
+Archivos relevantes:
+
+| Archivo | Descripcion |
+|---|---|
+| `docker/Dockerfile.build` | Contenedor Ubuntu 20.04 para build portable |
+| `scripts/build-portable.sh` | Script de build automatizado con Docker |
+| `scripts/validate-compat.sh` | Validacion de compatibilidad glibc |
+| `memvid-agent-core/.cargo/config.toml` | Flags de static linking |
+| `.github/workflows/release.yml` | CI/CD con contenedor Ubuntu 20.04 |
 
 ### Release
 
@@ -49,7 +77,7 @@ git tag v0.1.0 && git push --tags
 
 Esto dispara GitHub Actions: compila binarios + `.deb` para x86_64 y ARM64, usando contenedor Ubuntu 20.04 para compatibilidad con glibc antiguo.
 
-### Variables de entorno
+## Variables de entorno
 
 | Variable | Default | Descripcion |
 |---|---|---|
@@ -64,6 +92,13 @@ Esto dispara GitHub Actions: compila binarios + `.deb` para x86_64 y ARM64, usan
 | `TARGET` | Auto | Target triple para cross-compilation |
 
 Opcionalmente se carga `.env` via `dotenvy` antes de la configuracion.
+
+**Prebuilt libs fallback chain** (en `build.rs`):
+1. `LLAMA_LOCAL_LIBS=/path` — copia `.a` desde un directorio local
+2. Descarga `llama-libs-{target}.tar.gz` desde GitHub Releases
+3. CMake build (nivel de paralelismo via `CMAKE_BUILD_PARALLEL_LEVEL`, default 2)
+
+Override del repo de descarga: `LLAMA_LIBS_REPO=user/repo`.
 
 ## Comandos del REPL
 
@@ -98,7 +133,7 @@ Opcionalmente se carga `.env` via `dotenvy` antes de la configuracion.
 | `/help` | Ayuda completa |
 | `/exit` | Salir (Ctrl+C tambien funciona con shutdown graceful) |
 
-## Shutdown Graceful
+## Shutdown graceful
 
 aten-ia maneja senales SIGINT (Ctrl+C) y SIGTERM:
 
@@ -110,7 +145,7 @@ aten-ia maneja senales SIGINT (Ctrl+C) y SIGTERM:
 
 ## Modelo por defecto
 
-El modelo por defecto es `Qwen2.5-0.5B-Instruct` (`n_ctx: 8192`, `chat_template: chatml`). El catalog incluye 20 modelos GGUF Q4_K_M — se seleccionan con `/model <id>`.
+`Qwen2.5-0.5B-Instruct` (`n_ctx: 8192`, `chat_template: chatml`). El catalog incluye 20 modelos GGUF Q4_K_M — se seleccionan con `/model <id>`.
 
 ## Arquitectura
 
@@ -121,40 +156,40 @@ El modelo por defecto es `Qwen2.5-0.5B-Instruct` (`n_ctx: 8192`, `chat_template:
 - **Chunker UTF-8 safe** — `floor_char_boundary()` en overlaps, no puede entrar en panico con caracteres multibyte
 - **Session flush cada 5 interacciones** — `Session::flush()` -> `MemvidWriter`
 - **FileLock** — `data_dir/.lock` con `aten-ia <PID>`, rechaza instancias concurrentes, detecta locks stale de procesos muertos
-- **Shutdown graceful** — SIGINT/SIGTERM detectado via `libc::signal`, API server se detiene limpiamente, sesion se flusha al salir
+- **Shutdown graceful** — SIGINT/SIGTERM via `libc::signal` + `AtomicBool`, API server se detiene limpiamente, sesion se flusha al salir
 - **llama.cpp verbose suprimido** — `llama_log_set(noop_log)` al inicio
 
 ### Estructura de modulos
 
 ```
 src/
-  lib.rs          — 22 modulos publicos
-  main.rs         — REPL interactivo + setup wizard + shutdown handler
-  agent.rs        — Agente principal (chat, ingest, RAG)
-  api.rs           — Servidor HTTP OpenAI-compatible (detenible via AtomicBool)
-  books_catalog.rs — Catalogo de libros gratuitos
-  chunker.rs       — Chunking de texto (Fixed/Paragraph/Heading)
-  config.rs        — Configuracion persistente (config.json)
-  context_policy.rs — Politica de tamanho de contexto
-  extractor.rs     — Extraccion de PDF/EPUB/HTML/MD
-  feeds.rs         — Parseo de feeds RSS/Atom
-  generation.rs    — Generacion de texto via LLM
+  lib.rs              — 22 modulos publicos
+  main.rs             — REPL interactivo + setup wizard + shutdown handler
+  agent.rs            — Agente principal (chat, ingest, RAG)
+  api.rs              — Servidor HTTP OpenAI-compatible (detenible via AtomicBool)
+  books_catalog.rs    — Catalogo de libros gratuitos
+  chunker.rs          — Chunking de texto (Fixed/Paragraph/Heading)
+  config.rs           — Configuracion persistente (config.json)
+  context_policy.rs   — Politica de tamano de contexto
+  extractor.rs        — Extraccion de PDF/EPUB/HTML/MD
+  feeds.rs            — Parseo de feeds RSS/Atom
+  generation.rs       — Generacion de texto via LLM
   languages_catalog.rs — Catalogo de lenguajes
-  llama/            — FFI bindings para llama.cpp (TurboQuant)
-  memvid/           — Persistencia .mv2 (writer/reader/manifest/playlist)
-  models.rs         — Descarga de modelos GGUF
-  models_catalog.rs — Catalogo de 20 modelos
-  prompt.rs         — Templates de chat (ChatML/Llama/Alpaca/Mistral/Raw)
-  queue.rs          — Cola de feeds (JSONL persistente)
-  retrieval.rs      — Indice de conocimiento (keyword RAG)
-  session.rs        — Sesion de chat (flush cada 5 interacciones)
-  shutdown.rs        — Manejo de senales SIGINT/SIGTERM
-  types.rs           — Tipos compartidos (KnowledgeEntry, ConversationBatch, etc.)
+  llama/              — FFI bindings para llama.cpp (TurboQuant)
+  memvid/             — Persistencia .mv2 (writer/reader/manifest/playlist)
+  models.rs           — Descarga de modelos GGUF
+  models_catalog.rs   — Catalogo de 20 modelos
+  prompt.rs           — Templates de chat (ChatML/Llama/Alpaca/Mistral/Raw)
+  queue.rs            — Cola de feeds (JSONL persistente)
+  retrieval.rs        — Indice de conocimiento (keyword RAG)
+  session.rs          — Sesion de chat (flush cada 5 interacciones)
+  shutdown.rs         — Manejo de senales SIGINT/SIGTERM
+  types.rs            — Tipos compartidos (KnowledgeEntry, ConversationBatch, etc.)
   utils.rs           — FileLock, atomic_write, sha256, truncacion UTF-8
-  web_fetcher.rs     — Fetch HTTP con rate limiting y reintentos
+  web_fetcher.rs      — Fetch HTTP con rate limiting y reintentos
 ```
 
-### Estructura de memoria
+### Estructura de datos
 
 ```
 $DATA_DIR/
@@ -169,7 +204,7 @@ $DATA_DIR/
 
 ## Configuracion
 
-El proyecto usa `config.json` en `memvid-agent-core/`:
+`config.json` en `memvid-agent-core/`:
 
 - `data_dir`: directorio de persistencia (default `memvid_data`)
 - `model.path`: ruta al archivo GGUF
@@ -182,36 +217,6 @@ El proyecto usa `config.json` en `memvid-agent-core/`:
 - `ingestion.timeout_seconds`, `chunk_max_size`, `chunk_overlap`, etc.
 
 Validacion en `config.validate()`: `n_ctx > 0`, `max_tokens > 0`, `temp >= 0`, `0 <= top_p <= 1`, `top_k >= 0`, `port > 0`, y KV cache types validos.
-
-## Test
-
-```bash
-cd memvid-agent-core
-cargo test --lib -- --test-threads=1   # unit tests (no GGUF needed)
-cargo test -- --test-threads=1         # all tests (requires linking fix)
-cargo fmt --all -- --check
-cargo clippy --lib                     # lib only, not main.rs
-```
-
-Tests de integracion (`tests/functional.rs`, `tests/writer_integration.rs`, `tests/kv_cache_and_history.rs`) usan `tempfile::tempdir()` + `LlamaContext::null()` — no necesitan archivo GGUF.
-
-Ver `PLAN_TESTS.md` para el plan detallado de tests y fallos potenciales identificados.
-
-## Portabilidad
-
-El binario portable se construye en un contenedor Ubuntu 20.04 (glibc 2.31):
-
-- **glibc maximo requerido**: GLIBC_2.29
-- **Compatible con**: Ubuntu 20.04+, Debian 12+, y cualquier distribucion con glibc >= 2.29
-- **Dependencias dinamicas**: solo `libc.so.6`, `libm.so.6`, `libgcc_s.so.1`, `libpthread.so.0`, `libdl.so.2`
-- **`libstdc++` y `libgomp`**: estaticamente linkeados (no dependen de versiones del sistema)
-
-Archivos relevantes:
-- `docker/Dockerfile.build` — contenedor Ubuntu 20.04 para build portable
-- `scripts/build-portable.sh` — script de build automatizado
-- `scripts/validate-compat.sh` — validacion de compatibilidad glibc
-- `memvid-agent-core/.cargo/config.toml` — configuracion de static linking
-- `.github/workflows/release.yml` — CI/CD con contenedor Ubuntu 20.04
 
 ## Dependencias principales
 

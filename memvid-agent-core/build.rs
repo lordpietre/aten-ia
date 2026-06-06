@@ -15,23 +15,35 @@ fn repo_slug() -> String {
 }
 
 fn local_prebuilt(out_dir: &Path) -> bool {
-    let Some(src) = env::var("LLAMA_LOCAL_LIBS").ok() else {
+    let Ok(src_str) = env::var("LLAMA_LOCAL_LIBS") else {
         return false;
     };
-    let src = PathBuf::from(src);
+    let src = PathBuf::from(&src_str);
     if !src.is_dir() {
+        println!(
+            "cargo:warning=LLAMA_LOCAL_LIBS={} is not a directory, falling back",
+            src_str
+        );
         return false;
     }
-    let find = Command::new("find")
-        .args([&src.to_string_lossy(), "-name", "*.a"])
-        .output()
-        .ok();
-    if let Some(output) = find {
-        for path in String::from_utf8_lossy(&output.stdout).lines() {
-            let path = PathBuf::from(path);
-            if path.exists() {
-                let dst = out_dir.join(path.file_name().unwrap());
-                let _ = std::fs::copy(&path, &dst);
+    if let Ok(entries) = std::fs::read_dir(&src) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().is_some_and(|ext| ext == "a") {
+                let file_name = path.file_name().unwrap();
+                let dst = out_dir.join(file_name);
+                match std::fs::copy(&path, &dst) {
+                    Ok(bytes) => println!(
+                        "cargo:warning=copied {} ({} bytes)",
+                        file_name.to_string_lossy(),
+                        bytes
+                    ),
+                    Err(e) => println!(
+                        "cargo:warning=failed to copy {}: {}",
+                        file_name.to_string_lossy(),
+                        e
+                    ),
+                }
             }
         }
     }
@@ -185,6 +197,56 @@ fn merge_ggml_libs(lib_dir: &Path) {
     assert!(status.success(), "ar -M (MRI merge) failed");
 }
 
+fn find_gcc_static_lib_dir(target: &str) -> Option<String> {
+    let compiler = if target.contains("aarch64") {
+        "aarch64-linux-gnu-gcc"
+    } else {
+        "gcc"
+    };
+    if let Ok(output) = Command::new(compiler).args(["-print-search-dirs"]).output() {
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        for line in stdout.lines() {
+            if let Some(rest) = line.strip_prefix("install: ") {
+                let install_dir = rest.trim().trim_end_matches('/');
+                if Path::new(&install_dir).join("libstdc++.a").exists() {
+                    return Some(install_dir.to_string());
+                }
+            }
+        }
+    }
+    let fallbacks: Vec<String> = if target.contains("aarch64") {
+        [
+            "/usr/lib/gcc-cross/aarch64-linux-gnu",
+            "/usr/lib/gcc/aarch64-linux-gnu/9",
+            "/usr/lib/gcc/aarch64-linux-gnu/10",
+            "/usr/lib/gcc/aarch64-linux-gnu/11",
+            "/usr/lib/gcc/aarch64-linux-gnu/12",
+        ]
+        .iter()
+        .map(|s| s.to_string())
+        .collect()
+    } else {
+        [
+            "/usr/lib/gcc/x86_64-linux-gnu/9",
+            "/usr/lib/gcc/x86_64-linux-gnu/10",
+            "/usr/lib/gcc/x86_64-linux-gnu/11",
+            "/usr/lib/gcc/x86_64-linux-gnu/12",
+            "/usr/lib/gcc/x86_64-linux-gnu/13",
+            "/usr/lib/gcc/x86_64-linux-gnu/14",
+            "/usr/lib/gcc/x86_64-linux-gnu/15",
+        ]
+        .iter()
+        .map(|s| s.to_string())
+        .collect()
+    };
+    for dir in &fallbacks {
+        if Path::new(dir).join("libstdc++.a").exists() {
+            return Some(dir.clone());
+        }
+    }
+    None
+}
+
 fn main() {
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
     let target = env::var("TARGET").unwrap_or_default();
@@ -214,11 +276,14 @@ fn main() {
     let portable = env::var("ATEN_PORTABLE").unwrap_or_default() == "1";
     if portable {
         println!("cargo:warning=portable mode: static linking stdc++ and gomp");
-        let gcc_lib_dir = if target.contains("aarch64") {
-            "/usr/lib/gcc-cross/aarch64-linux-gnu/9"
-        } else {
-            "/usr/lib/gcc/x86_64-linux-gnu/9"
-        };
+        let gcc_lib_dir = find_gcc_static_lib_dir(&target).unwrap_or_else(|| {
+            if target.contains("aarch64") {
+                "/usr/lib/gcc-cross/aarch64-linux-gnu/9".to_string()
+            } else {
+                "/usr/lib/gcc/x86_64-linux-gnu/9".to_string()
+            }
+        });
+        println!("cargo:warning=using gcc lib dir: {}", gcc_lib_dir);
         println!("cargo:rustc-link-search=native={}", gcc_lib_dir);
         println!("cargo:rustc-link-lib=static=stdc++");
         println!("cargo:rustc-link-lib=static=gomp");

@@ -5,10 +5,13 @@ ENV TZ=Etc/UTC
 
 RUN apt-get update && apt-get install -y \
     build-essential \
+    g++-9 \
+    gcc-9 \
     cmake \
     clang \
     libclang-dev \
     libssl-dev \
+    libgomp-dev \
     pkg-config \
     curl \
     git \
@@ -16,11 +19,15 @@ RUN apt-get update && apt-get install -y \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
+# Verify gcc-9 static libs exist (needed for ATEN_PORTABLE)
+RUN ls -la /usr/lib/gcc/x86_64-linux-gnu/9/libstdc++.a /usr/lib/gcc/x86_64-linux-gnu/9/libgomp.a || \
+    (echo "ERROR: gcc-9 static libs not found" && exit 1)
+
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 ENV PATH="/root/.cargo/bin:${PATH}"
 
 RUN rustup default stable && \
-    rustup target add x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu
+    rustup target add x86_64-unknown-linux-gnu
 
 WORKDIR /build
 
@@ -40,8 +47,8 @@ RUN cd memvid-agent-core && \
       -DCMAKE_BUILD_TYPE=Release && \
     cmake --build build-llama --config Release -j$(nproc) && \
     mkdir -p /llama-libs && \
-    find build-llama -name "*.a" -exec cp {} /llama-libs/ \;
+    find build-llama -name "*.a" -exec cp {} /llama-libs/ \; && \
+    echo "==> Static libs:" && \
+    ls -lh /llama-libs/
 
-ENV LIBRARY_PATH="/usr/lib/gcc/x86_64-linux-gnu/9:${LIBRARY_PATH}"
-
-CMD ["bash", "-c", "cd memvid-agent-core && LLAMA_LOCAL_LIBS=/llama-libs ATEN_PORTABLE=1 cargo build --release"]
+CMD ["bash", "-c", "cd memvid-agent-core && LLAMA_LOCAL_LIBS=/llama-libs ATEN_PORTABLE=1 cargo build --release && echo '==> Build complete:' && ls -lh target/release/aten-ia"]

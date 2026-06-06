@@ -7,7 +7,6 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  CARGO_BUILD_JOBS: 2
 
 jobs:
   build:
@@ -21,6 +20,7 @@ jobs:
     permissions:
       contents: write
     strategy:
+      fail-fast: false
       matrix:
         include:
           - target: x86_64-unknown-linux-gnu
@@ -41,18 +41,17 @@ jobs:
         if: matrix.cross == false
         run: |
           apt-get update
-          apt-get install -y build-essential cmake libssl-dev clang libclang-dev libgomp-dev fakeroot curl git pkg-config
+          apt-get install -y build-essential g++-9 gcc-9 cmake libssl-dev clang libclang-dev \
+            libgomp-dev fakeroot curl git pkg-config
 
       - name: Install system dependencies (aarch64 cross)
         if: matrix.cross == true
         run: |
           apt-get update
-          apt-get install -y build-essential cmake libssl-dev clang libclang-dev fakeroot curl git pkg-config \
-            gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
-          sed -i 's/^# deb/deb/' /etc/apt/sources.list /etc/apt/sources.list.d/*.list 2>/dev/null || true
-          dpkg --add-architecture arm64
-          apt-get update
-          apt-get install -y libgomp-dev:arm64
+          apt-get install -y build-essential cmake libssl-dev clang libclang-dev fakeroot \
+            curl git pkg-config gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
+            gcc-9-aarch64-linux-gnu g++-9-aarch64-linux-gnu \
+            libstdc++-9-dev-arm64-cross libgomp-dev:arm64
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -109,23 +108,17 @@ jobs:
 
       - name: Package llama static libs
         run: |
-          mkdir -p libs
-          find build -name "*.a" -exec cp {} libs/ \;
-          tar -czf llama-libs-${{ matrix.target }}.tar.gz -C libs .
-          ls -lh llama-libs-${{ matrix.target }}.tar.gz
+          mkdir -p llama-libs
+          find build -name "*.a" -exec cp {} llama-libs/ \;
+          echo "==> Packaged static libs:"
+          ls -lh llama-libs/
 
-      - name: Build release binary (native x86_64)
-        if: matrix.cross == false
+      - name: Build release binary
         env:
           ATEN_PORTABLE: "1"
-        run: LLAMA_LOCAL_LIBS=libs cargo build --release --target ${{ matrix.target }} --verbose
-
-      - name: Build release binary (cross aarch64)
-        if: matrix.cross == true
-        env:
-          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
-          ATEN_PORTABLE: "1"
-        run: LLAMA_LOCAL_LIBS=libs cargo build --release --target ${{ matrix.target }} --verbose
+          LLAMA_LOCAL_LIBS: llama-libs
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: ${{ matrix.cross == true && 'aarch64-linux-gnu-gcc' || '' }}
+        run: cargo build --release --target ${{ matrix.target }} --verbose
 
       - name: Strip binary
         run: |
@@ -135,17 +128,54 @@ jobs:
             strip target/${{ matrix.target }}/release/aten-ia
           fi
 
-      - name: Validate binary compatibility
+      - name: Validate binary compatibility (x86_64)
         if: matrix.cross == false
         run: |
+          echo "==> Binary size:"
+          ls -lh target/${{ matrix.target }}/release/aten-ia
+          echo ""
           echo "==> Checking glibc version requirement..."
-          MAX_GLIBC=$(objdump -T target/${{ matrix.target }}/release/aten-ia | grep -oP 'GLIBC_\K[0-9.]+' | sort -V | tail -1)
+          MAX_GLIBC=$(objdump -T target/${{ matrix.target }}/release/aten-ia | grep -oP 'GLIBC_\K[0-9.]+' | sort -Vru | head -1)
           echo "Maximum glibc version required: GLIBC_$MAX_GLIBC"
-          if [ "$(printf '%s\n' "2.31" "$MAX_GLIBC" | sort -V | tail -1)" != "2.31" ]; then
-            echo "::error::Binary requires glibc newer than 2.31 (Ubuntu 20.04)"
+          echo ""
+          echo "==> Compatibility check:"
+          PASS=true
+          for VER in "2.31" "2.35" "2.39"; do
+            if printf '%s\n' "$MAX_GLIBC" "$VER" | sort -VC; then
+              echo "  GLIBC_$MAX_GLIBC <= GLIBC_$VER: OK"
+            else
+              echo "  GLIBC_$MAX_GLIBC > GLIBC_$VER: FAIL (requires newer glibc)"
+              PASS=false
+            fi
+          done
+          echo ""
+          echo "  Ubuntu 20.04 (glibc 2.31): $(printf '%s\n' "$MAX_GLIBC" "2.31" | sort -VC && echo 'OK' || echo 'FAIL')"
+          echo "  Ubuntu 22.04 (glibc 2.35): $(printf '%s\n' "$MAX_GLIBC" "2.35" | sort -VC && echo 'OK' || echo 'FAIL')"
+          echo "  Ubuntu 24.04 (glibc 2.39): $(printf '%s\n' "$MAX_GLIBC" "2.39" | sort -VC && echo 'OK' || echo 'FAIL')"
+          echo "  Debian 12   (glibc 2.36): $(printf '%s\n' "$MAX_GLIBC" "2.36" | sort -VC && echo 'OK' || echo 'FAIL')"
+          echo "  Debian 13   (glibc 2.38): $(printf '%s\n' "$MAX_GLIBC" "2.38" | sort -VC && echo 'OK' || echo 'FAIL')"
+          echo ""
+          if [ "$PASS" = false ]; then
+            echo "::error::Binary not compatible with all target distros"
             exit 1
           fi
-          echo "✓ Binary is compatible with Ubuntu 20.04+ (glibc 2.31+)"
+          echo "✓ Binary is compatible with Ubuntu 20.04+, Ubuntu 22.04+, Ubuntu 24.04+, Debian 12+, Debian 13+"
+
+      - name: Validate dynamic dependencies (x86_64)
+        if: matrix.cross == false
+        run: |
+          echo "==> Dynamic library dependencies:"
+          ldd target/${{ matrix.target }}/release/aten-ia || true
+          echo ""
+          echo "==> Verifying libstdc++ and libgomp are NOT dynamic..."
+          if ldd target/${{ matrix.target }}/release/aten-ia 2>&1 | grep -qE 'libstdc\+\+|libgomp'; then
+            echo "WARNING: libstdc++ or libgomp is dynamically linked! Binary may not be portable."
+            echo "Dynamic libstdc++/libgomp found:"
+            ldd target/${{ matrix.target }}/release/aten-ia 2>&1 | grep -E 'libstdc\+\+|libgomp'
+            exit 1
+          else
+            echo "✓ libstdc++ and libgomp are statically linked"
+          fi
 
       - name: Package binary tar.gz
         run: |
@@ -156,7 +186,7 @@ jobs:
       - name: Build .deb package
         run: |
           VERSION=${GITHUB_REF_NAME#v}
-          PKG_ROOT=debian/aten-ia_${VERSION}_${{ matrix.deb_arch }}
+          PKG_ROOT="debian/aten-ia_${VERSION}_${{ matrix.deb_arch }}"
           mkdir -p "$PKG_ROOT/DEBIAN"
           mkdir -p "$PKG_ROOT/usr/bin"
           mkdir -p "$PKG_ROOT/usr/share/doc/aten-ia"
@@ -165,19 +195,17 @@ jobs:
           cp ../README.md "$PKG_ROOT/usr/share/doc/aten-ia/"
           cp ../AGENTS.md "$PKG_ROOT/usr/share/doc/aten-ia/"
 
-          cat > "$PKG_ROOT/DEBIAN/control" <<'DSC'
+          cat > "$PKG_ROOT/DEBIAN/control" <<EOF
           Package: aten-ia
-          Version: VERSION_PLACEHOLDER
-          Architecture: ARCH_PLACEHOLDER
+          Version: ${VERSION}
+          Architecture: ${{ matrix.deb_arch }}
           Maintainer: lordpietre <lordpietre@users.noreply.github.com>
           Description: Local LLM agent with persistent memory and RAG
            Interactive AI agent CLI with local LLM inference via llama.cpp,
            persistent conversations (.mv2), keyword RAG, OpenAI-compatible API,
            and multi-source ingestion (PDF, EPUB, HTML, MD, TXT, URLs).
           Depends: libc6 (>= 2.31)
-          DSC
-          sed -i "s/VERSION_PLACEHOLDER/${VERSION}/" "$PKG_ROOT/DEBIAN/control"
-          sed -i "s/ARCH_PLACEHOLDER/${{ matrix.deb_arch }}/" "$PKG_ROOT/DEBIAN/control"
+          EOF
 
           gzip -9 -n "$PKG_ROOT/usr/share/doc/aten-ia/README.md"
           gzip -9 -n "$PKG_ROOT/usr/share/doc/aten-ia/AGENTS.md"
@@ -190,7 +218,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            memvid-agent-core/llama-libs-${{ matrix.target }}.tar.gz
             memvid-agent-core/aten-ia-${{ matrix.target }}.tar.gz
             memvid-agent-core/aten-ia-${{ matrix.target }}.tar.gz.sha256
             memvid-agent-core/aten-ia_*.deb
