@@ -88,6 +88,7 @@ Esto dispara GitHub Actions: compila binarios + `.deb` para x86_64 y ARM64, usan
 | `MODEL_URL` | URL de HuggingFace | URL de descarga alternativa |
 | `LLAMA_LOCAL_LIBS` | — | Directorio con `.a` precompiladas (salta cmake) |
 | `LLAMA_LIBS_REPO` | `lordpietre/aten-ia` | Repo de GitHub para descargar libs precompiladas |
+| `LLAMA_FINETUNE_BIN` | — | Ruta a un binario `llama-finetune` precompilado (para `/finetune`) |
 | `ATEN_PORTABLE` | — | Si es `1`, linkea `libstdc++` y `libgomp` estaticamente |
 | `CMAKE_BUILD_PARALLEL_LEVEL` | `2` | Nivel de paralelismo para cmake |
 | `TARGET` | Auto | Target triple para cross-compilation |
@@ -110,6 +111,7 @@ Override del repo de descarga: `LLAMA_LIBS_REPO=user/repo`.
 | `/model [id\|current]` | Muestra / descarga / cambia modelo |
 | `/learn <lang>` | Descarga e indexa docs de un lenguaje |
 | `/unlearn <lang>` | Elimina conocimiento de un lenguaje |
+| `/finetune <lang>` | Fine-tune real del modelo activo con los docs de `/learn` (estima RAM/tiempo antes) |
 | `/fetch <url>` | Descarga URL, extrae texto e indexa |
 | `/fetch-md <url>` | Descarga URL y muestra como Markdown |
 | `/ingest <file>` | Indexa archivo local (PDF/EPUB/MD/HTML/txt) |
@@ -233,6 +235,28 @@ Validacion en `config.validate()`: `n_ctx > 0`, `max_tokens > 0`, `temp >= 0`, `
 | `colored` | Salida de terminal colorida |
 | `dotenvy` | Carga de `.env` |
 | `libc` | Signal handling para shutdown graceful |
+
+## Fine-tuning (`/finetune <lang>`)
+
+Tras `/learn <lang>` puedes afinar el modelo activo con esos mismos docs. El flujo:
+
+1. **Corpus**: concatena los chunks indexados cuyo `source` empieza por `"<lang>/"`.
+2. **Estimacion previa**: calcula RAM pico (~16 bytes/parametro, full fine-tune
+   AdamW) y tiempo aproximado segun nº de parametros, epocas y threads. Si no cabe
+   en la RAM disponible (`/proc/meminfo`), avisa antes de continuar.
+3. **Ejecucion**: si hay binario `llama-finetune` (via `LLAMA_FINETUNE_BIN`,
+   `config.finetune.binary_path` o `PATH`) lo lanza y produce un GGUF afinado, y
+   ofrece cambiar a el. Si **no** hay binario, escribe el corpus y un script
+   `finetune_<lang>.sh` listo para ejecutar en una maquina con mas RAM.
+
+> ⚠️ Es **full fine-tune** (todos los pesos, salida GGUF del tamaño del modelo),
+> no LoRA. En CPU es lento y consume mucha RAM: pensado para portar a una maquina
+> capaz. aten-ia no compila `llama-finetune`; constrúyelo desde el fork:
+> `cmake -B build -DLLAMA_BUILD_EXAMPLES=ON && cmake --build build --target llama-finetune -j`.
+
+Config en `config.json` → `finetune`: `binary_path`, `epochs` (def. 3),
+`output_dir` (def. `models/finetuned`). Se dispara tambien automaticamente (oferta
+y/N) al terminar un `/learn`.
 
 ## Limitaciones conocidas
 

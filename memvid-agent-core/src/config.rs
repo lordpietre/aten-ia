@@ -19,6 +19,8 @@ pub struct Config {
     pub languages: LanguagesConfig,
     #[serde(default)]
     pub ingestion: IngestionConfig,
+    #[serde(default)]
+    pub finetune: FinetuneConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -67,6 +69,41 @@ pub struct LanguagesConfig {
     pub installed: Vec<String>,
 }
 
+/// Full fine-tuning settings (see `finetune` module). All fields have serde
+/// defaults so older `config.json` files (without a `finetune` section) load
+/// unchanged.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FinetuneConfig {
+    /// Path to a prebuilt `llama-finetune` binary. When unset, aten-ia falls
+    /// back to `LLAMA_FINETUNE_BIN`, then `PATH`, then emits a run script.
+    #[serde(default)]
+    pub binary_path: Option<String>,
+    /// Optimizer epochs (passed as `-epochs`).
+    #[serde(default = "default_finetune_epochs")]
+    pub epochs: u32,
+    /// Directory where corpus, run script and fine-tuned model are written.
+    #[serde(default = "default_finetune_output_dir")]
+    pub output_dir: String,
+}
+
+fn default_finetune_epochs() -> u32 {
+    3
+}
+
+fn default_finetune_output_dir() -> String {
+    "models/finetuned".to_string()
+}
+
+impl Default for FinetuneConfig {
+    fn default() -> Self {
+        Self {
+            binary_path: None,
+            epochs: default_finetune_epochs(),
+            output_dir: default_finetune_output_dir(),
+        }
+    }
+}
+
 impl LanguagesConfig {
     pub fn mark_installed(&mut self, key: &str) {
         if !self.installed.iter().any(|s| s == key) {
@@ -113,6 +150,7 @@ impl Default for Config {
                 installed: Vec::new(),
             },
             ingestion: IngestionConfig::default(),
+            finetune: FinetuneConfig::default(),
         }
     }
 }
@@ -501,5 +539,21 @@ mod tests {
         std::fs::write(&config_path, "not valid json").unwrap();
         let result = Config::load_or_create_with_path(&config_path);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn config_without_finetune_section_loads_with_defaults() {
+        // A v1 config.json that predates the `finetune` section must still load.
+        let dir = tempfile::tempdir().unwrap();
+        let config_path = dir.path().join("config.json");
+        let cfg = Config::default();
+        let mut json = serde_json::to_value(&cfg).unwrap();
+        json.as_object_mut().unwrap().remove("finetune");
+        std::fs::write(&config_path, serde_json::to_string(&json).unwrap()).unwrap();
+
+        let loaded = Config::load_or_create_with_path(&config_path).unwrap();
+        assert_eq!(loaded.finetune.epochs, 3);
+        assert_eq!(loaded.finetune.output_dir, "models/finetuned");
+        assert!(loaded.finetune.binary_path.is_none());
     }
 }

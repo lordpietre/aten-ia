@@ -4,6 +4,7 @@ use memvid_agent_core::agent::Agent;
 use memvid_agent_core::api::ApiServer;
 use memvid_agent_core::books_catalog::BooksCatalog;
 use memvid_agent_core::config::Config;
+use memvid_agent_core::finetune::{self, FinetuneOutcome, FinetunePlan};
 use memvid_agent_core::languages_catalog::LanguagesCatalog;
 use memvid_agent_core::models;
 use memvid_agent_core::models_catalog::{self, ModelsCatalog};
@@ -429,6 +430,11 @@ fn main() -> Result<()> {
                 lang.name.bold(),
                 entries.len()
             );
+
+            // Auto-offer a fine-tune of the active model on what we just learned.
+            let lang_key = lang.key.clone();
+            let lang_name = lang.name.clone();
+            run_finetune_flow(&lang_key, &lang_name, true, &mut config, &agent)?;
             continue;
         }
 
@@ -452,6 +458,26 @@ fn main() -> Result<()> {
                 lang_key.bold(),
                 removed
             );
+            continue;
+        }
+
+        if let Some(lang_id) = input.strip_prefix("/finetune ") {
+            let lang_id = lang_id.trim().to_string();
+            if lang_id.is_empty() {
+                eprintln!("{} Usage: /finetune <language>", "✗".red());
+                continue;
+            }
+            // Resolve the canonical key + display name (same source as /learn).
+            let lang_catalog = LanguagesCatalog::load_or_fetch(&config.data_dir)?;
+            let (lang_key, lang_name) = match lang_catalog.find(&lang_id) {
+                Some(l) => (l.key.clone(), l.name.clone()),
+                None => {
+                    // Fall back to the raw id so a user can still target an
+                    // already-installed key even if the catalog is offline.
+                    (lang_id.to_lowercase().replace(' ', "-"), lang_id.clone())
+                }
+            };
+            run_finetune_flow(&lang_key, &lang_name, false, &mut config, &agent)?;
             continue;
         }
 
@@ -1192,6 +1218,10 @@ fn print_help() {
         "/unlearn <lang>".bright_blue()
     );
     println!(
+        "  {:<20}  Fine-tune the model on a learned language",
+        "/finetune <lang>".bright_blue()
+    );
+    println!(
         "  {:<20}  Fetch URL and index as knowledge",
         "/fetch <url>".bright_blue()
     );
@@ -1372,6 +1402,199 @@ fn read_line_prompt(prompt: &str) -> String {
     let mut buf = String::new();
     std::io::stdin().read_line(&mut buf).ok();
     buf.trim().to_string()
+}
+
+/// Drive a full fine-tune of the active model on the `/learn` knowledge for one
+/// language. Estimates RAM/time first, refuses (unless confirmed) when it cannot
+/// fit, then either runs `llama-finetune` or writes a portable run script.
+///
+/// `lang_key`/`lang_name` are already resolved (catalog key + display name).
+/// When `auto` is set the flow is being offered automatically after `/learn`, so
+/// it asks once up front and bails quietly on "no".
+fn run_finetune_flow(
+    lang_key: &str,
+    lang_name: &str,
+    auto: bool,
+    config: &mut Config,
+    agent: &Arc<Mutex<Agent>>,
+) -> Result<()> {
+    if auto {
+        let ans = read_line_prompt(&format!(
+            "{} You can fine-tune the current model on the {} docs you just learned. Estimate it now? (y/N): ",
+            "✦".bright_magenta(),
+            lang_name.bold()
+        ));
+        if !ans.eq_ignore_ascii_case("y") {
+            return Ok(());
+        }
+    }
+
+    // 1. Build the corpus from indexed `/learn` knowledge for this language.
+    let (corpus, chunks) = {
+        let a = agent.lock().unwrap();
+        finetune::build_corpus(a.knowledge_entries(), lang_key)
+    };
+    if chunks == 0 || corpus.trim().is_empty() {
+        eprintln!(
+            "{} No indexed knowledge for '{}'. Run /learn {} first.",
+            "✗".red(),
+            lang_key,
+            lang_key
+        );
+        return Ok(());
+    }
+
+    // 2. Estimate parameter count from the model file on disk (Q4_K_M).
+    let model_bytes = std::fs::metadata(&config.model.path)
+        .map(|m| m.len())
+        .unwrap_or(0);
+    let param_count = if model_bytes > 0 {
+        finetune::estimate_params_from_size_mb(model_bytes / 1_048_576)
+    } else {
+        500_000_000
+    };
+
+    let threads = finetune::suggested_threads();
+    let epochs = config.finetune.epochs.max(1);
+    let tokens = finetune::approx_token_count(&corpus);
+    let est = finetune::estimate(tokens, param_count, epochs, threads);
+
+    // 3. Show the estimate.
+    println!();
+    println!("{} Fine-tune estimate", "━━━ Fine-tune ━━━".bold());
+    println!("  {} {}", "Language:".dimmed(), lang_name.bright_cyan());
+    println!("  {} {}", "Base model:".dimmed(), config.model.name);
+    println!(
+        "  {} {} chunks (~{} tokens)",
+        "Corpus:".dimmed(),
+        chunks,
+        tokens
+    );
+    println!(
+        "  {} ~{:.1}B params · {} epochs · {} threads",
+        "Run:".dimmed(),
+        param_count as f64 / 1e9,
+        epochs,
+        threads
+    );
+    println!(
+        "  {} ~{:.1} GB peak RAM (full AdamW fine-tune)",
+        "Memory:".dimmed(),
+        est.ram_gb()
+    );
+    println!("  {} {} (rough)", "Time:".dimmed(), est.human_time());
+
+    // 4. RAM pre-flight.
+    if let Some(avail) = finetune::available_ram_bytes() {
+        let avail_gb = avail as f64 / 1_073_741_824.0;
+        if !est.fits_in_ram(avail) {
+            println!();
+            eprintln!(
+                "{} Not enough RAM: need ~{:.1} GB, only ~{:.1} GB available.",
+                "⚠".yellow(),
+                est.ram_gb(),
+                avail_gb
+            );
+            eprintln!(
+                "  {} This machine will likely OOM. Set finetune.binary_path / LLAMA_FINETUNE_BIN",
+                "→".dimmed()
+            );
+            eprintln!(
+                "  {} on a bigger box, or continue to just write the corpus + run script.",
+                "→".dimmed()
+            );
+        }
+    }
+
+    // 5. Locate the binary and confirm.
+    let binary = finetune::locate_binary(config.finetune.binary_path.as_deref());
+    println!();
+    let prompt = match &binary {
+        Some(bin) => format!(
+            "{} Run {} now? It may take {}. (y/N): ",
+            "•".dimmed(),
+            bin.display(),
+            est.human_time()
+        ),
+        None => format!(
+            "{} No llama-finetune found — write corpus + run script for another machine? (Y/n): ",
+            "•".dimmed()
+        ),
+    };
+    let ans = read_line_prompt(&prompt);
+    let proceed = match binary {
+        Some(_) => ans.eq_ignore_ascii_case("y"),
+        // Deferred path is cheap (just writes files) → default yes.
+        None => !ans.eq_ignore_ascii_case("n"),
+    };
+    if !proceed {
+        println!("  {} Cancelled.", "i".yellow());
+        return Ok(());
+    }
+
+    // 6. Run (or defer).
+    let output_dir = std::path::PathBuf::from(&config.finetune.output_dir);
+    let plan = FinetunePlan {
+        lang_key,
+        lang_name,
+        model_path: &config.model.path,
+        model_name: &config.model.name,
+        param_count,
+        n_ctx: config.model.n_ctx,
+        epochs,
+        n_threads: threads,
+        output_dir: &output_dir,
+        binary,
+    };
+
+    match finetune::prepare_and_run(&corpus, &plan)? {
+        FinetuneOutcome::Trained(path) => {
+            println!(
+                "{} Fine-tune complete: {}",
+                "✓".green(),
+                path.display().to_string().bright_cyan()
+            );
+            let switch = read_line_prompt(&format!(
+                "{} Switch to the fine-tuned model now? (y/N): ",
+                "•".dimmed()
+            ));
+            if switch.eq_ignore_ascii_case("y") {
+                config.model.path = path.to_string_lossy().to_string();
+                config.model.name = path
+                    .file_stem()
+                    .map(|s| s.to_string_lossy().to_string())
+                    .unwrap_or_else(|| config.model.name.clone());
+                config.model.download_url = None;
+                config.model.sha256 = None;
+                config.save()?;
+                let mut a = agent.lock().unwrap();
+                a.switch_model(
+                    &config.model.path,
+                    config.model.n_ctx,
+                    config.model.n_gpu_layers,
+                    &config.model.kv_type_k,
+                    &config.model.kv_type_v,
+                    &config.model.name,
+                    &config.model.chat_template,
+                    config.generation.top_k,
+                    config.generation.top_p,
+                    config.generation.temp,
+                )?;
+                println!("{} Now using {}", "✓".green(), config.model.name.bold());
+            }
+        }
+        FinetuneOutcome::Deferred { corpus, script } => {
+            println!("{} No training run on this machine. Wrote:", "i".yellow());
+            println!("  {} {}", "corpus:".dimmed(), corpus.display());
+            println!("  {} {}", "script:".dimmed(), script.display());
+            println!(
+                "  {} Build llama-finetune and run the script on a machine with ~{:.0} GB RAM.",
+                "→".dimmed(),
+                est.ram_gb()
+            );
+        }
+    }
+    Ok(())
 }
 
 fn run_setup_wizard(config: &mut Config, catalog: &ModelsCatalog) -> Result<()> {

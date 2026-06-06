@@ -398,6 +398,11 @@ impl Agent {
         self.knowledge_index.len()
     }
 
+    /// All indexed knowledge entries (used to build a fine-tuning corpus).
+    pub fn knowledge_entries(&self) -> &[KnowledgeEntry] {
+        self.knowledge_index.entries()
+    }
+
     pub fn unlearn_language(&mut self, lang_key: &str) -> Result<usize> {
         let prefix = format!("{}/", lang_key);
         self.knowledge_index.remove_by_source_prefix(&prefix)

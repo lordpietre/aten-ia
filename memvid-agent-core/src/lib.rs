@@ -6,6 +6,7 @@ pub mod config;
 pub mod context_policy;
 pub mod extractor;
 pub mod feeds;
+pub mod finetune;
 pub mod generation;
 pub mod languages_catalog;
 pub mod llama;

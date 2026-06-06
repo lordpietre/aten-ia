@@ -35,6 +35,7 @@ Override download repo: `LLAMA_LIBS_REPO=user/repo`.
 - **Crate names**: binary = `aten-ia`, lib = `memvid_agent_core` (for `use` statements)
 - **Module decls** in `lib.rs` — 21 modules covering all subsystems
 - **Model catalog**: `src/models_catalog.json` — 20 models, loaded at runtime
+- **Fine-tuning**: `src/finetune.rs` — `/finetune <lang>` builds a corpus from `/learn` knowledge, estimates RAM (~16 B/param AdamW full fine-tune) + time, then runs `llama-finetune` (`LLAMA_FINETUNE_BIN`/`config.finetune.binary_path`/`PATH`) or writes a portable run script. aten-ia never builds the finetune binary itself.
 - **Config**: `config.json` — version 1, fields with serde defaults; first-run wizard creates if absent
 - **Persistence dir**: `memvid_data/` — `.mv2` segments + `knowledge_index.jsonl` + `manifest.json` + `.lock`
 - **FFI**: `wrapper.h` → `llama-cpp-turboquant/include/llama.h` → bindgen → patched `unsafe extern "C"`
