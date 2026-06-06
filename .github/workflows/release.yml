@@ -219,11 +219,7 @@ jobs:
 
       - name: Build .deb package
         run: |
-          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
-            VERSION="${GITHUB_REF_NAME#v}"
-          else
-            VERSION="0.0.0-$(git rev-parse --short HEAD)"
-          fi
+          VERSION=$(grep '^version = ' Cargo.toml | sed 's/version = "\(.*\)"/\1/' || echo "0.0.0")
           PKG_ROOT="debian/aten-ia_${VERSION}_${{ matrix.deb_arch }}"
           mkdir -p "$PKG_ROOT/DEBIAN"
           mkdir -p "$PKG_ROOT/usr/bin"
