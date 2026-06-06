@@ -29,16 +29,23 @@ jobs:
 
       - name: Install system dependencies (x86_64)
         if: matrix.cross == false
-        run: sudo apt-get update && sudo apt-get install -y cmake libssl-dev clang libclang-dev libgomp-dev
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y --no-install-recommends \
+            cmake libssl-dev clang libclang-dev libgomp-dev
 
       - name: Install system dependencies (aarch64 cross)
         if: matrix.cross == true
         run: |
-          sudo apt-get update
-          sudo apt-get install -y cmake libssl-dev clang libclang-dev gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+          sudo apt-get update -y
+          sudo apt-get install -y --no-install-recommends \
+            cmake libssl-dev clang libclang-dev \
+            gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
+            crossbuild-essential-arm64
           sudo dpkg --add-architecture arm64
-          sudo apt-get update
-          sudo apt-get install -y libgomp-dev:arm64 libstdc++-dev-arm64-cross
+          sudo apt-get update -y
+          sudo apt-get install -y --no-install-recommends \
+            libgomp-dev:arm64 libstdc++-dev-arm64-cross
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable

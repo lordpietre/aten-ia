@@ -3,7 +3,7 @@ FROM ubuntu:20.04
 ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=Etc/UTC
 
-RUN apt-get update && apt-get install -y \
+RUN apt-get update -y && apt-get install -y --no-install-recommends \
     build-essential \
     g++-9 \
     gcc-9 \
@@ -20,8 +20,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Verify gcc-9 static libs exist (needed for ATEN_PORTABLE)
-RUN ls -la /usr/lib/gcc/x86_64-linux-gnu/9/libstdc++.a /usr/lib/gcc/x86_64-linux-gnu/9/libgomp.a || \
-    (echo "ERROR: gcc-9 static libs not found" && exit 1)
+RUN ls -la /usr/lib/gcc/x86_64-linux-gnu/9/libstdc++.a /usr/lib/gcc/x86_64-linux-gnu/9/libgomp.a
 
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 ENV PATH="/root/.cargo/bin:${PATH}"
