@@ -1726,7 +1726,7 @@ fn writer_config_defaults_correct() {
     let cfg = WriterConfig::default();
     assert_eq!(cfg.batch_size, 10);
     assert_eq!(cfg.segment_max_bytes, 50 * 1024 * 1024);
-    assert_eq!(cfg.data_dir, std::path::PathBuf::from("memvid_data"));
+    assert!(cfg.data_dir.to_string_lossy().ends_with("memvid_data"));
 }
 
 // ---------------------------------------------------------------------------

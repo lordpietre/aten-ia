@@ -4,8 +4,32 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
-const CONFIG_FILENAME: &str = "config.json";
 const CONFIG_VERSION: u32 = 1;
+
+/// Returns the base directory for aten-ia configuration and data.
+/// Override with `ATEN_IA_HOME` env var; defaults to `$HOME/.aten-ia`.
+pub fn home_config_dir() -> PathBuf {
+    if let Ok(home) = std::env::var("ATEN_IA_HOME") {
+        return PathBuf::from(home);
+    }
+    let home = std::env::var("HOME").expect("HOME not set");
+    PathBuf::from(home).join(".aten-ia")
+}
+
+/// Full path to `config.json` under `home_config_dir()`.
+pub fn default_config_path() -> PathBuf {
+    home_config_dir().join("config.json")
+}
+
+/// Default data directory (`memvid_data` under `home_config_dir()`).
+pub fn default_data_dir() -> PathBuf {
+    home_config_dir().join("memvid_data")
+}
+
+/// Default models directory under `home_config_dir()`.
+pub fn default_models_dir() -> PathBuf {
+    home_config_dir().join("models")
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
@@ -91,7 +115,7 @@ fn default_finetune_epochs() -> u32 {
 }
 
 fn default_finetune_output_dir() -> String {
-    "models/finetuned".to_string()
+    home_config_dir().join("models/finetuned").to_string_lossy().to_string()
 }
 
 impl Default for FinetuneConfig {
@@ -120,11 +144,11 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             version: CONFIG_VERSION,
-            data_dir: PathBuf::from("memvid_data"),
+            data_dir: default_data_dir(),
             developer_mode: true,
             developer_prompt: None,
             model: ModelConfig {
-                path: "models/qwen2.5-0.5b.gguf".to_string(),
+                path: default_models_dir().join("qwen2.5-0.5b.gguf").to_string_lossy().to_string(),
                 name: "Qwen2.5-0.5B-Instruct".to_string(),
                 n_ctx: 8192,
                 n_gpu_layers: 0,
@@ -157,17 +181,25 @@ impl Default for Config {
 
 impl Config {
     pub fn save(&self) -> Result<()> {
-        self.save_to_path(CONFIG_FILENAME)
+        let path = default_config_path();
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        self.save_to_path(path)
     }
 
     pub fn save_to_path<P: AsRef<Path>>(&self, path: P) -> Result<()> {
+        let path = path.as_ref();
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
         let content = serde_json::to_string_pretty(self)?;
         utils::atomic_write(path, content)?;
         Ok(())
     }
 
     pub fn load_or_create() -> Result<Self> {
-        Self::load_or_create_with_path(CONFIG_FILENAME)
+        Self::load_or_create_with_path(default_config_path())
     }
 
     pub fn load_or_create_with_path<P: AsRef<Path>>(config_path: P) -> Result<Self> {
@@ -221,6 +253,14 @@ impl Config {
     }
 
     fn apply_env_overrides(&mut self) {
+        if let Ok(val) = std::env::var("ATEN_IA_HOME") {
+            let base = PathBuf::from(val);
+            self.data_dir = base.join("memvid_data");
+            if let Some(fname) = Path::new(&self.model.path).file_name() {
+                self.model.path = base.join("models").join(fname).to_string_lossy().to_string();
+            }
+            self.finetune.output_dir = base.join("models/finetuned").to_string_lossy().to_string();
+        }
         if let Ok(val) = std::env::var("MODEL_PATH") {
             self.model.path = val;
         }
@@ -256,7 +296,7 @@ mod tests {
     fn config_defaults() {
         let cfg = Config::default();
         assert_eq!(cfg.version, 1);
-        assert_eq!(cfg.model.path, "models/qwen2.5-0.5b.gguf");
+        assert!(cfg.model.path.ends_with("models/qwen2.5-0.5b.gguf"));
         assert_eq!(cfg.model.n_ctx, 8192);
         assert_eq!(cfg.model.n_gpu_layers, 0);
         assert_eq!(cfg.model.chat_template, "chatml");
@@ -422,7 +462,7 @@ mod tests {
     fn env_var_unset_does_not_override() {
         let mut cfg = Config::default();
         cfg.apply_env_overrides();
-        assert_eq!(cfg.model.path, "models/qwen2.5-0.5b.gguf");
+        assert!(cfg.model.path.ends_with("models/qwen2.5-0.5b.gguf"));
         assert_eq!(cfg.model.name, "Qwen2.5-0.5B-Instruct");
     }
 
@@ -553,7 +593,7 @@ mod tests {
 
         let loaded = Config::load_or_create_with_path(&config_path).unwrap();
         assert_eq!(loaded.finetune.epochs, 3);
-        assert_eq!(loaded.finetune.output_dir, "models/finetuned");
+        assert!(loaded.finetune.output_dir.ends_with("models/finetuned"));
         assert!(loaded.finetune.binary_path.is_none());
     }
 }

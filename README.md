@@ -207,9 +207,9 @@ $DATA_DIR/
 
 ## Configuracion
 
-`config.json` en `memvid-agent-core/`:
+`config.json` en `~/.aten-ia/` (o `$ATEN_IA_HOME/config.json`):
 
-- `data_dir`: directorio de persistencia (default `memvid_data`)
+- `data_dir`: directorio de persistencia (default `~/.aten-ia/memvid_data`)
 - `model.path`: ruta al archivo GGUF
 - `model.name`: nombre del modelo activo
 - `model.n_ctx`: tamano de contexto

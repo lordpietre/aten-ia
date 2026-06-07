@@ -204,7 +204,7 @@ pub fn apply_model_to_config(
         model_path,
         entry,
         config,
-        std::path::Path::new("config.json"),
+        &crate::config::default_config_path(),
     )
 }
 

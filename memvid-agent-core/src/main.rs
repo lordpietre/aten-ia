@@ -3,6 +3,7 @@ use colored::*;
 use memvid_agent_core::agent::Agent;
 use memvid_agent_core::api::ApiServer;
 use memvid_agent_core::books_catalog::BooksCatalog;
+use memvid_agent_core::config;
 use memvid_agent_core::config::Config;
 use memvid_agent_core::finetune::{self, FinetuneOutcome, FinetunePlan};
 use memvid_agent_core::languages_catalog::LanguagesCatalog;
@@ -25,11 +26,11 @@ fn main() -> Result<()> {
         }
     }
 
-    dotenvy::dotenv().ok();
+    dotenvy::from_path(config::home_config_dir().join(".env")).ok();
     tracing_subscriber::fmt::init();
     shutdown::install_handlers();
 
-    let config_path = std::path::Path::new("config.json");
+    let config_path = config::default_config_path();
     let is_first_run = !config_path.exists();
 
     let mut config = Config::load_or_create()?;
@@ -245,8 +246,8 @@ fn main() -> Result<()> {
                 }
             };
 
-            let models_dir = std::path::Path::new("models");
-            match models_catalog::download_model(entry, models_dir) {
+            let models_dir = config::default_models_dir();
+            match models_catalog::download_model(entry, &models_dir) {
                 Ok(model_path) => {
                     models_catalog::apply_model_to_config(&model_path, entry, &mut config)?;
                     let spinner = indicatif::ProgressBar::new_spinner();
@@ -1646,8 +1647,8 @@ fn run_setup_wizard(config: &mut Config, catalog: &ModelsCatalog) -> Result<()> 
     };
     if model_idx > 0 && model_idx <= catalog.list().len() {
         let entry = &catalog.list()[model_idx - 1];
-        let models_dir = std::path::Path::new("models");
-        if models_catalog::download_model(entry, models_dir).is_ok() {
+        let models_dir = config::default_models_dir();
+        if models_catalog::download_model(entry, &models_dir).is_ok() {
             let model_path = models_dir.join(&entry.id).with_extension("gguf");
             models_catalog::apply_model_to_config(&model_path, entry, config)?;
             println!("  {} Selected model: {}", "✓".green(), entry.name.bold());

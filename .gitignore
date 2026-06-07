@@ -1,4 +1,5 @@
 target/
+# Now under ~/.aten-ia/ (or $ATEN_IA_HOME), kept for backwards compat
 memvid_data/
 *.tmp
 *.swp

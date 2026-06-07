@@ -70,7 +70,7 @@ impl Default for WriterConfig {
         Self {
             batch_size: 10,
             segment_max_bytes: 50 * 1024 * 1024,
-            data_dir: std::path::PathBuf::from("memvid_data"),
+            data_dir: crate::config::default_data_dir(),
         }
     }
 }
@@ -326,7 +326,7 @@ mod tests {
         let config = WriterConfig::default();
         assert_eq!(config.batch_size, 10);
         assert_eq!(config.segment_max_bytes, 50 * 1024 * 1024);
-        assert_eq!(config.data_dir, std::path::PathBuf::from("memvid_data"));
+        assert!(config.data_dir.to_string_lossy().ends_with("memvid_data"));
     }
 
     #[test]
