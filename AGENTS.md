@@ -36,8 +36,8 @@ Override download repo: `LLAMA_LIBS_REPO=user/repo`.
 - **Module decls** in `lib.rs` — 21 modules covering all subsystems
 - **Model catalog**: `src/models_catalog.json` — 20 models, loaded at runtime
 - **Fine-tuning**: `src/finetune.rs` — `/finetune <lang>` builds a corpus from `/learn` knowledge, estimates RAM (~16 B/param AdamW full fine-tune) + time, then runs `llama-finetune` (`LLAMA_FINETUNE_BIN`/`config.finetune.binary_path`/`PATH`) or writes a portable run script. aten-ia never builds the finetune binary itself.
-- **Config**: `config.json` — version 1, fields with serde defaults; first-run wizard creates if absent
-- **Persistence dir**: `memvid_data/` — `.mv2` segments + `knowledge_index.jsonl` + `manifest.json` + `.lock`
+- **Config**: `~/.aten-ia/config.json` (override: `ATEN_IA_HOME`) — version 1, fields with serde defaults; first-run wizard creates if absent
+- **Persistence dir**: `~/.aten-ia/memvid_data/` — `.mv2` segments + `knowledge_index.jsonl` + `manifest.json` + `.lock`
 - **FFI**: `wrapper.h` → `llama-cpp-turboquant/include/llama.h` → bindgen → patched `unsafe extern "C"`
 
 ## Gotchas
@@ -60,7 +60,7 @@ Override download repo: `LLAMA_LIBS_REPO=user/repo`.
 - **All persistence atomic**: write → fsync → rename → fsync(parent)
 - **Chunker UTF-8 safe** — `floor_char_boundary()` on overlap to avoid panics on multi-byte chars
 - **`ingest <file>` auto-detects format** via `Format::from_extension()` (pdf/epub/md/html → text fallback)
-- **Env overrides**: `MODEL_PATH`, `MODEL_NAME`, `MODEL_CTX`, `MODEL_URL` (applied on config load)
+- **Env overrides**: `ATEN_IA_HOME` (base dir, default `~/.aten-ia`), `MODEL_PATH`, `MODEL_NAME`, `MODEL_CTX`, `MODEL_URL` (applied on config load)
 - **Default model**: `Qwen2.5-0.5B-Instruct` (`n_ctx: 8192`, `chat_template: chatml`, auto-downloads from HuggingFace)
 - **llama.cpp verbose suppressed** at startup via `llama_log_set(noop_log)` in `context.rs`
 
