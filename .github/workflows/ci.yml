@@ -92,8 +92,9 @@ jobs:
           EOF
           cmake -B build -S llama-cpp-turboquant \
             -DCMAKE_TOOLCHAIN_FILE="$PWD/llama-cpp-turboquant/cross-toolchain.cmake" \
-            -DCMAKE_C_FLAGS="-march=armv8-a+dotprod" \
-            -DCMAKE_CXX_FLAGS="-march=armv8-a+dotprod" \
+            -DCMAKE_C_FLAGS="-march=armv8.2-a" \
+            -DCMAKE_CXX_FLAGS="-march=armv8.2-a" \
+            -DCMAKE_ASM_FLAGS="-march=armv8.2-a" \
             -DLLAMA_BUILD_TOOLS=OFF \
             -DLLAMA_BUILD_EXAMPLES=OFF \
             -DLLAMA_BUILD_TESTS=OFF \
@@ -103,7 +104,7 @@ jobs:
             -DGGML_METAL=OFF \
             -DGGML_VULKAN=OFF \
             -DGGML_NATIVE=OFF \
-            -DGGML_CPU_ARM_ARCH=armv8-a+dotprod \
+            -DGGML_CPU_ARM_ARCH=armv8.2-a \
             -DCMAKE_BUILD_TYPE=Release
           cmake --build build --config Release -j$(nproc)
 
