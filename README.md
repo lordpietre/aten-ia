@@ -195,7 +195,7 @@ src/
 ### Estructura de datos
 
 ```
-$DATA_DIR/
+~/.aten-ia/
   core.mv2
   manifest.json
   feed_queue.jsonl
@@ -205,11 +205,13 @@ $DATA_DIR/
   archive/
 ```
 
+Por defecto los datos se guardan en `~/.aten-ia`. Puedes cambiarlo con `/config` o la variable `DATA_DIR`.
+
 ## Configuracion
 
 `config.json` en `memvid-agent-core/`:
 
-- `data_dir`: directorio de persistencia (default `memvid_data`)
+- `data_dir`: directorio de persistencia (default `~/.aten-ia`, cuando `$HOME` no esta disponible usa `memvid_data`)
 - `model.path`: ruta al archivo GGUF
 - `model.name`: nombre del modelo activo
 - `model.n_ctx`: tamano de contexto
