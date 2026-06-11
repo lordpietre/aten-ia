@@ -172,6 +172,8 @@ impl LlamaContext {
 
             let mut ctx_params = llama_context_default_params();
             ctx_params.n_ctx = n_ctx;
+            ctx_params.n_batch = n_ctx;
+            ctx_params.n_ubatch = n_ctx;
 
             let kv_k = kv_cache_ggml_type(kv_type_k);
             let kv_v = kv_cache_ggml_type(kv_type_v);

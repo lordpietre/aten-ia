@@ -116,11 +116,18 @@ impl LanguagesConfig {
     }
 }
 
+fn default_data_dir() -> PathBuf {
+    std::env::var_os("HOME")
+        .map(PathBuf::from)
+        .map(|h| h.join(".aten-ia"))
+        .unwrap_or_else(|| PathBuf::from("memvid_data"))
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self {
             version: CONFIG_VERSION,
-            data_dir: PathBuf::from("memvid_data"),
+            data_dir: default_data_dir(),
             developer_mode: true,
             developer_prompt: None,
             model: ModelConfig {
