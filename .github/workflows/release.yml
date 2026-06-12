@@ -124,9 +124,9 @@ jobs:
           set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
           set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
           set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
-          set(CMAKE_C_FLAGS_INIT "-march=armv8.2-a")
-          set(CMAKE_CXX_FLAGS_INIT "-march=armv8.2-a")
-          set(CMAKE_ASM_FLAGS_INIT "-march=armv8.2-a")
+          set(CMAKE_C_FLAGS_INIT "-march=armv8.2-a+dotprod")
+          set(CMAKE_CXX_FLAGS_INIT "-march=armv8.2-a+dotprod")
+          set(CMAKE_ASM_FLAGS_INIT "-march=armv8.2-a+dotprod")
           EOF
           cmake -B build -S llama-cpp-turboquant \
             -DCMAKE_TOOLCHAIN_FILE="$PWD/llama-cpp-turboquant/cross-toolchain.cmake" \
@@ -139,7 +139,7 @@ jobs:
             -DGGML_METAL=OFF \
             -DGGML_VULKAN=OFF \
             -DGGML_NATIVE=OFF \
-            -DGGML_CPU_ARM_ARCH=armv8.2-a \
+            -DGGML_CPU_ARM_ARCH=armv8.2-a+dotprod \
             -DCMAKE_BUILD_TYPE=Release
           cmake --build build --config Release -j$(nproc)
 
@@ -243,7 +243,7 @@ jobs:
            Interactive AI agent CLI with local LLM inference via llama.cpp,
            persistent conversations (.mv2), keyword RAG, OpenAI-compatible API,
            and multi-source ingestion (PDF, EPUB, HTML, MD, TXT, URLs).
-          Depends: libc6 (>= 2.31)
+          Depends: libc6 (>= 2.31), pkg-config, libssl-dev
           EOF
 
           gzip -9 -n "$PKG_ROOT/usr/share/doc/aten-ia/README.md"

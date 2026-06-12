@@ -571,7 +571,7 @@ fn context_policy_budget_calculation() {
 fn context_policy_trim_messages_empty() {
     use memvid_agent_core::context_policy::ContextPolicy;
     let policy = ContextPolicy::new(4096, 2048);
-    let result = policy.trim_messages("sys", &[], "input", |s| s.len() / 4);
+    let result = policy.trim_messages("sys", &[], &[], "input", |s| s.len() / 4);
     assert_eq!(result.len(), 0);
 }
 
@@ -596,7 +596,7 @@ fn context_policy_trim_messages_only_system() {
             tokens: None,
         },
     ];
-    let result = policy.trim_messages("dev", &msgs, "input", |s| s.len() / 4);
+    let result = policy.trim_messages("dev", &[], &msgs, "input", |s| s.len() / 4);
     assert_eq!(result.len(), 2);
     assert_eq!(result[0].content, "sys1");
     assert_eq!(result[1].content, "sys2");
@@ -635,7 +635,7 @@ fn context_policy_trim_messages_preserves_system_order() {
             tokens: None,
         },
     ];
-    let result = policy.trim_messages("dev", &msgs, "input", |s| s.len() / 4);
+    let result = policy.trim_messages("dev", &[], &msgs, "input", |s| s.len() / 4);
     assert_eq!(result[0].role, MessageRole::System);
     assert_eq!(result[0].content, "first");
     assert_eq!(result[1].role, MessageRole::System);
@@ -647,7 +647,7 @@ fn context_policy_zero_budget_returns_empty() {
     use memvid_agent_core::context_policy::ContextPolicy;
     let policy = ContextPolicy::new(64, 64);
     let msgs = vec![msg("user", "hi")];
-    let result = policy.trim_messages("sys", &msgs, "input", |s| s.len() / 4);
+    let result = policy.trim_messages("sys", &[], &msgs, "input", |s| s.len() / 4);
     assert_eq!(result.len(), 0);
 }
 
@@ -1524,8 +1524,9 @@ fn generation_prompt_assembles_correct_template() {
     let policy = ContextPolicy::new(4096, 2048);
     let batch = vec![msg("user", "hi")];
 
-    let trimmed =
-        policy.trim_messages(builder.developer_prompt(), &batch, "hello", |t| t.len() / 4);
+    let trimmed = policy.trim_messages(builder.developer_prompt(), &[], &batch, "hello", |t| {
+        t.len() / 4
+    });
     let prompt = builder.build(&trimmed, "hello", &[]);
     assert!(prompt.contains("<|im_start|>system"));
     assert!(prompt.contains("expert software engineer"));

@@ -26,11 +26,12 @@ pub fn generate_chat(
         .collect();
 
     let system_content = prompt_builder.developer_prompt().to_string();
-    let trimmed = context_policy.trim_messages(&system_content, batch, user_input, |text| {
-        llm.tokenize(text, false)
-            .map(|t| t.len())
-            .unwrap_or_else(|_| text.len() / 4)
-    });
+    let trimmed =
+        context_policy.trim_messages(&system_content, &rag_context, batch, user_input, |text| {
+            llm.tokenize(text, false)
+                .map(|t| t.len())
+                .unwrap_or_else(|_| text.len() / 4)
+        });
 
     let prompt = prompt_builder.build(&trimmed, user_input, &rag_context);
     let max_tokens = context_policy.max_tokens();
@@ -82,7 +83,7 @@ mod tests {
         // Without a real LlamaContext, generation will fail
         // This just validates the function signature and early path
         let system_content = builder.developer_prompt().to_string();
-        let trimmed = policy.trim_messages(&system_content, &batch, "hello", |t| t.len() / 4);
+        let trimmed = policy.trim_messages(&system_content, &[], &batch, "hello", |t| t.len() / 4);
         let prompt = builder.build(&trimmed, "hello", &[]);
         assert!(prompt.contains("<|im_start|>system"));
         assert!(prompt.contains("expert software engineer"));

@@ -27,6 +27,7 @@ impl ContextPolicy {
     pub fn trim_messages<F>(
         &self,
         system_content: &str,
+        rag_context: &[String],
         messages: &[Message],
         user_input: &str,
         count_tokens: F,
@@ -37,10 +38,12 @@ impl ContextPolicy {
         let budget = self.prompt_budget();
 
         let system_tokens = count_tokens(system_content);
+        let rag_tokens: usize = rag_context.iter().map(|c| count_tokens(c)).sum();
         let input_tokens = count_tokens(user_input);
 
         let available = budget
             .saturating_sub(system_tokens)
+            .saturating_sub(rag_tokens)
             .saturating_sub(input_tokens)
             .saturating_sub(SAFETY_MARGIN_TOKENS);
 
@@ -107,7 +110,7 @@ mod tests {
     fn no_truncation_needed() {
         let policy = ContextPolicy::new(4096, 2048);
         let msgs = vec![msg(MessageRole::User, "hi")];
-        let result = policy.trim_messages("system prompt", &msgs, "hello", count_chars);
+        let result = policy.trim_messages("system prompt", &[], &msgs, "hello", count_chars);
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].content, "hi");
     }
@@ -120,7 +123,8 @@ mod tests {
         for i in 0..20 {
             msgs.push(msg(MessageRole::User, &format!("msg {}", i)));
         }
-        let result = policy.trim_messages("developer prompt", &msgs, "current input", count_chars);
+        let result =
+            policy.trim_messages("developer prompt", &[], &msgs, "current input", count_chars);
         assert!(result.iter().any(|m| m.content == "system msg"));
         assert!(result.len() <= msgs.len());
     }
@@ -134,7 +138,7 @@ mod tests {
         msgs.push(msg(MessageRole::User, "middle"));
         msgs.push(msg(MessageRole::Assistant, "resp2"));
         msgs.push(msg(MessageRole::User, "newest"));
-        let result = policy.trim_messages("dev prompt", &msgs, "current", count_chars);
+        let result = policy.trim_messages("dev prompt", &[], &msgs, "current", count_chars);
         let positions: Vec<usize> = msgs
             .iter()
             .filter(|m| result.iter().any(|r| r.content == m.content))
@@ -152,7 +156,7 @@ mod tests {
     fn returns_empty_when_system_exceeds_budget() {
         let policy = ContextPolicy::new(64, 32);
         let msgs = vec![msg(MessageRole::User, "hi")];
-        let result = policy.trim_messages(&"a".repeat(200), &msgs, "hello", |s| s.len() / 4);
+        let result = policy.trim_messages(&"a".repeat(200), &[], &msgs, "hello", |s| s.len() / 4);
         assert!(result.is_empty() || result.iter().all(|m| m.role == MessageRole::System));
     }
 
@@ -160,7 +164,7 @@ mod tests {
     fn zero_budget_returns_empty() {
         let policy = ContextPolicy::new(64, 64);
         let msgs = vec![msg(MessageRole::User, "hi")];
-        let result = policy.trim_messages("sys", &msgs, "input", |s| s.len() / 4);
+        let result = policy.trim_messages("sys", &[], &msgs, "input", |s| s.len() / 4);
         assert_eq!(result.len(), 0);
     }
 
@@ -179,7 +183,7 @@ mod tests {
     #[test]
     fn trim_messages_empty_slice() {
         let policy = ContextPolicy::new(4096, 2048);
-        let result = policy.trim_messages("sys", &[], "input", |s| s.len() / 4);
+        let result = policy.trim_messages("sys", &[], &[], "input", |s: &str| s.len() / 4);
         assert_eq!(result.len(), 0);
     }
 
@@ -190,7 +194,7 @@ mod tests {
             msg(MessageRole::System, "sys1"),
             msg(MessageRole::System, "sys2"),
         ];
-        let result = policy.trim_messages("dev", &msgs, "input", |s| s.len() / 4);
+        let result = policy.trim_messages("dev", &[], &msgs, "input", |s| s.len() / 4);
         assert_eq!(result.len(), 2);
         assert_eq!(result[0].content, "sys1");
         assert_eq!(result[1].content, "sys2");
@@ -202,7 +206,7 @@ mod tests {
         let budget = policy.prompt_budget();
         let content = "a".repeat(budget.saturating_sub(128) * 4);
         let msgs = vec![msg(MessageRole::User, &content)];
-        let result = policy.trim_messages("", &msgs, "", |s| s.len() / 4);
+        let result = policy.trim_messages("", &[], &msgs, "", |s| s.len() / 4);
         assert_eq!(result.len(), 1);
     }
 
@@ -221,7 +225,7 @@ mod tests {
             msg(MessageRole::System, "second"),
             msg(MessageRole::User, "user2"),
         ];
-        let result = policy.trim_messages("dev", &msgs, "input", |s| s.len() / 4);
+        let result = policy.trim_messages("dev", &[], &msgs, "input", |s| s.len() / 4);
         let system_positions: Vec<_> = result
             .iter()
             .enumerate()
