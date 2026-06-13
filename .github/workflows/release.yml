@@ -272,6 +272,20 @@ jobs:
             memvid-agent-core/aten-ia_*.deb.sha256
           if-no-files-found: warn
 
+      - name: Upload to GitHub Release
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            memvid-agent-core/aten-ia-${{ matrix.target }}.tar.gz
+            memvid-agent-core/aten-ia-${{ matrix.target }}.tar.gz.sha256
+            memvid-agent-core/aten-ia_*.deb
+            memvid-agent-core/aten-ia_*.deb.sha256
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Upload release assets (Gitea)
         if: github.ref_type == 'tag' && vars.GITEA_REPO != ''
         env:
