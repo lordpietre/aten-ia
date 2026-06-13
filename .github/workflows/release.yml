@@ -265,13 +265,34 @@ jobs:
             memvid-agent-core/aten-ia_*.deb.sha256
           if-no-files-found: warn
 
-      - name: Upload release assets
+      - name: Upload release assets (Gitea)
         if: github.ref_type == 'tag'
-        uses: softprops/action-gh-release@v3
-        with:
-          files: |
-            memvid-agent-core/aten-ia-${{ matrix.target }}.tar.gz
-            memvid-agent-core/aten-ia-${{ matrix.target }}.tar.gz.sha256
-            memvid-agent-core/aten-ia_*.deb
-            memvid-agent-core/aten-ia_*.deb.sha256
-          fail_on_unmatched_files: false
+        env:
+          GITEA_TOKEN: ${{ secrets.GITEA_TOKEN }}
+          GITEA_REPO: ${{ github.repository }}
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          OWNER="${GITEA_REPO%/*}"
+          REPO="${GITEA_REPO#*/}"
+          
+          # Get release ID by tag
+          RELEASE_ID=$(curl -s -H "Authorization: token $GITEA_TOKEN" \
+            "https://lowai.org/api/v1/repos/${OWNER}/${REPO}/releases/tags/${TAG_NAME}" | \
+            python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
+          
+          echo "Release ID: ${RELEASE_ID}"
+          
+          # Upload each asset
+          for f in memvid-agent-core/aten-ia-${{ matrix.target }}.tar.gz \
+                   memvid-agent-core/aten-ia-${{ matrix.target }}.tar.gz.sha256 \
+                   memvid-agent-core/aten-ia_*.deb \
+                   memvid-agent-core/aten-ia_*.deb.sha256; do
+            for file in $f; do
+              if [ -f "$file" ]; then
+                echo "Uploading $file..."
+                curl -s -H "Authorization: token $GITEA_TOKEN" \
+                  -F "attachment=@${file}" \
+                  "https://lowai.org/api/v1/repos/${OWNER}/${REPO}/releases/${RELEASE_ID}/attachments"
+              fi
+            done
+          done
