@@ -1507,6 +1507,7 @@ fn generation_result_construction() {
     let result = GenerationResult {
         response: "hello".to_string(),
         tokens_estimated: 5,
+        rag_debug: Vec::new(),
     };
     assert_eq!(result.response, "hello");
     assert_eq!(result.tokens_estimated, 5);

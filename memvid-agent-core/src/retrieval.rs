@@ -6,6 +6,12 @@ use std::path::{Path, PathBuf};
 
 const JSONL_FILENAME: &str = "knowledge_index.jsonl";
 
+#[derive(Debug, Clone)]
+pub struct ScoredEntry<'a> {
+    pub entry: &'a KnowledgeEntry,
+    pub score: f32,
+}
+
 pub struct KnowledgeIndex {
     entries: Vec<KnowledgeEntry>,
     jsonl_path: PathBuf,
@@ -65,6 +71,37 @@ impl KnowledgeIndex {
 
     pub fn search(&self, query: &str, limit: usize) -> Vec<&KnowledgeEntry> {
         self.search_with_filter(query, limit, None)
+    }
+
+    pub fn search_with_scores(&self, query: &str, limit: usize) -> Vec<ScoredEntry<'_>> {
+        let results = self.search(query, limit);
+        let query_lower = query.to_lowercase();
+        let query_words: Vec<&str> = query_lower.split_whitespace().collect();
+
+        results
+            .into_iter()
+            .map(|entry| {
+                let content_lower = entry.content.to_lowercase();
+                let source_lower = entry.source.to_lowercase();
+                let id_lower = entry.id.to_lowercase();
+                let content_word_count = content_lower.split_whitespace().count().max(1);
+
+                let mut score: f32 = 0.0;
+                for w in &query_words {
+                    let source_matches = source_lower.matches(w).count() as f32;
+                    score += source_matches * 4.0;
+
+                    let content_matches = content_lower.matches(w).count() as f32;
+                    let density_factor = (content_word_count + 99) / 200;
+                    score += (content_matches * 100.0) / density_factor.max(1) as f32;
+
+                    let id_matches = id_lower.matches(w).count() as f32;
+                    score += id_matches * 0.5;
+                }
+
+                ScoredEntry { entry, score }
+            })
+            .collect()
     }
 
     pub fn search_with_filter(

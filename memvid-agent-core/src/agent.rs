@@ -2,7 +2,7 @@ use crate::books_catalog::{BooksCatalog, prepare_knowledge_from_books};
 use crate::chunker;
 use crate::config::Config;
 use crate::context_policy::ContextPolicy;
-use crate::generation;
+use crate::generation::{self, RagEntryDebug};
 use crate::llama::context::LlamaContext;
 use crate::memvid::writer::MemvidWriter;
 use crate::prompt::{ChatTemplate, DEFAULT_DEVELOPER_PROMPT, PromptBuilder};
@@ -32,6 +32,8 @@ pub struct Agent {
     session: Session,
     prompt_builder: PromptBuilder,
     context_policy: ContextPolicy,
+    debug: bool,
+    last_rag_debug: Vec<RagEntryDebug>,
 }
 
 impl Agent {
@@ -75,7 +77,17 @@ impl Agent {
             session: Session::new(),
             prompt_builder,
             context_policy,
+            debug: false,
+            last_rag_debug: Vec::new(),
         })
+    }
+
+    pub fn set_debug(&mut self, enabled: bool) {
+        self.debug = enabled;
+    }
+
+    pub fn get_last_rag_debug(&self) -> &[RagEntryDebug] {
+        &self.last_rag_debug
     }
 
     /// Chat using externally provided messages (e.g. from API).
@@ -111,6 +123,10 @@ impl Agent {
             self.session.messages(),
             user_input,
         )?;
+
+        if self.debug {
+            self.last_rag_debug = result.rag_debug;
+        }
 
         self.session.push_message(Message {
             role: MessageRole::User,
@@ -485,6 +501,8 @@ impl Agent {
             session,
             prompt_builder,
             context_policy,
+            debug: false,
+            last_rag_debug: Vec::new(),
         }
     }
 
@@ -599,6 +617,8 @@ mod tests {
             session: Session::new(),
             prompt_builder: PromptBuilder::new(ChatTemplate::ChatML),
             context_policy: ContextPolicy::new(4096, 2048),
+            debug: false,
+            last_rag_debug: Vec::new(),
         }
     }
 

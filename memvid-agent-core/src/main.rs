@@ -118,6 +118,26 @@ fn main() -> Result<()> {
             continue;
         }
 
+        if input_lower == "/debug" {
+            {
+                let mut a = agent.lock().unwrap();
+                let current = a.get_last_rag_debug().len() > 0;
+                let new_state = !current;
+                a.set_debug(new_state);
+                println!(
+                    "{} Debug mode {}",
+                    "↳".dimmed(),
+                    if new_state { "ON".bright_green() } else { "OFF".dimmed() }
+                );
+                if new_state && a.get_last_rag_debug().is_empty() {
+                    println!("{} Run a query to see RAG debug info", "↳".dimmed());
+                } else if !a.get_last_rag_debug().is_empty() {
+                    print_rag_debug(a.get_last_rag_debug());
+                }
+            }
+            continue;
+        }
+
         if input_lower == "/kv" || input_lower.starts_with("/kv ") {
             let args: Vec<&str> = input.split_whitespace().skip(1).collect();
             if args.is_empty() {
@@ -1126,6 +1146,11 @@ fn main() -> Result<()> {
             Ok(response) => {
                 spinner.finish_and_clear();
                 println!("{}", response.bright_cyan());
+                if let Ok(a) = agent.lock() {
+                    if !a.get_last_rag_debug().is_empty() {
+                        print_rag_debug(a.get_last_rag_debug());
+                    }
+                }
             }
             Err(e) => {
                 spinner.finish_and_clear();
@@ -1267,6 +1292,10 @@ fn print_help() {
         "/config".bright_blue()
     );
     println!(
+        "  {:<20}  Show RAG debug info for last query",
+        "/debug".bright_blue()
+    );
+    println!(
         "  {:<20}  Get/set KV-cache types (e.g. /kv f16 turbo3)",
         "/kv [k] [v]".bright_blue()
     );
@@ -1374,6 +1403,27 @@ fn print_config(config: &Config) {
         for lang in &config.languages.installed {
             println!("    • {}", lang);
         }
+    }
+    println!();
+}
+
+fn print_rag_debug(entries: &[memvid_agent_core::generation::RagEntryDebug]) {
+    println!();
+    println!("{} RAG Debug ({} entries)", "━━━ Debug ━━━".bold(), entries.len());
+    for (i, entry) in entries.iter().enumerate() {
+        println!(
+            "  {}. [{}] score={:.1} tokens={}",
+            i + 1,
+            entry.source.bright_yellow(),
+            entry.score,
+            entry.tokens
+        );
+        let preview = if entry.content.len() > 100 {
+            format!("{}...", &entry.content[..100])
+        } else {
+            entry.content.clone()
+        };
+        println!("     {}", preview.dimmed());
     }
     println!();
 }

@@ -6,9 +6,18 @@ use crate::session::estimate_tokens;
 use crate::types::Message;
 use anyhow::Result;
 
+#[derive(Debug, Clone)]
+pub struct RagEntryDebug {
+    pub source: String,
+    pub content: String,
+    pub score: f32,
+    pub tokens: usize,
+}
+
 pub struct GenerationResult {
     pub response: String,
     pub tokens_estimated: u32,
+    pub rag_debug: Vec<RagEntryDebug>,
 }
 
 pub fn generate_chat(
@@ -32,18 +41,25 @@ pub fn generate_chat(
 
     let max_rag_tokens = (prompt_budget - system_tokens - input_tokens - 128).max(0) as u32;
 
-    let rag_entries = knowledge_index.search(user_input, 10);
+    let rag_search_results = knowledge_index.search_with_scores(user_input, 10);
     let mut rag_context: Vec<String> = Vec::new();
     let mut rag_tokens_used: usize = 0;
+    let mut rag_debug: Vec<RagEntryDebug> = Vec::new();
 
-    for entry in rag_entries {
-        let formatted = format!("[{}] {}", entry.source, entry.content);
+    for entry in rag_search_results {
+        let formatted = format!("[{}] {}", entry.entry.source, entry.entry.content);
         let entry_tokens = count_tokens(&formatted);
         if rag_tokens_used + entry_tokens > max_rag_tokens as usize {
             break;
         }
         rag_tokens_used += entry_tokens;
-        rag_context.push(formatted);
+        rag_context.push(formatted.clone());
+        rag_debug.push(RagEntryDebug {
+            source: entry.entry.source.clone(),
+            content: entry.entry.content.clone(),
+            score: entry.score,
+            tokens: entry_tokens,
+        });
     }
 
     let trimmed = context_policy.trim_messages(
@@ -72,6 +88,7 @@ pub fn generate_chat(
     Ok(GenerationResult {
         response,
         tokens_estimated,
+        rag_debug,
     })
 }
 
@@ -98,6 +115,7 @@ mod tests {
         let result = GenerationResult {
             response: "hello".to_string(),
             tokens_estimated: 5,
+            rag_debug: Vec::new(),
         };
         assert_eq!(result.response, "hello");
         assert_eq!(result.tokens_estimated, 5);
