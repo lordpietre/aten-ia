@@ -41,5 +41,10 @@
     "chunk_overlap": 200,
     "max_retries": 3,
     "retry_backoff_seconds": 5
+  },
+  "finetune": {
+    "binary_path": null,
+    "epochs": 3,
+    "output_dir": "models/finetuned"
   }
 }

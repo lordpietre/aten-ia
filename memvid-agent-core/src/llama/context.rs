@@ -22,6 +22,7 @@ pub struct LlamaContext {
     ctx: *mut llama_context,
     vocab: *const llama_vocab,
     n_ctx: u32,
+    n_batch: u32,
     // Retained for introspection; GPU offload is currently disabled at build
     // time (see K4 in IMPROVEMENTS_PLAN.md), so nothing reads it yet.
     #[allow(dead_code)]
@@ -170,9 +171,10 @@ impl LlamaContext {
                 );
             }
 
+            let n_batch = 2048.min(n_ctx);
             let mut ctx_params = llama_context_default_params();
             ctx_params.n_ctx = n_ctx;
-            ctx_params.n_batch = n_ctx;
+            ctx_params.n_batch = n_batch;
             ctx_params.n_ubatch = n_ctx;
 
             let kv_k = kv_cache_ggml_type(kv_type_k);
@@ -212,6 +214,7 @@ impl LlamaContext {
                 ctx,
                 vocab,
                 n_ctx,
+                n_batch,
                 n_gpu_layers,
                 top_k,
                 top_p,
@@ -310,14 +313,17 @@ impl LlamaContext {
         if tokens.is_empty() {
             return Ok(());
         }
-        unsafe {
-            let batch = llama_batch_get_one(tokens.as_mut_ptr(), tokens.len() as i32);
-            let ret = llama_decode(self.ctx, batch);
-            if ret != 0 {
-                anyhow::bail!("Failed to decode batch (ret={})", ret);
+        let chunk_size = self.n_batch as usize;
+        for chunk in tokens.chunks_mut(chunk_size) {
+            unsafe {
+                let batch = llama_batch_get_one(chunk.as_mut_ptr(), chunk.len() as i32);
+                let ret = llama_decode(self.ctx, batch);
+                if ret != 0 {
+                    anyhow::bail!("Failed to decode batch (ret={})", ret);
+                }
             }
-            Ok(())
         }
+        Ok(())
     }
 
     pub fn sample(&self, top_k: i32, top_p: f32, temp: f32) -> Result<i32> {
@@ -408,6 +414,7 @@ impl LlamaContext {
             ctx: std::ptr::null_mut(),
             vocab: std::ptr::null_mut(),
             n_ctx: 4096,
+            n_batch: 2048,
             n_gpu_layers: 0,
             top_k: 40,
             top_p: 0.95,

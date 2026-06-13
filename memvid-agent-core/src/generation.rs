@@ -19,21 +19,47 @@ pub fn generate_chat(
     batch: &[Message],
     user_input: &str,
 ) -> Result<GenerationResult> {
-    let rag_context: Vec<String> = knowledge_index
-        .search(user_input, 3)
-        .iter()
-        .map(|e| format!("[{}] {}", e.source, e.content))
-        .collect();
+    let count_tokens = |text: &str| {
+        llm.tokenize(text, false)
+            .map(|t| t.len())
+            .unwrap_or_else(|_| text.len() / 4)
+    };
 
     let system_content = prompt_builder.developer_prompt().to_string();
+    let system_tokens = count_tokens(&system_content) as i32;
+    let input_tokens = count_tokens(user_input) as i32;
+    let prompt_budget = context_policy.prompt_budget() as i32;
+
+    let max_rag_tokens = (prompt_budget - system_tokens - input_tokens - 128).max(0) as u32;
+
+    let rag_entries = knowledge_index.search(user_input, 10);
+    let mut rag_context: Vec<String> = Vec::new();
+    let mut rag_tokens_used: usize = 0;
+
+    for entry in rag_entries {
+        let formatted = format!("[{}] {}", entry.source, entry.content);
+        let entry_tokens = count_tokens(&formatted);
+        if rag_tokens_used + entry_tokens > max_rag_tokens as usize {
+            break;
+        }
+        rag_tokens_used += entry_tokens;
+        rag_context.push(formatted);
+    }
+
     let trimmed =
-        context_policy.trim_messages(&system_content, &rag_context, batch, user_input, |text| {
-            llm.tokenize(text, false)
-                .map(|t| t.len())
-                .unwrap_or_else(|_| text.len() / 4)
-        });
+        context_policy.trim_messages(&system_content, &rag_context, batch, user_input, count_tokens);
 
     let prompt = prompt_builder.build(&trimmed, user_input, &rag_context);
+    let prompt_tokens = count_tokens(&prompt);
+
+    if prompt_tokens as u32 > context_policy.n_ctx() - context_policy.max_tokens() {
+        anyhow::bail!(
+            "Prompt too large: {} tokens (budget: {})",
+            prompt_tokens,
+            context_policy.n_ctx() - context_policy.max_tokens()
+        );
+    }
+
     let max_tokens = context_policy.max_tokens();
     let response = llm.generate(&prompt, max_tokens)?;
     let tokens_estimated = estimate_tokens(&response);
