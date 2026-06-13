@@ -88,15 +88,24 @@ impl KnowledgeIndex {
 
                 let mut score: f32 = 0.0;
                 for w in &query_words {
+                    // Source matches: weight 20x
                     let source_matches = source_lower.matches(w).count() as f32;
-                    score += source_matches * 4.0;
+                    score += source_matches * 20.0;
 
+                    // Exact word boundary matches in content: weight 50x
+                    let word_pattern = format!(" {}", w);
                     let content_matches = content_lower.matches(w).count() as f32;
+                    let exact_matches = content_lower.matches(&word_pattern).count() as f32;
                     let density_factor = (content_word_count + 99) / 200;
-                    score += (content_matches * 100.0) / density_factor.max(1) as f32;
 
+                    // Bonus for exact word match
+                    score += exact_matches * 50.0;
+                    // Regular matches get lower weight
+                    score += ((content_matches - exact_matches) * 30.0) / density_factor.max(1) as f32;
+
+                    // ID matches: weight 5x
                     let id_matches = id_lower.matches(w).count() as f32;
-                    score += id_matches * 0.5;
+                    score += id_matches * 5.0;
                 }
 
                 ScoredEntry { entry, score }
@@ -145,18 +154,24 @@ impl KnowledgeIndex {
 
                 let mut score: i64 = 0;
                 for w in &query_words {
-                    // Source matches: weight 4x
+                    // Source matches: weight 20x (much higher to prioritize relevant docs)
                     let source_matches = source_lower.matches(w).count() as i64;
-                    score += source_matches * 4;
+                    score += source_matches * 20;
 
-                    // Content matches: normalised by length (blocks of ~200 words)
+                    // Exact word boundary matches in content: weight 50x
+                    let word_pattern = format!(" {}", w);
                     let content_matches = content_lower.matches(w).count() as i64;
+                    let exact_matches = content_lower.matches(&word_pattern).count() as i64;
                     let density_factor = (content_word_count + 99) / 200;
-                    score += (content_matches * 100) / density_factor.max(1) as i64;
 
-                    // ID matches: weight 0.5x
+                    // Bonus for exact word match (not substring like "rust" in "trust")
+                    score += exact_matches * 50;
+                    // Regular matches get lower weight
+                    score += ((content_matches - exact_matches) * 30) / density_factor.max(1) as i64;
+
+                    // ID matches: weight 5x
                     let id_matches = id_lower.matches(w).count() as i64;
-                    score += id_matches;
+                    score += id_matches * 5;
                 }
 
                 Some((score, i, entry))

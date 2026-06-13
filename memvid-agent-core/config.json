@@ -24,12 +24,13 @@
     "enabled": true,
     "host": "127.0.0.1",
     "port": 8787,
-    "token": null
+    "token": "aca6b333-ec9b-43ab-8cff-f17f21f4fd16"
   },
   "languages": {
     "installed": [
       "python",
-      "c"
+      "c",
+      "rust"
     ]
   },
   "ingestion": {
