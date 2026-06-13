@@ -11,6 +11,7 @@ use memvid_agent_core::models_catalog::{self, ModelsCatalog};
 use memvid_agent_core::queue::FeedQueue;
 use memvid_agent_core::shutdown;
 use memvid_agent_core::utils::FileLock;
+use std::io::Write;
 use std::sync::{Arc, Mutex};
 
 fn main() -> Result<()> {
@@ -539,26 +540,93 @@ fn main() -> Result<()> {
             let port = config.api.port;
             let token = config.api.token.clone();
 
-            // With token: bind to 0.0.0.0 so remote access is possible.
-            // Without token: keep configured host (default 127.0.0.1) for safety.
             let bind_host = if token.is_some() {
                 "0.0.0.0".to_string()
             } else {
                 host.clone()
             };
 
-            println!(
-                "{} API server starting on http://{}:{}",
-                "●".bright_green(),
-                bind_host,
-                port
-            );
+            println!();
+            println!("{} API server starting on http://{}:{}", "●".bright_green(), bind_host, port);
             if let Some(ref t) = token {
                 println!("{} Token: {}", "  key".dimmed(), t.bright_yellow());
                 println!("{} Use: Authorization: Bearer {}", "  auth".dimmed(), t);
             } else {
                 println!("{} No authentication configured", "  auth".dimmed());
             }
+
+            println!();
+            println!("{}", "━━━ Client Setup Instructions ━━━".bold());
+            println!();
+            println!("  1. OpenCode     - AI coding assistant (opencode.ai)");
+            println!("  2. VS Code      - VS Code with extension");
+            println!("  3. Skip         - No instructions");
+            println!();
+
+            loop {
+                print!("{} Select client (1/2/3): ", "?".yellow());
+                std::io::stdout().flush().ok();
+                let mut choice = String::new();
+                if std::io::stdin().read_line(&mut choice).is_err() {
+                    break;
+                }
+                let choice = choice.trim();
+
+                match choice {
+                    "1" => {
+                        println!();
+                        println!("{} OpenCode Configuration", "━━━".dimmed());
+                        println!();
+                        println!("  Create file: ~/.config/opencode/opencode.json");
+                        println!();
+                        let config_content = format!(r#"{{
+  "llm": {{
+    "provider": "openai",
+    "model": "aten-ia",
+    "api_base": "http://localhost:{port}/v1",
+    "api_key": "{token}"
+  }}
+}}"#, port = port, token = token.as_ref().unwrap());
+                        println!("  Content:");
+                        for line in config_content.lines() {
+                            println!("    {}", line);
+                        }
+                        println!();
+                        println!("  {} Restart opencode after creating the config file", "↳".dimmed());
+                        break;
+                    }
+                    "2" => {
+                        println!();
+                        println!("{} VS Code Configuration", "━━━".dimmed());
+                        println!();
+                        println!("  1. Install 'Continue' extension in VS Code");
+                        println!("  2. Go to VS Code Settings → Extensions → Continue");
+                        println!("  3. Configure:");
+                        println!();
+                        let config_lines = format!(r#"{{
+  "openai-compatible": {{
+    "api_base": "http://localhost:{port}/v1",
+    "api_key": "{token}",
+    "title": "aten-ia"
+  }}
+}}"#, port = port, token = token.as_ref().unwrap());
+                        for line in config_lines.lines() {
+                            println!("    {}", line);
+                        }
+                        println!();
+                        println!("  {} Or use config.json in .continue folder", "↳".dimmed());
+                        break;
+                    }
+                    "3" | "" => {
+                        println!("  {} Skipped", "↳".dimmed());
+                        break;
+                    }
+                    _ => {
+                        println!("  {} Invalid option, try again", "✗".red());
+                    }
+                }
+            }
+            println!();
 
             std::thread::spawn(move || {
                 let server = ApiServer::new(api_agent, model_name, bind_host, port, token);
