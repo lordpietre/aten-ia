@@ -27,15 +27,15 @@ jobs:
       - name: Install system dependencies (x86_64)
         if: matrix.cross == false
         run: |
-          sudo apt-get update -y
-          sudo apt-get install -y --no-install-recommends \
+          apt-get update -y
+          apt-get install -y --no-install-recommends \
             cmake libssl-dev clang libclang-dev gcc
 
       - name: Install system dependencies (aarch64 cross)
         if: matrix.cross == true
         run: |
-          sudo apt-get update -y
-          sudo apt-get install -y --no-install-recommends \
+          apt-get update -y
+          apt-get install -y --no-install-recommends \
             cmake libssl-dev clang libclang-dev \
             gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
             crossbuild-essential-arm64 \
