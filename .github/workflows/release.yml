@@ -229,10 +229,13 @@ jobs:
           mkdir -p "$PKG_ROOT/DEBIAN"
           mkdir -p "$PKG_ROOT/usr/bin"
           mkdir -p "$PKG_ROOT/usr/share/doc/aten-ia"
+          mkdir -p "$PKG_ROOT/usr/share/man/man1"
 
           cp target/${{ matrix.target }}/release/aten-ia "$PKG_ROOT/usr/bin/"
           cp ../README.md "$PKG_ROOT/usr/share/doc/aten-ia/"
           cp ../AGENTS.md "$PKG_ROOT/usr/share/doc/aten-ia/"
+          cp ../man/aten-ia.1 "$PKG_ROOT/usr/share/man/man1/"
+          gzip -9 "$PKG_ROOT/usr/share/man/man1/aten-ia.1"
 
           cat > "$PKG_ROOT/DEBIAN/control" <<EOF
           Package: aten-ia
@@ -243,7 +246,11 @@ jobs:
            Interactive AI agent CLI with local LLM inference via llama.cpp,
            persistent conversations (.mv2), keyword RAG, OpenAI-compatible API,
            and multi-source ingestion (PDF, EPUB, HTML, MD, TXT, URLs).
-          Depends: libc6 (>= 2.31), pkg-config, libssl-dev
+          Depends: libc6 (>= 2.31), libssl3, pkg-config
+          Recommends: gcc, cmake, clang
+          Suggests: libclang-dev
+          Section: utils
+          Priority: optional
           EOF
 
           gzip -9 -n "$PKG_ROOT/usr/share/doc/aten-ia/README.md"

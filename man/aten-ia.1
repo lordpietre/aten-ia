@@ -1,0 +1,107 @@
+% ATEN-IA(1) aten-ia user manual
+% pietre
+% 2024
+
+# NAME
+
+aten-ia - Agente de IA interactivo CLI con inferencia LLM local
+
+# SYNOPSIS
+
+**aten-ia** [*OPTIONS*]
+
+# DESCRIPTION
+
+**aten-ia** es un agente de IA interactivo que funciona 100% en local usando modelos LLM
+(llama.cpp). No requiere conexión a internet ni API keys externas.
+
+# OPTIONS
+
+**-h**, **--help**
+: Muestra esta ayuda
+
+**--version**
+: Muestra la versión
+
+**--api**
+: Inicia el servidor API OpenAI-compatible
+
+**--api-port** *PORT*
+: Puerto para el servidor API (default: 8080)
+
+**--data-dir** *DIR*
+: Directorio de datos (default: ~/.aten-ia)
+
+# COMANDOS DEL REPL
+
+**/help**
+: Muestra la ayuda
+
+**/quit**, **/exit**
+: Sale del programa
+
+**/debug**
+: Activa modo debug para ver RAG
+
+**/config**
+: Muestra configuración actual
+
+**/kv** [*K*] [*V*]
+: Configura tipos de KV cache (ej: /kv f16 turbo3)
+
+**/models**
+: Lista modelos disponibles
+
+**/model** [*nombre*]
+: Cambia el modelo activo
+
+**/ingest** [*archivo*]
+: Ingesta un archivo (PDF, EPUB, HTML, MD, TXT)
+
+**/search** [*query*]
+: Busca en el conocimiento indexado
+
+# ENTORNO
+
+**MODEL_PATH**
+: Ruta al archivo del modelo GGUF
+
+**MODEL_NAME**
+: Nombre del modelo
+
+**MODEL_CTX**
+: Tamaño del contexto (default: 8192)
+
+# FILES
+
+~/.aten-ia/
+: Directorio de datos por defecto
+
+~/.aten-ia/config.json
+: Archivo de configuración
+
+~/.aten-ia/memvid_data/
+: Datos persistentes (conversaciones, conocimiento)
+
+# EXAMPLES
+
+Iniciar el REPL:
+: **aten-ia**
+
+Iniciar con API:
+: **aten-ia --api**
+
+Cambiar modelo:
+: **/model Qwen2.5-Coder-1.5B-Instruct**
+
+Ingestar documentación:
+: **/ingest mis_notas.pdf**
+
+# SEE ALSO
+
+Proyecto: https://github.com/lordpietre/aten-ia
+Wiki: https://lowai.org/code/pietre/aten-ia/wiki
+
+# BUGS
+
+Reportar bugs en: https://github.com/lordpietre/aten-ia/issues
