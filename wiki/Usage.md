@@ -50,11 +50,42 @@ Esto inicia el REPL interactivo.
 El servidor HTTP corre en el puerto configurado (default: 8080).
 
 ```bash
-# POST request
-curl -X POST http://localhost:8080/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -d '{"messages":[{"role":"user","content":"Hola"}]}'
+# Activar API con token
+> /token
+API server starting on http://0.0.0.0:8080
+Token: tu-token-aqui
+Use: Authorization: Bearer tu-token-aqui
 ```
+
+## Configurar OpenCode para usar aten-ia como backend
+
+### 1. Generar token en aten-ia
+
+```bash
+cargo run
+> /token
+# Anotar el token que aparece
+```
+
+### 2. Crear archivo de configuración de OpenCode
+
+Crea `~/.config/opencode/opencode.json` (Linux) o `%APPDATA%\opencode\opencode.json` (Windows):
+
+```json
+{
+  "instructions": "Eres un asistente de IA. Usa el backend local aten-ia para consultas.",
+  "llm": {
+    "provider": "openai",
+    "model": "local",
+    "api_base": "http://localhost:8080/v1",
+    "api_key": "tu-token-aqui"
+  }
+}
+```
+
+### 3. Usar
+
+Ejecuta opencode y configurará automáticamente el backend hacia aten-ia.
 
 ## Memoria y persistencia
 
