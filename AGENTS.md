@@ -27,7 +27,7 @@ Override download repo: `LLAMA_LIBS_REPO=user/repo`.
 
 **Cross-compilation**: `build.rs` detects `TARGET` vs `HOST`. If different, generates a CMake cross-toolchain and passes `--target` to bindgen. ARM64 builds use `GGML_CPU_ARM_ARCH=armv8-a+dotprod` and `GGML_NATIVE=OFF`.
 
-**Release** (`git tag v0.1.0 && git push --tags`) triggers `.github/workflows/release.yml`: cross-compiles `aarch64` on `ubuntu-latest` with `gcc-aarch64-linux-gnu` + native build for `x86_64` → llama static libs → Rust binary → `.tar.gz` → `.deb` → `.snap`.
+**Release** (`git tag v0.1.0 && git push --tags`) triggers workflows: cross-compiles `aarch64` on `ubuntu-latest` with `gcc-aarch64-linux-gnu` + native build for `x86_64` → llama static libs → Rust binary → `.tar.gz` → `.deb`.
 
 ## Structure
 
@@ -49,11 +49,13 @@ Override download repo: `LLAMA_LIBS_REPO=user/repo`.
 - **First run** triggers interactive setup wizard (model select, API config, language docs)
 - **`FileLock::acquire()`** creates `data_dir/.lock` with PID — concurrent instances rejected
 - **`.env` loaded** before config via `dotenvy::dotenv().ok()`; optional
+- **`rustfmt.toml`** exists — enforces consistent formatting across machines/versions
 
 ## Architecture
 
 - **No GPU** — `n_gpu_layers = 0`, no CUDA/Metal/Vulkan cmake flags
 - **RAG is keyword-only** — word substring match over `knowledge_index.jsonl`, no embeddings
+- **RAG token budget** — dynamically limits RAG context based on available prompt budget (system + input tokens subtracted first)
 - **API single-threaded** — raw TCP `TcpListener`, sequential connections, no streaming SSE
 - **Session flushes every 5 interactions** — `Session::flush()` → `MemvidWriter`
 - **KV cache type** configurable: `model.kv_type_k` / `model.kv_type_v` (default `f16`; `turbo2/3/4` enable flash-attn automatically)
@@ -63,6 +65,16 @@ Override download repo: `LLAMA_LIBS_REPO=user/repo`.
 - **Env overrides**: `MODEL_PATH`, `MODEL_NAME`, `MODEL_CTX`, `MODEL_URL` (applied on config load)
 - **Default model**: `Qwen2.5-0.5B-Instruct` (`n_ctx: 8192`, `chat_template: chatml`, auto-downloads from HuggingFace)
 - **llama.cpp verbose suppressed** at startup via `llama_log_set(noop_log)` in `context.rs`
+- **Decode chunked** — `decode()` processes tokens in chunks of `n_batch` size to avoid GGML_ASSERT failures
+- **`n_batch` = 2048** — set lower than `n_ctx` to respect model internal limits
+
+## Debug Mode
+
+Use `/debug` command in REPL to see RAG retrieval debug info after each query:
+- Source file
+- Relevance score
+- Token count
+- Content preview
 
 ## Testing
 
@@ -70,6 +82,13 @@ Integration tests use `tempfile::tempdir()` + `LlamaContext::null()` — no GGUF
 - `tests/functional.rs`
 - `tests/writer_integration.rs`
 - `tests/kv_cache_and_history.rs`
+
+## CI/CD
+
+- **GitHub Actions**: `.github/workflows/ci.yml` + `.github/workflows/release.yml`
+- **Gitea Actions**: `.gitea/workflows/ci.yml` + `.gitea/workflows/release.yml`
+- Both CIs use same workflow content (Gitea Actions is compatible with GitHub Actions syntax)
+- Gitea runner must run as root (no `sudo` needed in workflows)
 
 ## Git-ignored
 
