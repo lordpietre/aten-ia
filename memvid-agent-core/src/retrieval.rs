@@ -101,7 +101,8 @@ impl KnowledgeIndex {
                     // Bonus for exact word match
                     score += exact_matches * 50.0;
                     // Regular matches get lower weight
-                    score += ((content_matches - exact_matches) * 30.0) / density_factor.max(1) as f32;
+                    let non_exact = (content_matches - exact_matches) * 30.0;
+                    score += non_exact / density_factor.max(1) as f32;
 
                     // ID matches: weight 5x
                     let id_matches = id_lower.matches(w).count() as f32;
@@ -167,7 +168,8 @@ impl KnowledgeIndex {
                     // Bonus for exact word match (not substring like "rust" in "trust")
                     score += exact_matches * 50;
                     // Regular matches get lower weight
-                    score += ((content_matches - exact_matches) * 30) / density_factor.max(1) as i64;
+                    let non_exact = (content_matches - exact_matches) * 30;
+                    score += non_exact / density_factor.max(1) as i64;
 
                     // ID matches: weight 5x
                     let id_matches = id_lower.matches(w).count() as i64;
