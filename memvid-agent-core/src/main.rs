@@ -124,11 +124,12 @@ fn main() -> Result<()> {
                 let current = a.get_last_rag_debug().len() > 0;
                 let new_state = !current;
                 a.set_debug(new_state);
-                println!(
-                    "{} Debug mode {}",
-                    "↳".dimmed(),
-                    if new_state { "ON".bright_green() } else { "OFF".dimmed() }
-                );
+                let state_str = if new_state {
+                    "ON".bright_green()
+                } else {
+                    "OFF".dimmed()
+                };
+                println!("{} Debug mode {}", "↳".dimmed(), state_str);
                 if new_state && a.get_last_rag_debug().is_empty() {
                     println!("{} Run a query to see RAG debug info", "↳".dimmed());
                 } else if !a.get_last_rag_debug().is_empty() {
@@ -1409,7 +1410,12 @@ fn print_config(config: &Config) {
 
 fn print_rag_debug(entries: &[memvid_agent_core::generation::RagEntryDebug]) {
     println!();
-    println!("{} RAG Debug ({} entries)", "━━━ Debug ━━━".bold(), entries.len());
+    let title = format!(
+        "{} RAG Debug ({} entries)",
+        "━━━ Debug ━━━".bold(),
+        entries.len()
+    );
+    println!("{}", title);
     for (i, entry) in entries.iter().enumerate() {
         println!(
             "  {}. [{}] score={:.1} tokens={}",
