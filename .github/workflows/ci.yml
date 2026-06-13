@@ -34,15 +34,23 @@ jobs:
       - name: Install system dependencies (x86_64)
         if: matrix.cross == false
         run: |
-          apt-get update -y
-          apt-get install -y --no-install-recommends \
+          sudo rm -f /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock /var/cache/apt/archives/lock 2>/dev/null || true
+          sudo dpkg --configure -a 2>/dev/null || true
+          for i in 1 2 3; do
+            sudo apt-get update -y && break || { sleep 5; continue; }
+          done
+          sudo apt-get install -y --no-install-recommends \
             cmake libssl-dev clang libclang-dev gcc
 
       - name: Install system dependencies (aarch64 cross)
         if: matrix.cross == true
         run: |
-          apt-get update -y
-          apt-get install -y --no-install-recommends \
+          sudo rm -f /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock /var/cache/apt/archives/lock 2>/dev/null || true
+          sudo dpkg --configure -a 2>/dev/null || true
+          for i in 1 2 3; do
+            sudo apt-get update -y && break || { sleep 5; continue; }
+          done
+          sudo apt-get install -y --no-install-recommends \
             cmake libssl-dev clang libclang-dev \
             gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
             crossbuild-essential-arm64 \
