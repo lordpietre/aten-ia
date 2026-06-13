@@ -6,6 +6,34 @@
 - **System deps**: `cmake libssl-dev clang libgomp-dev`
 - **Packaging deps**: `fakeroot` (para .deb)
 
+## Paquetes .deb (Ubuntu/Debian) - Recomendado
+
+Descarga desde la pestaña **Releases** de GitHub o Gitea:
+
+```bash
+# Ubuntu/Debian (x86_64)
+wget https://github.com/lordpietre/aten-ia/releases/latest/download/aten-ia_amd64.deb
+sudo dpkg -i aten-ia_amd64.deb
+aten-ia  # Ejecutar
+
+# Ubuntu/Debian (ARM64)
+wget https://github.com/lordpietre/aten-ia/releases/latest/download/aten-ia_arm64.deb
+sudo dpkg -i aten-ia_arm64.deb
+aten-ia  # Ejecutar
+```
+
+## Binarios portable (otras distribuciones)
+
+Descarga desde releases:
+- `aten-ia-x86_64-unknown-linux-gnu.tar.gz`
+- `aten-ia-aarch64-unknown-linux-gnu.tar.gz`
+
+```bash
+# Extraer
+tar -xzf aten-ia-x86_64-unknown-linux-gnu.tar.gz
+./aten-ia  # Ejecutar
+```
+
 ## Build desde código
 
 ```bash
@@ -17,23 +45,6 @@ cargo build
 
 # O build release (más lento pero binario optimizado)
 cargo build --release
-```
-
-## Usar binario precompilado
-
-Descarga desde releases de GitHub o Gitea:
-- `aten-ia-x86_64-unknown-linux-gnu.tar.gz`
-- `aten-ia-aarch64-unknown-linux-gnu.tar.gz`
-- `aten-ia_*.deb` (Debian/Ubuntu)
-
-## Docker (opcional)
-
-```bash
-# Build portable
-./scripts/build-portable.sh
-
-# Validar compatibilidad
-./scripts/validate-compat.sh dist/aten-ia
 ```
 
 ## Configuración inicial
@@ -52,4 +63,4 @@ Los modelos se descargan automáticamente de HuggingFace si no existen.
 | `MODEL_PATH` | `models/qwen2.5-0.5b.gguf` | Ruta al modelo GGUF |
 | `MODEL_NAME` | `Qwen2.5-0.5B-Instruct` | Nombre del modelo |
 | `MODEL_CTX` | `8192` | Tamaño de contexto |
-| `LLAMA_LOCAL_LIBS` | — | Usar libs precompiladas |
+| `LLAMA_LOCAL_LIBS` | — | Usar libs precompiladas
