@@ -46,8 +46,13 @@ pub fn generate_chat(
         rag_context.push(formatted);
     }
 
-    let trimmed =
-        context_policy.trim_messages(&system_content, &rag_context, batch, user_input, count_tokens);
+    let trimmed = context_policy.trim_messages(
+        &system_content,
+        &rag_context,
+        batch,
+        user_input,
+        count_tokens,
+    );
 
     let prompt = prompt_builder.build(&trimmed, user_input, &rag_context);
     let prompt_tokens = count_tokens(&prompt);
