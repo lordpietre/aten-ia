@@ -1,6 +1,6 @@
 [package]
 name = "aten-ia"
-version = "0.3.6"
+version = "0.3.9"
 edition = "2024"
 repository = "https://github.com/lordpietre/aten-ia"
 
