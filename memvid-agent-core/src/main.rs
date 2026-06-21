@@ -574,24 +574,45 @@ fn main() -> Result<()> {
 
                 match choice {
                     "1" => {
-                        println!();
-                        println!("{} OpenCode Configuration", "━━━".dimmed());
-                        println!();
-                        println!("  Create file: ~/.config/opencode/opencode.json");
-                        println!();
                         let config_content = format!(r#"{{
-  "llm": {{
-    "provider": "openai",
-    "model": "aten-ia",
-    "api_base": "http://localhost:{port}/v1",
-    "api_key": "{token}"
-  }}
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {{
+    "aten": {{
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "ATEN IA",
+      "options": {{
+        "baseURL": "http://localhost:{port}/v1",
+        "apiKey": "{token}"
+      }},
+      "models": {{
+        "aten-ia": {{
+          "name": "ATEN IA"
+        }}
+      }}
+    }}
+  }},
+  "model": "aten/aten-ia"
 }}"#, port = port, token = token.as_ref().unwrap());
-                        println!("  Content:");
-                        for line in config_content.lines() {
-                            println!("    {}", line);
+                        let opencode_path = std::env::var("HOME")
+                            .map(|h| std::path::PathBuf::from(h).join(".config/opencode/opencode.json"))
+                            .unwrap_or_else(|_| std::path::PathBuf::from(".opencode.json"));
+                        if let Some(parent) = opencode_path.parent() {
+                            std::fs::create_dir_all(parent).ok();
                         }
-                        println!();
+                        match memvid_agent_core::utils::atomic_write(&opencode_path, &config_content) {
+                            Ok(_) => {
+                                println!();
+                                println!("{} OpenCode config written to {}", "✓".green(), opencode_path.display());
+                            }
+                            Err(e) => {
+                                println!();
+                                println!("{} Failed to write {}: {}", "✗".red(), opencode_path.display(), e);
+                                println!("  Content:");
+                                for line in config_content.lines() {
+                                    println!("    {}", line);
+                                }
+                            }
+                        }
                         println!("  {} Restart opencode after creating the config file", "↳".dimmed());
                         break;
                     }
