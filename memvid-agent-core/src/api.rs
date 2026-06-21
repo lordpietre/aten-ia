@@ -161,12 +161,11 @@ impl ApiServer {
     }
 
     fn handle_chat_stream(&self, stream: &mut TcpStream, req: &HttpRequest) -> Result<()> {
-        let body: serde_json::Value = serde_json::from_str(&req.body).map_err(|e| {
-            anyhow::anyhow!("Invalid JSON: {}", e)
-        })?;
-        let messages = body["messages"].as_array().ok_or_else(|| {
-            anyhow::anyhow!("Missing 'messages' field")
-        })?;
+        let body: serde_json::Value =
+            serde_json::from_str(&req.body).map_err(|e| anyhow::anyhow!("Invalid JSON: {}", e))?;
+        let messages = body["messages"]
+            .as_array()
+            .ok_or_else(|| anyhow::anyhow!("Missing 'messages' field"))?;
 
         let mut api_messages: Vec<Message> = Vec::with_capacity(messages.len());
         for msg in messages {
@@ -197,19 +196,22 @@ impl ApiServer {
             "object": "chat.completion.chunk",
             "model": self.model_name,
             "choices": [{"index": 0, "delta": {"role": "assistant"}, "finish_reason": null}]
-        })).unwrap_or_default();
+        }))
+        .unwrap_or_default();
         let content_chunk = serde_json::to_string(&json!({
             "id": &chunk_id,
             "object": "chat.completion.chunk",
             "model": self.model_name,
             "choices": [{"index": 0, "delta": {"content": &content}, "finish_reason": null}]
-        })).unwrap_or_default();
+        }))
+        .unwrap_or_default();
         let finish_chunk = serde_json::to_string(&json!({
             "id": &chunk_id,
             "object": "chat.completion.chunk",
             "model": self.model_name,
             "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}]
-        })).unwrap_or_default();
+        }))
+        .unwrap_or_default();
 
         let body = format!(
             "data: {}\n\ndata: {}\n\ndata: {}\n\ndata: [DONE]\n\n",

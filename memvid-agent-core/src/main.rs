@@ -547,7 +547,12 @@ fn main() -> Result<()> {
             };
 
             println!();
-            println!("{} API server starting on http://{}:{}", "●".bright_green(), bind_host, port);
+            println!(
+                "{} API server starting on http://{}:{}",
+                "●".bright_green(),
+                bind_host,
+                port
+            );
             if let Some(ref t) = token {
                 println!("{} Token: {}", "  key".dimmed(), t.bright_yellow());
                 println!("{} Use: Authorization: Bearer {}", "  auth".dimmed(), t);
@@ -574,7 +579,8 @@ fn main() -> Result<()> {
 
                 match choice {
                     "1" => {
-                        let config_content = format!(r#"{{
+                        let config_content = format!(
+                            r#"{{
   "$schema": "https://opencode.ai/config.json",
   "provider": {{
     "aten": {{
@@ -592,28 +598,48 @@ fn main() -> Result<()> {
     }}
   }},
   "model": "aten/aten-ia"
-}}"#, port = port, token = token.as_ref().unwrap());
+}}"#,
+                            port = port,
+                            token = token.as_ref().unwrap()
+                        );
                         let opencode_path = std::env::var("HOME")
-                            .map(|h| std::path::PathBuf::from(h).join(".config/opencode/opencode.json"))
+                            .map(|h| {
+                                std::path::PathBuf::from(h).join(".config/opencode/opencode.json")
+                            })
                             .unwrap_or_else(|_| std::path::PathBuf::from(".opencode.json"));
                         if let Some(parent) = opencode_path.parent() {
                             std::fs::create_dir_all(parent).ok();
                         }
-                        match memvid_agent_core::utils::atomic_write(&opencode_path, &config_content) {
+                        match memvid_agent_core::utils::atomic_write(
+                            &opencode_path,
+                            &config_content,
+                        ) {
                             Ok(_) => {
                                 println!();
-                                println!("{} OpenCode config written to {}", "✓".green(), opencode_path.display());
+                                println!(
+                                    "{} OpenCode config written to {}",
+                                    "✓".green(),
+                                    opencode_path.display()
+                                );
                             }
                             Err(e) => {
                                 println!();
-                                println!("{} Failed to write {}: {}", "✗".red(), opencode_path.display(), e);
+                                println!(
+                                    "{} Failed to write {}: {}",
+                                    "✗".red(),
+                                    opencode_path.display(),
+                                    e
+                                );
                                 println!("  Content:");
                                 for line in config_content.lines() {
                                     println!("    {}", line);
                                 }
                             }
                         }
-                        println!("  {} Restart opencode after creating the config file", "↳".dimmed());
+                        println!(
+                            "  {} Restart opencode after creating the config file",
+                            "↳".dimmed()
+                        );
                         break;
                     }
                     "2" => {
@@ -624,13 +650,17 @@ fn main() -> Result<()> {
                         println!("  2. Go to VS Code Settings → Extensions → Continue");
                         println!("  3. Configure:");
                         println!();
-                        let config_lines = format!(r#"{{
+                        let config_lines = format!(
+                            r#"{{
   "openai-compatible": {{
     "api_base": "http://localhost:{port}/v1",
     "api_key": "{token}",
     "title": "aten-ia"
   }}
-}}"#, port = port, token = token.as_ref().unwrap());
+}}"#,
+                            port = port,
+                            token = token.as_ref().unwrap()
+                        );
                         for line in config_lines.lines() {
                             println!("    {}", line);
                         }
