@@ -15,7 +15,7 @@ const MAX_BODY_BYTES: usize = 10 * 1024 * 1024;
 /// Reject header blocks larger than this.
 const MAX_HEADER_BYTES: usize = 64 * 1024;
 /// Per-connection read/write timeout so a stalled client can't pin a worker.
-const CONN_TIMEOUT_SECS: u64 = 30;
+const CONN_TIMEOUT_SECS: u64 = 120;
 
 fn within_body_limit(content_length: usize) -> bool {
     content_length <= MAX_BODY_BYTES
@@ -96,6 +96,24 @@ impl ApiServer {
 
     fn handle_connection(&self, stream: &mut TcpStream) -> Result<()> {
         let req = read_http_request(stream)?;
+
+        let is_streaming_chat = req.method == "POST"
+            && req.path == "/v1/chat/completions"
+            && serde_json::from_str::<serde_json::Value>(&req.body)
+                .ok()
+                .and_then(|v| v.get("stream").and_then(|s| s.as_bool()))
+                .unwrap_or(false);
+
+        if is_streaming_chat {
+            if !self.check_auth(&req) {
+                let resp = unauthorized();
+                stream.write_all(resp.as_bytes())?;
+                stream.flush()?;
+                return Ok(());
+            }
+            return self.handle_chat_stream(stream, &req);
+        }
+
         let response = self.route(&req);
         stream.write_all(response.as_bytes())?;
         stream.flush()?;
@@ -140,6 +158,71 @@ impl ApiServer {
                 .map(|t| constant_time_eq(t, token))
                 .unwrap_or(false),
         }
+    }
+
+    fn handle_chat_stream(&self, stream: &mut TcpStream, req: &HttpRequest) -> Result<()> {
+        let body: serde_json::Value = serde_json::from_str(&req.body).map_err(|e| {
+            anyhow::anyhow!("Invalid JSON: {}", e)
+        })?;
+        let messages = body["messages"].as_array().ok_or_else(|| {
+            anyhow::anyhow!("Missing 'messages' field")
+        })?;
+
+        let mut api_messages: Vec<Message> = Vec::with_capacity(messages.len());
+        for msg in messages {
+            let role = match msg["role"].as_str() {
+                Some("user") => MessageRole::User,
+                Some("assistant") => MessageRole::Assistant,
+                Some("system") => MessageRole::System,
+                Some("tool") => MessageRole::Tool,
+                _ => continue,
+            };
+            let content = msg["content"].as_str().unwrap_or("");
+            api_messages.push(Message {
+                role,
+                content: content.to_string(),
+                timestamp: Utc::now(),
+                tokens: None,
+            });
+        }
+
+        let mut agent = self.agent.lock().unwrap();
+        let content = agent.chat_with_messages(&api_messages)?;
+        drop(agent);
+
+        let chunk_id = format!("chatcmpl-{}", uuid::Uuid::new_v4());
+
+        let role_chunk = serde_json::to_string(&json!({
+            "id": &chunk_id,
+            "object": "chat.completion.chunk",
+            "model": self.model_name,
+            "choices": [{"index": 0, "delta": {"role": "assistant"}, "finish_reason": null}]
+        })).unwrap_or_default();
+        let content_chunk = serde_json::to_string(&json!({
+            "id": &chunk_id,
+            "object": "chat.completion.chunk",
+            "model": self.model_name,
+            "choices": [{"index": 0, "delta": {"content": &content}, "finish_reason": null}]
+        })).unwrap_or_default();
+        let finish_chunk = serde_json::to_string(&json!({
+            "id": &chunk_id,
+            "object": "chat.completion.chunk",
+            "model": self.model_name,
+            "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}]
+        })).unwrap_or_default();
+
+        let body = format!(
+            "data: {}\n\ndata: {}\n\ndata: {}\n\ndata: [DONE]\n\n",
+            role_chunk, content_chunk, finish_chunk
+        );
+        let response = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nCache-Control: no-cache\r\nAccess-Control-Allow-Origin: *\r\nContent-Length: {}\r\n\r\n{}",
+            body.len(),
+            body
+        );
+        stream.write_all(response.as_bytes())?;
+        stream.flush()?;
+        Ok(())
     }
 
     fn handle_health(&self) -> String {
