@@ -582,6 +582,7 @@ fn main() -> Result<()> {
                         let config_content = format!(
                             r#"{{
   "$schema": "https://opencode.ai/config.json",
+  "model": "aten/aten-ia",
   "provider": {{
     "aten": {{
       "npm": "@ai-sdk/openai-compatible",
@@ -597,45 +598,69 @@ fn main() -> Result<()> {
       }}
     }}
   }},
-  "model": "aten/aten-ia"
+  "agent": {{
+    "aten-ia": {{
+      "description": "Agente local de aten-ia — conoce toda la codebase y arquitectura del proyecto. Usa el LLM local para responder preguntas sobre el código, RAG, persistencia, y más.",
+      "mode": "primary",
+      "model": "aten/aten-ia",
+      "instructions": ["AGENTS.md"]
+    }}
+  }},
+  "default_agent": "aten-ia"
 }}"#,
                             port = port,
                             token = token.as_ref().unwrap()
                         );
-                        let opencode_path = std::env::var("HOME")
+
+                        let write_config = |path: &std::path::Path| -> Result<()> {
+                            if let Some(parent) = path.parent() {
+                                std::fs::create_dir_all(parent).ok();
+                            }
+                            memvid_agent_core::utils::atomic_write(path, &config_content)?;
+                            println!(
+                                "{} OpenCode config written to {}",
+                                "✓".green(),
+                                path.display()
+                            );
+                            Ok(())
+                        };
+
+                        // Global config
+                        let global_path = std::env::var("HOME")
                             .map(|h| {
                                 std::path::PathBuf::from(h).join(".config/opencode/opencode.json")
                             })
                             .unwrap_or_else(|_| std::path::PathBuf::from(".opencode.json"));
-                        if let Some(parent) = opencode_path.parent() {
-                            std::fs::create_dir_all(parent).ok();
+                        if let Err(e) = write_config(&global_path) {
+                            println!("{} Failed to write global config: {}", "✗".red(), e);
                         }
-                        match memvid_agent_core::utils::atomic_write(
-                            &opencode_path,
-                            &config_content,
-                        ) {
-                            Ok(_) => {
-                                println!();
-                                println!(
-                                    "{} OpenCode config written to {}",
-                                    "✓".green(),
-                                    opencode_path.display()
-                                );
-                            }
-                            Err(e) => {
-                                println!();
-                                println!(
-                                    "{} Failed to write {}: {}",
-                                    "✗".red(),
-                                    opencode_path.display(),
-                                    e
-                                );
-                                println!("  Content:");
-                                for line in config_content.lines() {
-                                    println!("    {}", line);
+
+                        // Project-level config (parent of CWD, i.e. project root)
+                        if let Ok(cwd) = std::env::current_dir() {
+                            if let Some(parent) = cwd.parent() {
+                                let project_path = parent.join("opencode.json");
+                                let should_write = if project_path.exists() {
+                                    true
+                                } else {
+                                    let ans = read_line_prompt(&format!(
+                                        "{} Write project config to {}? (Y/n): ",
+                                        "?".yellow(),
+                                        project_path.display()
+                                    ));
+                                    ans.is_empty() || ans.to_lowercase() == "y"
+                                };
+                                if should_write {
+                                    if let Err(e) = write_config(&project_path) {
+                                        println!(
+                                            "{} Failed to write project config: {}",
+                                            "✗".red(),
+                                            e
+                                        );
+                                    }
                                 }
                             }
                         }
+
                         println!(
                             "  {} Restart opencode after creating the config file",
                             "↳".dimmed()
@@ -1881,11 +1906,81 @@ fn run_setup_wizard(config: &mut Config, catalog: &ModelsCatalog) -> Result<()> 
             }
         }
         config.api.token = Some(uuid::Uuid::new_v4().to_string());
+        let token = config.api.token.as_ref().unwrap().clone();
         println!(
             "  {} API token generated: {}",
             "✓".green(),
-            config.api.token.as_ref().unwrap()
+            token.bright_yellow()
         );
+
+        let setup_opencode = read_line_prompt(&format!(
+            "{} Generate OpenCode config? (Y/n): ",
+            "•".dimmed()
+        ));
+        if setup_opencode.is_empty() || setup_opencode.to_lowercase() == "y" {
+            let oc_content = format!(
+                r#"{{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "aten/aten-ia",
+  "provider": {{
+    "aten": {{
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "ATEN IA",
+      "options": {{
+        "baseURL": "http://localhost:{port}/v1",
+        "apiKey": "{token}"
+      }},
+      "models": {{
+        "aten-ia": {{
+          "name": "ATEN IA"
+        }}
+      }}
+    }}
+  }},
+  "agent": {{
+    "aten-ia": {{
+      "description": "Agente local de aten-ia — conoce toda la codebase y arquitectura del proyecto. Usa el LLM local para responder preguntas sobre el código, RAG, persistencia, y más.",
+      "mode": "primary",
+      "model": "aten/aten-ia",
+      "instructions": ["AGENTS.md"]
+    }}
+  }},
+  "default_agent": "aten-ia"
+}}"#,
+                port = config.api.port,
+                token = token
+            );
+
+            let global_path = std::env::var("HOME")
+                .map(|h| std::path::PathBuf::from(h).join(".config/opencode/opencode.json"))
+                .unwrap_or_else(|_| std::path::PathBuf::from(".opencode.json"));
+            if let Some(parent) = global_path.parent() {
+                std::fs::create_dir_all(parent).ok();
+            }
+            if memvid_agent_core::utils::atomic_write(&global_path, &oc_content).is_ok() {
+                println!("  {} OpenCode global config written to {}", "✓".green(), global_path.display());
+            }
+
+            if let Ok(cwd) = std::env::current_dir() {
+                if let Some(parent) = cwd.parent() {
+                    let project_path = parent.join("opencode.json");
+                    if project_path.exists() || {
+                        let ans = read_line_prompt(&format!(
+                            "{} Write project config to {}? (Y/n): ",
+                            "•".dimmed(),
+                            project_path.display()
+                        ));
+                        ans.is_empty() || ans.to_lowercase() == "y"
+                    } {
+                        if memvid_agent_core::utils::atomic_write(&project_path, &oc_content).is_ok() {
+                            println!("  {} OpenCode project config written to {}", "✓".green(), project_path.display());
+                        }
+                    }
+                }
+            }
+
+            println!("  {} Restart opencode after updating config", "↳".dimmed());
+        }
     }
 
     config.save()?;
