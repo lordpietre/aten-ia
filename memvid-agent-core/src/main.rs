@@ -225,20 +225,23 @@ fn main() -> Result<()> {
 
         if input_lower == "/models" || input == "/MODELS" {
             println!("{} Available Models", "━━━ Models ━━━".bold());
-            for entry in catalog.list() {
+            println!();
+            for (i, entry) in catalog.list().iter().enumerate() {
+                let num = format!("{}.", i + 1);
                 let current = if entry.name == config.model.name {
-                    " ◄ active"
+                    format!(" {}", "◄ active".green())
                 } else {
-                    ""
+                    String::new()
                 };
                 println!(
-                    "  {:<20} {} ({} MB){}",
+                    "  {:<3} {:<20} {} ({} MB){}",
+                    num.bright_cyan(),
                     entry.id.bright_cyan(),
                     entry.name,
                     entry.size_mb,
-                    current.green(),
+                    current,
                 );
-                println!("  {:<20} {}", "", entry.description.dimmed());
+                println!("  {:<3} {}", "", entry.description.dimmed());
                 println!();
             }
             continue;
@@ -1847,9 +1850,8 @@ fn run_setup_wizard(config: &mut Config, catalog: &ModelsCatalog) -> Result<()> 
     if model_idx > 0 && model_idx <= catalog.list().len() {
         let entry = &catalog.list()[model_idx - 1];
         let models_dir = std::path::Path::new("models");
+        let model_path = models_dir.join(&entry.id).with_extension("gguf");
         if models_catalog::download_model(entry, models_dir).is_ok() {
-            let model_path = models_dir.join(&entry.id).with_extension("gguf");
-            models_catalog::apply_model_to_config(&model_path, entry, config)?;
             println!("  {} Selected model: {}", "✓".green(), entry.name.bold());
         } else {
             println!(
@@ -1857,6 +1859,7 @@ fn run_setup_wizard(config: &mut Config, catalog: &ModelsCatalog) -> Result<()> 
                 "i".yellow()
             );
         }
+        models_catalog::apply_model_to_config(&model_path, entry, config)?;
     }
 
     let install_langs = read_line_prompt(&format!(
