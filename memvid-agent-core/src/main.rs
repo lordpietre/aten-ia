@@ -1961,7 +1961,11 @@ fn run_setup_wizard(config: &mut Config, catalog: &ModelsCatalog) -> Result<()> 
                 std::fs::create_dir_all(parent).ok();
             }
             if memvid_agent_core::utils::atomic_write(&global_path, &oc_content).is_ok() {
-                println!("  {} OpenCode global config written to {}", "✓".green(), global_path.display());
+                println!(
+                    "  {} OpenCode global config written to {}",
+                    "✓".green(),
+                    global_path.display()
+                );
             }
 
             if let Ok(cwd) = std::env::current_dir() {
@@ -1975,8 +1979,14 @@ fn run_setup_wizard(config: &mut Config, catalog: &ModelsCatalog) -> Result<()> 
                         ));
                         ans.is_empty() || ans.to_lowercase() == "y"
                     } {
-                        if memvid_agent_core::utils::atomic_write(&project_path, &oc_content).is_ok() {
-                            println!("  {} OpenCode project config written to {}", "✓".green(), project_path.display());
+                        if memvid_agent_core::utils::atomic_write(&project_path, &oc_content)
+                            .is_ok()
+                        {
+                            println!(
+                                "  {} OpenCode project config written to {}",
+                                "✓".green(),
+                                project_path.display()
+                            );
                         }
                     }
                 }
