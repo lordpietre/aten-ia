@@ -585,19 +585,12 @@ fn main() -> Result<()> {
                         let config_content = format!(
                             r#"{{
   "$schema": "https://opencode.ai/config.json",
-  "model": "aten/aten-ia",
+  "model": "openai/{model}",
   "provider": {{
-    "aten": {{
-      "npm": "@ai-sdk/openai-compatible",
-      "name": "ATEN IA",
+    "openai": {{
       "options": {{
         "baseURL": "http://localhost:{port}/v1",
         "apiKey": "{token}"
-      }},
-      "models": {{
-        "aten-ia": {{
-          "name": "ATEN IA"
-        }}
       }}
     }}
   }},
@@ -605,12 +598,13 @@ fn main() -> Result<()> {
     "aten-ia": {{
       "description": "Agente local de aten-ia — conoce toda la codebase y arquitectura del proyecto. Usa el LLM local para responder preguntas sobre el código, RAG, persistencia, y más.",
       "mode": "primary",
-      "model": "aten/aten-ia",
+      "model": "openai/{model}",
       "instructions": ["AGENTS.md"]
     }}
   }},
   "default_agent": "aten-ia"
 }}"#,
+                            model = model_name,
                             port = port,
                             token = token.as_ref().unwrap()
                         );
@@ -1924,19 +1918,12 @@ fn run_setup_wizard(config: &mut Config, catalog: &ModelsCatalog) -> Result<()> 
             let oc_content = format!(
                 r#"{{
   "$schema": "https://opencode.ai/config.json",
-  "model": "aten/aten-ia",
+  "model": "openai/{model}",
   "provider": {{
-    "aten": {{
-      "npm": "@ai-sdk/openai-compatible",
-      "name": "ATEN IA",
+    "openai": {{
       "options": {{
         "baseURL": "http://localhost:{port}/v1",
         "apiKey": "{token}"
-      }},
-      "models": {{
-        "aten-ia": {{
-          "name": "ATEN IA"
-        }}
       }}
     }}
   }},
@@ -1944,12 +1931,13 @@ fn run_setup_wizard(config: &mut Config, catalog: &ModelsCatalog) -> Result<()> 
     "aten-ia": {{
       "description": "Agente local de aten-ia — conoce toda la codebase y arquitectura del proyecto. Usa el LLM local para responder preguntas sobre el código, RAG, persistencia, y más.",
       "mode": "primary",
-      "model": "aten/aten-ia",
+      "model": "openai/{model}",
       "instructions": ["AGENTS.md"]
     }}
   }},
   "default_agent": "aten-ia"
 }}"#,
+                model = config.model.name,
                 port = config.api.port,
                 token = token
             );
