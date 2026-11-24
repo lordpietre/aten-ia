@@ -24,7 +24,7 @@ pub struct LlamaContext {
     n_ctx: u32,
     n_batch: u32,
     // Retained for introspection; GPU offload is currently disabled at build
-    // time (see K4 in IMPROVEMENTS_PLAN.md), so nothing reads it yet.
+    // time (no CUDA/Metal/Vulkan flags), so nothing reads it yet.
     #[allow(dead_code)]
     n_gpu_layers: u32,
     top_k: i32,

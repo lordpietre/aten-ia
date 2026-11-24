@@ -1,5 +1,5 @@
 name: aten-ia
-version: "0.1.0"
+version: "0.3.12"
 summary: Local LLM agent with persistent memory and RAG
 description: |
   Interactive AI agent CLI with local LLM inference via llama.cpp,

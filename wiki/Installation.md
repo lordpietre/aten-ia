@@ -1,37 +1,61 @@
-# Installation
+# Instalación
 
 ## Requisitos
 
-- **Rust** >= 1.85.0 (edition 2024)
-- **System deps**: `cmake libssl-dev clang libgomp-dev`
-- **Packaging deps**: `fakeroot` (para .deb)
+- **Rust** >= 1.85.0 (edition 2024, fijado por `rust-toolchain.toml`)
+- **Dependencias de build:** `cmake libssl-dev clang libgomp-dev` (en algunas distros también `libclang-dev`)
+- **Empaquetado `.deb`:** `fakeroot`
+- Opcional: Docker, solo para el build portable reproducible
 
-## Paquetes .deb (Ubuntu/Debian) - Recomendado
+## Paquetes `.deb` (Ubuntu/Debian) — recomendado
 
-Descarga desde la pestaña **Releases** de GitHub o Gitea:
+Descarga el paquete desde la pestaña **Releases** del repositorio (GitHub o Gitea). El nombre incluye la versión y la arquitectura:
 
-```bash
-# Ubuntu/Debian (x86_64)
-wget https://github.com/lordpietre/aten-ia/releases/latest/download/aten-ia_amd64.deb
-sudo dpkg -i aten-ia_amd64.deb
-aten-ia  # Ejecutar
-
-# Ubuntu/Debian (ARM64)
-wget https://github.com/lordpietre/aten-ia/releases/latest/download/aten-ia_arm64.deb
-sudo dpkg -i aten-ia_arm64.deb
-aten-ia  # Ejecutar
+```
+aten-ia_<versión>_amd64.deb
+aten-ia_<versión>_arm64.deb
 ```
 
-## Binarios portable (otras distribuciones)
+```bash
+# x86_64
+sudo dpkg -i aten-ia_0.3.12_amd64.deb
 
-Descarga desde releases:
-- `aten-ia-x86_64-unknown-linux-gnu.tar.gz`
-- `aten-ia-aarch64-unknown-linux-gnu.tar.gz`
+# ARM64
+sudo dpkg -i aten-ia_0.3.12_arm64.deb
+
+aten-ia
+```
+
+El paquete instala:
+
+| Ruta | Contenido |
+|---|---|
+| `/usr/bin/aten-ia` | Binario |
+| `/usr/share/man/man1/aten-ia.1.gz` | Página de manual |
+| `/usr/share/doc/aten-ia/` | README y AGENTS |
+
+Dependencias declaradas: `libc6 (>= 2.31)`, `libssl3`, `pkg-config`. Se recomiendan `gcc`, `cmake` y `clang` solo si vas a compilar desde fuente.
+
+## Binarios portables
+
+Para otras distribuciones, usa los archivos de Releases:
+
+```
+aten-ia-x86_64-unknown-linux-gnu.tar.gz
+aten-ia-aarch64-unknown-linux-gnu.tar.gz
+```
 
 ```bash
-# Extraer
 tar -xzf aten-ia-x86_64-unknown-linux-gnu.tar.gz
-./aten-ia  # Ejecutar
+./aten-ia
+```
+
+Ambos se compilan en un contenedor con glibc 2.31 y exigen como máximo **GLIBC_2.31**. Son compatibles con Ubuntu 20.04+ y Debian 11+.
+
+Cada archivo incluye su checksum SHA-256 (`.sha256`):
+
+```bash
+sha256sum -c aten-ia-x86_64-unknown-linux-gnu.tar.gz.sha256
 ```
 
 ## Build desde código
@@ -40,27 +64,60 @@ tar -xzf aten-ia-x86_64-unknown-linux-gnu.tar.gz
 git clone https://github.com/lordpietre/aten-ia.git
 cd aten-ia/memvid-agent-core
 
-# Primera compilación (~30 min, compila llama.cpp)
-cargo build
-
-# O build release (más lento pero binario optimizado)
-cargo build --release
+cargo build              # debug
+cargo build --release    # optimizado
 ```
 
-## Configuración inicial
+La primera compilación tarda ~30 min porque compila llama.cpp. Para evitarlo, `build.rs` intenta, en orden:
 
-La primera ejecución muestra un wizard interactivo para:
-1. Seleccionar modelo LLM
-2. Configurar directorio de datos
-3. Configurar API (opcional)
+1. Copiar bibliotecas estáticas desde `LLAMA_LOCAL_LIBS=/ruta`.
+2. Descargar `llama-libs-{target}.tar.gz` desde GitHub Releases (`LLAMA_LIBS_REPO` para cambiar el repo).
+3. Compilar con CMake (`CMAKE_BUILD_PARALLEL_LEVEL`, por defecto 2).
 
-Los modelos se descargan automáticamente de HuggingFace si no existen.
+Comprobar la versión:
+
+```bash
+cargo run -- --version    # aten-ia 0.3.12
+# o, con el binario compilado:
+./target/release/aten-ia --version
+```
+
+### Build portable (glibc antiguo)
+
+```bash
+./scripts/build-portable.sh
+./scripts/validate-compat.sh dist/aten-ia
+```
+
+Requiere Docker. Compila en Ubuntu 20.04 con `ATEN_PORTABLE=1`, enlazando `libstdc++` y `libgomp` estáticamente.
+
+## Primer arranque
+
+Si no existe `config.json` en el directorio de trabajo, se inicia un asistente que configura:
+
+1. **Directorio de datos** — por defecto `~/.aten-ia` (o `memvid_data` si no hay `$HOME`).
+2. **Modelo** — una de las 21 entradas del catálogo.
+3. **Documentación de un lenguaje** — opcional.
+4. **Servidor API** — puerto, token generado y configuración de OpenCode.
+
+El modelo se descarga automáticamente de HuggingFace si no está en disco.
+
+> El repositorio incluye `memvid-agent-core/config.json` con `data_dir: "memvid_data"`. Bórralo si quieres repetir el asistente o usa otro directorio de trabajo.
 
 ## Variables de entorno
 
 | Variable | Default | Descripción |
-|----------|---------|-------------|
-| `MODEL_PATH` | `models/qwen2.5-0.5b.gguf` | Ruta al modelo GGUF |
-| `MODEL_NAME` | `Qwen2.5-0.5B-Instruct` | Nombre del modelo |
+|---|---|---|
+| `MODEL_PATH` | `models/qwen2.5-0.5b.gguf` | Ruta al GGUF |
+| `MODEL_NAME` | `Qwen2.5-0.5B-Instruct` | Nombre visible del modelo |
 | `MODEL_CTX` | `8192` | Tamaño de contexto |
-| `LLAMA_LOCAL_LIBS` | — | Usar libs precompiladas
+| `MODEL_URL` | HuggingFace | URL alternativa de descarga |
+| `LLAMA_LOCAL_LIBS` | — | Directorio con `.a` precompiladas |
+| `LLAMA_LIBS_REPO` | `lordpietre/aten-ia` | Repo de libs precompiladas |
+| `LLAMA_FINETUNE_BIN` | — | Binario `llama-finetune` para `/finetune` |
+| `ATEN_PORTABLE` | — | `1` enlaza `libstdc++`/`libgomp` estáticamente |
+| `CMAKE_BUILD_PARALLEL_LEVEL` | `2` | Paralelismo de CMake |
+| `TARGET` | Auto | Target triple de compilación cruzada |
+| `HOME` | — | Define el `data_dir` por defecto |
+
+Si existe un `.env`, se carga automáticamente antes de leer la configuración. Las variables de modelo se aplican al cargar el binario.

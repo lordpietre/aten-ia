@@ -1,18 +1,62 @@
 # aten-ia
 
-Agente de IA interactivo CLI con inferencia LLM local via [llama.cpp](https://github.com/ggml-org/llama.cpp) (fork TurboQuant), persistencia `.mv2` ([memvid-core](https://crates.io/crates/memvid-core)), RAG por keywords, API OpenAI-compatible e ingesta multi-formato.
+**Agente de IA local con memoria persistente, RAG y API compatible con OpenAI.**
 
-## Inicio rapido
+aten-ia es un agente conversacional de línea de comandos escrito en Rust. Ejecuta modelos GGUF en CPU mediante [llama.cpp](https://github.com/ggml-org/llama.cpp) (fork **TurboQuant**), guarda conversaciones y conocimiento en segmentos `.mv2` ([memvid-core](https://crates.io/crates/memvid-core) v2), busca en su propio índice por palabras clave y expone una API HTTP compatible con OpenAI para usarlo desde OpenCode, VS Code u otros clientes.
 
-### Requisitos
+Inferencia 100% local: no requiere GPU, API keys ni servicios externos. Solo necesita red para descargar el modelo la primera vez o para ingerir contenido de Internet.
 
-- **Rust** >= 1.85.0 (edition 2024, via `rust-toolchain.toml`)
-- **System deps (build)**: `cmake libssl-dev clang libgomp-dev`
-- **System deps (packaging)**: + `fakeroot`
+- **Versión:** 0.3.12
+- **Lenguaje:** Rust 2024
+- **Licencia:** Apache 2.0
 
-### Build y ejecucion
+---
 
-La primera compilacion tarda ~30 min (compila llama.cpp desde fuente). Posteriores <1s con cache.
+## Características
+
+| Área | Qué incluye |
+|---|---|
+| **LLM local** | llama.cpp compilado desde el fork TurboQuant, CPU only, plantillas ChatML / Llama 3 / Mistral / Raw |
+| **KV-cache configurable** | `f32`, `f16`, `bf16`, `q8_0`, `q4_0` y codecs TurboQuant `turbo2/3/4` (activan flash-attn automáticamente) |
+| **Catálogo de modelos** | 21 modelos GGUF Q4_K_M (0.36B–14B) descargables desde el REPL |
+| **Memoria persistente** | Conversaciones y conocimiento en `.mv2` + `manifest.json` + índice JSONL, con escrituras atómicas |
+| **RAG keyword** | Búsqueda ponderada por coincidencias en fuente, contenido e ID, con presupuesto de tokens dinámico |
+| **Ingesta multi-fuente** | Archivos PDF/EPUB/Markdown/HTML/TXT, URLs, lotes de URLs, feeds RSS/Atom y catálogo de free-programming-books |
+| **Aprendizaje de lenguajes** | `/learn <lang>` descarga e indexa documentación de programación; `/unlearn` la elimina |
+| **Fine-tuning** | Full fine-tune del modelo activo sobre los docs aprendidos, con estimación previa de RAM y tiempo |
+| **API OpenAI-compatible** | `/v1/chat/completions` (con SSE opcional), `/v1/models`, `/health`, autenticación Bearer |
+| **Integración con clientes** | `/token` genera configuración para OpenCode y muestra la de VS Code (Continue) |
+| **Gestión de estado** | FileLock contra instancias concurrentes, flush de sesión cada 5 interacciones y apagado graceful (SIGINT/SIGTERM) |
+
+---
+
+## Stack tecnológico
+
+| Componente | Tecnología |
+|---|---|
+| Lenguaje | Rust (edition 2024, mínimo 1.85) |
+| Inferencia | llama.cpp (fork TurboQuant) vía FFI generado con `bindgen` + CMake |
+| Persistencia | `memvid-core` v2 (`.mv2`) + JSONL |
+| HTTP cliente | `ureq` (rustls), con timeouts, rate limiting y reintentos |
+| HTTP servidor | `TcpListener` propio, un hilo por conexión, mutex de inferencia |
+| Extracción | `pdf-extract`, `epub`, HTML→texto/Markdown propio |
+| Feeds | `feed-rs` (RSS/Atom) |
+| Serialización | `serde` / `serde_json` |
+| Utilidades | `sha2`, `uuid`, `chrono`, `regex`, `indicatif`, `colored`, `dotenvy`, `libc` |
+| Tests | `cargo test` + `tempfile` (sin GGUF) |
+
+---
+
+## Requisitos
+
+- **Rust** >= 1.85.0 (edition 2024, fijado en `rust-toolchain.toml`)
+- **Dependencias de build:** `cmake libssl-dev clang libgomp-dev` (y `libclang-dev` en algunas distros)
+- **Dependencias de empaquetado:** añadir `fakeroot`
+- Opcional: Docker (solo para el build portable reproducible)
+
+---
+
+## Inicio rápido
 
 ```bash
 cd memvid-agent-core
@@ -20,255 +64,391 @@ cargo build
 cargo run
 ```
 
-El primer lanzamiento muestra un wizard interactivo para elegir modelo, directorio de datos y config API. Si no existe un modelo GGUF, se descarga automaticamente `Qwen2.5-0.5B-Instruct` (~350 MB) con barra de progreso.
+La **primera compilación tarda ~30 min** porque compila llama.cpp desde fuente; las siguientes son incrementales (<1 s si no hay cambios). Alternativas para evitar la compilación:
 
-### Tests
+1. `LLAMA_LOCAL_LIBS=/ruta/con/libs` — copia los `.a` desde un directorio local.
+2. Descarga automática de `llama-libs-{target}.tar.gz` desde GitHub Releases.
+3. Compilación con CMake (paralelismo con `CMAKE_BUILD_PARALLEL_LEVEL`, por defecto 2).
+
+Comprobar la versión:
 
 ```bash
-cd memvid-agent-core
-cargo test -- --test-threads=1    # todos los tests
-cargo test --lib -- --test-threads=1  # solo unit (mas rapido)
-cargo fmt --all -- --check
-cargo clippy --lib
+cargo run -- --version   # aten-ia 0.3.12
 ```
 
-Los tests de integracion usan `tempfile::tempdir()` + `LlamaContext::null()` — no necesitan archivo GGUF.
+### Primer arranque
 
-Ver [`PLAN_TESTS.md`](PLAN_TESTS.md) para el plan detallado de tests y fallos potenciales identificados.
+Si no existe `config.json`, se lanza un asistente interactivo que configura:
 
-## Build portable
+1. Directorio de datos (por defecto `~/.aten-ia`, o `memvid_data` si `$HOME` no existe).
+2. Modelo inicial del catálogo (21 opciones).
+3. Documentación de un lenguaje (opcional).
+4. Servidor API: puerto, token generado y configuración de OpenCode (global y de proyecto).
 
-Construye un binario portable en un contenedor Ubuntu 20.04 (glibc 2.31), compatible con las siguientes distribuciones:
+Al terminar, el modelo se descarga automáticamente con barra de progreso si aún no está en disco (por defecto `Qwen2.5-0.5B-Instruct`, ~350 MB).
 
-| Distribucion | Version | glibc | Compatibilidad |
+El repositorio incluye un `memvid-agent-core/config.json` de ejemplo que usa `memvid_data` como directorio de datos. Puedes editarlo o borrarlo para repetir el asistente.
+
+Opcionalmente se carga `.env` (vía `dotenvy`) antes de leer la configuración.
+
+---
+
+## Comandos del REPL
+
+Los comandos aceptan mayúsculas en muchos casos (`/MODELS`, `/MODEL`, `/SEARCH`, `/TOKEN`, `/LOAD`, `/INGEST`, etc.).
+
+### Conversación y estado
+
+| Comando | Descripción |
+|---|---|
+| `<mensaje>` | Chatea con el agente (usa RAG e historial de la sesión) |
+| `/help` | Muestra la ayuda completa |
+| `/exit`, `/quit` | Sale (también Ctrl+C con apagado graceful) |
+| `/stats` | Modelo activo, interacciones, memoria y archivos cargados |
+| `/history`, `/ls` | Historial de conversaciones persistidas |
+| `/config` | Configuración actual |
+| `/debug` | Activa/desactiva el modo debug y muestra el RAG de la última consulta |
+
+### Modelos y generación
+
+| Comando | Descripción |
+|---|---|
+| `/models` | Lista el catálogo con tamaños, descripción y modelo activo |
+| `/model` | Muestra el modelo actual |
+| `/model current` | Igual que `/model` |
+| `/model <id>` | Descarga (si falta) y cambia al modelo indicado |
+| `/kv` | Muestra los tipos de KV-cache actuales |
+| `/kv <k> <v>` | Cambia los tipos K/V (p. ej. `/kv f16 turbo3`) y recarga el contexto |
+
+### Conocimiento e ingesta
+
+| Comando | Descripción |
+|---|---|
+| `/search <query> [from:<source>]` | Busca en el índice (top 5), con filtro opcional por fuente |
+| `/load <file>` | Carga un archivo de texto en la sesión (no lo indexa) |
+| `/ingest <file>` | Extrae e indexa un archivo (PDF/EPUB/MD/HTML/TXT); los de texto se resumen al indexar |
+| `/ingest-pdf <file>` | Igual, forzando extracción de PDF/EPUB |
+| `/fetch <url>` | Descarga una URL, extrae texto y lo indexa (con deduplicación) |
+| `/fetch-md <url>` | Descarga una URL y la muestra convertida a Markdown |
+| `/batch <file>` | Procesa un archivo con una URL por línea (`#` para comentarios) |
+| `/reindex` | Reconstruye el índice desde los segmentos `.mv2` |
+| `/languages` | Lista lenguajes con documentación disponible |
+| `/languages-installed` | Lista lenguajes instalados |
+| `/learn <lang>` | Descarga hasta 10 recursos del lenguaje y los indexa |
+| `/unlearn <lang>` | Elimina el conocimiento asociado al lenguaje |
+| `/books` | Lista lenguajes de free-programming-books |
+| `/download-books <lang> [limit]` | Indexa hasta `limit` recursos del catálogo de libros de ese lenguaje (metadatos: título, formato y URL) |
+| `/finetune <lang>` | Fine-tune del modelo activo con los docs de ese lenguaje |
+
+### Feeds y cola
+
+| Comando | Descripción |
+|---|---|
+| `/feed <url>` | Descarga un feed RSS/Atom e indexa hasta 20 entradas |
+| `/queue` | Estado de la cola (`pending`, `processing`, `done`, `failed`) |
+| `/queue-add <url>` | Añade una URL a la cola persistente |
+| `/queue-process` | Procesa todas las URLs pendientes |
+
+### API
+
+| Comando | Descripción |
+|---|---|
+| `/token` | Habilita la API, genera token si falta, arranca el servidor y ofrece configurar OpenCode/VS Code |
+
+> Nota: `/token` genera un token si falta y hace `bind` en `0.0.0.0`, por lo que la API queda accesible desde la red. `api.host` solo se usa cuando no hay token configurado.
+
+---
+
+## API HTTP compatible con OpenAI
+
+El servidor se inicia desde el REPL con `/token`. La sección `api` de `config.json` define host, puerto y token; marcar `api.enabled: true` no lo arranca automáticamente.
+
+### Endpoints
+
+| Método | Ruta | Auth | Descripción |
 |---|---|---|---|
-| Ubuntu | 20.04 LTS | 2.31 | Compatible |
-| Ubuntu | 22.04 LTS | 2.35 | Compatible |
-| Ubuntu | 24.04 LTS | 2.39 | Compatible |
-| Ubuntu | 26.04 LTS | 2.41 | Compatible |
-| Debian | 12 (bookworm) | 2.36 | Compatible |
-| Debian | 13 (trixie) | 2.38 | Compatible |
+| `GET` | `/health` | No | Estado, modelo y uptime |
+| `GET` | `/v1/models` | Bearer | Lista de modelos (el activo) |
+| `POST` | `/v1/chat/completions` | Bearer | Chat completion; soporta `"stream": true` (SSE) |
+| `GET` / `POST` | `/token` | Bearer | Devuelve el token configurado |
+
+- **Autenticación:** `Authorization: Bearer <token>`.
+- **Límites:** cuerpo máximo 10 MB, cabeceras 64 KB, timeout de conexión 120 s.
+- **Concurrencia:** un hilo por conexión; la inferencia se serializa con un mutex, por lo que las peticiones se atienden de una en una.
+- **SSE:** `stream: true` devuelve un evento `role`, un evento `content` y un evento `finish` con `[DONE]`. El texto se genera completo antes de emitirse, no token a token.
+- **Memoria:** las peticiones de la API **no** se guardan en la sesión persistente del REPL.
+- **Uso de tokens:** `usage` se informa con ceros (no se tokeniza la petición).
+
+### Ejemplo
+
+```bash
+curl http://localhost:8787/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{
+    "model": "Qwen2.5-0.5B-Instruct",
+    "messages": [{"role": "user", "content": "¿Qué es un struct en Rust?"}]
+  }'
+```
+
+```bash
+curl http://localhost:8787/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"messages":[{"role":"user","content":"hola"}],"stream":true}'
+```
+
+### Clientes
+
+`/token` ofrece instrucciones y, en el caso de OpenCode, escribe la configuración:
+
+- **OpenCode:** `~/.config/opencode/opencode.json` y, opcionalmente, `<padre-del-cwd>/opencode.json`. El proveedor se configura como `openai` con `baseURL: http://localhost:<puerto>/v1`.
+- **VS Code (Continue):** muestra el bloque `openai-compatible` con `api_base` y `api_key`.
+
+---
+
+## Configuración
+
+`config.json` (en el directorio desde el que se ejecuta el binario):
+
+| Campo | Default | Descripción |
+|---|---|---|
+| `version` | `1` | Versión del formato de configuración |
+| `data_dir` | `~/.aten-ia` (o `memvid_data`) | Directorio de persistencia |
+| `developer_mode` | `true` | Activa el system prompt de desarrollo |
+| `developer_prompt` | `null` | System prompt personalizado (si es `null`, usa el de por defecto) |
+| `model.path` | `models/qwen2.5-0.5b.gguf` | Ruta al GGUF |
+| `model.name` | `Qwen2.5-0.5B-Instruct` | Nombre visible del modelo |
+| `model.n_ctx` | `8192` | Tamaño de contexto |
+| `model.n_gpu_layers` | `0` | Capas en GPU (los builds no incluyen backends GPU) |
+| `model.chat_template` | `chatml` | `chatml`, `llama3`, `mistral` o `raw` |
+| `model.kv_type_k` / `model.kv_type_v` | `f16` | Tipo de KV-cache K/V (ver tabla siguiente) |
+| `model.download_url` | HuggingFace | URL de descarga si falta el modelo |
+| `model.sha256` | `null` | Checksum opcional del GGUF |
+| `generation.top_k` | `40` | Muestreo top-k |
+| `generation.top_p` | `0.95` | Muestreo nucleus |
+| `generation.temp` | `0.8` | Temperatura |
+| `generation.max_tokens` | `2048` | Tokens máximos por respuesta |
+| `api.enabled` | `false` | Marca la API como habilitada (el arranque es vía `/token`) |
+| `api.host` | `127.0.0.1` | Host de escucha |
+| `api.port` | `8787` | Puerto |
+| `api.token` | `null` | Token Bearer (se genera con `/token`) |
+| `languages.installed` | `[]` | Lenguajes aprendidos |
+| `ingestion.*` | ver abajo | Parámetros de descarga e indexación |
+| `finetune.*` | ver abajo | Parámetros de fine-tuning |
+
+**KV-cache admitida:** `f32`, `f16`, `bf16`, `q8_0`, `q4_0`, `turbo2`/`turbo2_0`, `turbo3`/`turbo3_0`, `turbo4`/`turbo4_0`.
+Por fidelidad se recomienda mantener `K` con precisión igual o mayor que `V` (por ejemplo `K=f16`, `V=turbo3`); los codecs `turbo*` activan flash-attn automáticamente.
+
+**Ingesta (defaults):**
+
+| Campo | Default |
+|---|---|
+| `timeout_seconds` | `30` |
+| `max_size_bytes` | `5242880` (5 MB) |
+| `rate_limit_per_second` | `2` |
+| `max_retries` | `3` |
+| `retry_backoff_seconds` | `5` |
+| `chunk_max_size` | `1024` |
+| `chunk_overlap` | `200` |
+| `user_agent` | `aten-ia/0.1.0` |
+
+**Fine-tune (defaults):** `binary_path: null`, `epochs: 3`, `output_dir: models/finetuned`.
+
+`Config::validate()` comprueba: `n_ctx > 0`, `max_tokens > 0`, `temp >= 0`, `0 <= top_p <= 1`, `top_k >= 0`, `port > 0` y tipos de KV válidos.
+
+### Variables de entorno
+
+| Variable | Default | Descripción |
+|---|---|---|
+| `MODEL_PATH` | — | Sobrescribe `model.path` |
+| `MODEL_NAME` | — | Sobrescribe `model.name` |
+| `MODEL_CTX` | — | Sobrescribe `model.n_ctx` |
+| `MODEL_URL` | — | Sobrescribe `model.download_url` |
+| `LLAMA_LOCAL_LIBS` | — | Directorio con `.a` precompiladas (evita CMake) |
+| `LLAMA_LIBS_REPO` | `lordpietre/aten-ia` | Repo de GitHub para libs precompiladas |
+| `LLAMA_FINETUNE_BIN` | — | Binario `llama-finetune` para `/finetune` |
+| `ATEN_PORTABLE` | — | `1` enlaza estáticamente `libstdc++` y `libgomp` |
+| `CMAKE_BUILD_PARALLEL_LEVEL` | `2` | Paralelismo de CMake |
+| `TARGET` | Auto | Target triple para cross-compilation |
+| `HOME` | — | Determina el `data_dir` por defecto |
+
+`.env` se carga automáticamente si existe. Las variables de modelo se aplican al cargar la configuración.
+
+---
+
+## Persistencia
+
+```
+<data_dir>/
+  core.mv2                  # identidad del agente
+  manifest.json             # catálogo de segmentos
+  conversations/            # conv_YYYY-MM-DD_NNN.mv2
+  knowledge/                # know_YYYY-MM-DD_NNN.mv2
+  knowledge_index.jsonl     # índice de búsqueda por keywords
+  feed_queue.jsonl          # cola persistente de URLs
+  languages_catalog.json    # caché del catálogo de lenguajes
+  .lock                     # PID de la instancia activa
+```
+
+- Todas las escrituras son **atómicas**: escribir temporal → `fsync` → `rename` → `fsync` del directorio padre.
+- El **FileLock** rechaza instancias concurrentes y elimina locks obsoletos de procesos muertos (`/proc/<pid>`).
+- La sesión se vuelca a `.mv2` **cada 5 interacciones** y al salir (`Drop`), con recuento real de tokens vía el tokenizador del modelo.
+- El conocimiento se indexa en caliente en `knowledge_index.jsonl` y, además, se persiste en segmentos `.mv2`; `/reindex` reconstruye el índice desde estos últimos.
+
+---
+
+## Arquitectura
+
+```
+REPL (main.rs) ───────────────┐
+                              ├──> Agent (agent.rs)
+API HTTP (api.rs) ────────────┘         │
+                                        ├── LlamaContext  (llama/)
+                                        ├── PromptBuilder (prompt.rs)
+                                        ├── ContextPolicy (context_policy.rs)
+                                        ├── Session       (session.rs)
+                                        ├── KnowledgeIndex(retrieval.rs)
+                                        └── MemvidWriter  (memvid/)
+```
+
+**Flujo de una consulta:**
+
+1. `KnowledgeIndex::search_with_scores()` recupera los 10 candidatos mejor puntuados.
+2. Se descartan los que no caben en el presupuesto de RAG (contexto − system − entrada − margen).
+3. `ContextPolicy::trim_messages()` recorta el historial conservando los mensajes más recientes.
+4. `PromptBuilder::build()` aplica la plantilla del modelo con el contexto RAG.
+5. `LlamaContext::generate()` infiere y se devuelve la respuesta (+ debug opcional).
+
+**Scoring RAG** (keyword, sin embeddings): coincidencia en fuente ×20, palabra exacta en contenido ×50, coincidencia parcial ×30 normalizada por densidad, e ID ×5.
+
+### Módulos (23)
+
+```
+memvid-agent-core/src/
+  lib.rs               — crate library (memvid_agent_core)
+  main.rs              — REPL, asistente de primer arranque, /token, finetune UI
+  agent.rs             — Orquestación: chat, ingesta, búsqueda, modelos
+  api.rs               — Servidor HTTP OpenAI-compatible
+  books_catalog.rs     — Catálogo free-programming-books
+  chunker.rs           — Chunking Fixed / Paragraph / Heading
+  config.rs            — Configuración persistente y validación
+  context_policy.rs    — Presupuesto de contexto y recorte de historial
+  extractor.rs         — Extracción PDF/EPUB/HTML/Markdown/texto
+  feeds.rs             — Parseo RSS/Atom
+  finetune.rs          — Corpus, estimación y ejecución de fine-tuning
+  generation.rs        — Pipeline prompt + RAG + generación
+  languages_catalog.rs — Catálogo y descarga de docs por lenguaje
+  llama/               — FFI de llama.cpp (context.rs, ffi.rs)
+  memvid/              — Persistencia .mv2 (writer/reader/manifest/playlist)
+  models.rs            — Descarga del modelo activo
+  models_catalog.rs    — Catálogo de 21 modelos GGUF
+  prompt.rs            — Plantillas ChatML/Llama3/Mistral/Raw
+  queue.rs             — Cola de URLs persistente
+  retrieval.rs         — Índice de conocimiento y chunking de texto
+  session.rs           — Buffer de sesión y flush a memoria
+  shutdown.rs          — Señales SIGINT/SIGTERM
+  types.rs             — Tipos compartidos y defaults
+  utils.rs             — FileLock, atomic_write, SHA-256, truncado UTF-8
+  web_fetcher.rs       — HTTP con rate limit, timeouts y reintentos
+```
+
+---
+
+## Fine-tuning (`/finetune <lang>`)
+
+Después de `/learn <lang>`, se puede afinar el modelo activo con esos mismos documentos (también se ofrece automáticamente al terminar `/learn`):
+
+1. **Corpus:** concatena los chunks indexados cuyo `source` empieza por `"<lang>/"`.
+2. **Estimación previa:** ~16 bytes/parámetro (peso maestro, gradiente y dos momentos AdamW en f32) + ~1,5 GB de overhead; también estima el tiempo según parámetros, épocas y threads.
+3. **Comprobación de RAM:** lee la RAM disponible del sistema y avisa si el run no cabe.
+4. **Ejecución:**
+   - Si encuentra `llama-finetune` (`LLAMA_FINETUNE_BIN`, `finetune.binary_path` o `PATH`), lo ejecuta y ofrece cambiar al GGUF resultante.
+   - Si no lo encuentra, escribe el corpus y un script `finetune_<lang>.sh` para ejecutarlo en otra máquina.
+
+> ⚠️ Es un **full fine-tune** (todos los pesos), no LoRA. En CPU es lento y consume mucha RAM: está pensado para preparar el trabajo en local y ejecutarlo en una máquina mayor. aten-ia **no compila** `llama-finetune`; constrúyelo desde el fork:
+>
+> ```bash
+> cmake -B build -DLLAMA_BUILD_EXAMPLES=ON && cmake --build build --target llama-finetune -j
+> ```
+
+---
+
+## Build portable y releases
+
+### Binario portable (glibc antiguo)
 
 ```bash
 ./scripts/build-portable.sh
 ./scripts/validate-compat.sh dist/aten-ia
 ```
 
-Requiere Docker. El binario resultante:
+Usa Docker (`docker/Dockerfile.build`) con **Ubuntu 20.04** y compila con `ATEN_PORTABLE=1`, enlazando `libstdc++` y `libgomp` estáticamente. El binario resultante requiere como máximo **GLIBC_2.31** y solo depende de bibliotecas base del sistema (`libc`, `libm`, `libgcc_s`, `libpthread`, `libdl` y, en algunos casos, `librt`).
 
-- glibc maximo requerido: GLIBC_2.31
-- `libstdc++` y `libgomp` estaticamente linkeados
-- Solo depende de: `libc.so.6`, `libm.so.6`, `libgcc_s.so.1`, `libpthread.so.0`, `libdl.so.2`
+| Distribución | Versión | glibc | Compatible |
+|---|---|---|---|
+| Ubuntu | 20.04 LTS | 2.31 | ✅ |
+| Ubuntu | 22.04 / 24.04 / 26.04 | 2.35 / 2.39 / 2.41 | ✅ |
+| Debian | 11 (bullseye) / 12 / 13 | 2.31 / 2.36 / 2.38 | ✅ |
 
-Archivos relevantes:
-
-| Archivo | Descripcion |
-|---|---|
-| `docker/Dockerfile.build` | Contenedor Ubuntu 20.04 para build portable |
-| `scripts/build-portable.sh` | Script de build automatizado con Docker |
-| `scripts/validate-compat.sh` | Validacion de compatibilidad glibc |
-| `memvid-agent-core/.cargo/config.toml` | Flags de static linking |
-| `.github/workflows/release.yml` | CI/CD con contenedor Ubuntu 20.04 |
+Archivos implicados: `docker/Dockerfile.build`, `scripts/build-portable.sh`, `scripts/validate-compat.sh`, `memvid-agent-core/.cargo/config.toml` (linker aarch64).
 
 ### Release
 
 ```bash
-git tag v0.1.0 && git push --tags
+git tag v0.3.12 && git push --tags
 ```
 
-Esto dispara GitHub Actions: compila binarios + `.deb` para x86_64 y ARM64, usando contenedor Ubuntu 20.04 para compatibilidad con glibc antiguo.
+Los workflows (`.github/workflows/release.yml` y `.gitea/workflows/release.yml`) compilan en un contenedor `node:20-bullseye` (glibc 2.31) para:
 
-## Variables de entorno
+- `x86_64-unknown-linux-gnu`
+- `aarch64-unknown-linux-gnu` (cross-compilado)
 
-| Variable | Default | Descripcion |
-|---|---|---|
-| `MODEL_PATH` | `models/qwen2.5-0.5b.gguf` | Ruta al modelo GGUF |
-| `MODEL_NAME` | `Qwen2.5-0.5B-Instruct` | Nombre del modelo |
-| `MODEL_CTX` | `8192` | Tamano de contexto |
-| `MODEL_URL` | URL de HuggingFace | URL de descarga alternativa |
-| `LLAMA_LOCAL_LIBS` | — | Directorio con `.a` precompiladas (salta cmake) |
-| `LLAMA_LIBS_REPO` | `lordpietre/aten-ia` | Repo de GitHub para descargar libs precompiladas |
-| `LLAMA_FINETUNE_BIN` | — | Ruta a un binario `llama-finetune` precompilado (para `/finetune`) |
-| `ATEN_PORTABLE` | — | Si es `1`, linkea `libstdc++` y `libgomp` estaticamente |
-| `CMAKE_BUILD_PARALLEL_LEVEL` | `2` | Nivel de paralelismo para cmake |
-| `TARGET` | Auto | Target triple para cross-compilation |
+Artefactos: `aten-ia-<target>.tar.gz`, paquete `.deb` (`amd64`/`arm64`) y checksums SHA-256, publicados en GitHub Releases y en Gitea.
 
-Opcionalmente se carga `.env` via `dotenvy` antes de la configuracion.
+También existe un `snapcraft.yaml` que empaqueta el binario ya compilado.
 
-**Prebuilt libs fallback chain** (en `build.rs`):
-1. `LLAMA_LOCAL_LIBS=/path` — copia `.a` desde un directorio local
-2. Descarga `llama-libs-{target}.tar.gz` desde GitHub Releases
-3. CMake build (nivel de paralelismo via `CMAKE_BUILD_PARALLEL_LEVEL`, default 2)
+---
 
-Override del repo de descarga: `LLAMA_LIBS_REPO=user/repo`.
+## Tests y CI
 
-## Comandos del REPL
-
-| Comando | Descripcion |
-|---|---|
-| `<mensaje>` | Chatea con el agente |
-| `/models` | Lista modelos disponibles |
-| `/model [id\|current]` | Muestra / descarga / cambia modelo |
-| `/learn <lang>` | Descarga e indexa docs de un lenguaje |
-| `/unlearn <lang>` | Elimina conocimiento de un lenguaje |
-| `/finetune <lang>` | Fine-tune real del modelo activo con los docs de `/learn` (estima RAM/tiempo antes) |
-| `/fetch <url>` | Descarga URL, extrae texto e indexa |
-| `/fetch-md <url>` | Descarga URL y muestra como Markdown |
-| `/ingest <file>` | Indexa archivo local (PDF/EPUB/MD/HTML/txt) |
-| `/ingest-pdf <file>` | Extrae e indexa PDF/EPUB explicitamente |
-| `/search <query> [from:<source>]` | Busca en el knowledge index |
-| `/reindex` | Reconstruye indice desde `.mv2` |
-| `/load <file>` | Carga archivo en sesion (sin indexar) |
-| `/batch <file>` | Procesa lote de URLs desde archivo |
-| `/feed <url>` | Descarga e indexa feed RSS/Atom |
-| `/queue-add <url>` | Anade URL a la cola de feeds |
-| `/queue-process` | Procesa todas las URLs pendientes |
-| `/queue` | Muestra estado de la cola |
-| `/books` | Lista lenguajes de free-programming-books |
-| `/download-books <lang> [limit]` | Descarga e indexa libros de un lenguaje |
-| `/languages` | Lista lenguajes disponibles para `/learn` |
-| `/languages-installed` | Lista lenguajes instalados |
-| `/token` | Inicia servidor API OpenAI-compatible |
-| `/kv [k] [v]` | Muestra/cambia tipos de KV-cache |
-| `/stats` | Estadisticas del agente |
-| `/history` | Historial de conversaciones |
-| `/config` | Muestra configuracion actual |
-| `/help` | Ayuda completa |
-| `/exit` | Salir (Ctrl+C tambien funciona con shutdown graceful) |
-
-## Shutdown graceful
-
-aten-ia maneja senales SIGINT (Ctrl+C) y SIGTERM:
-
-- Al presionar Ctrl+C, el proceso detecta la senal y sale limpiamente
-- El API server se detiene al recibir la senal de shutdown
-- La sesion se flusha automaticamente antes de salir (via `Agent::Drop`)
-- El file lock se elimina automaticamente al salir
-- El mensaje de despedida indica si fue por senal o salida normal
-
-## Modelo por defecto
-
-`Qwen2.5-0.5B-Instruct` (`n_ctx: 8192`, `chat_template: chatml`). El catalog incluye 20 modelos GGUF Q4_K_M — se seleccionan con `/model <id>`.
-
-## Arquitectura
-
-- **CPU only** — `n_gpu_layers = 0`, sin flags CUDA/Metal/Vulkan
-- **RAG keyword-only** — busqueda por substrings sobre `knowledge_index.jsonl`, sin embeddings
-- **API single-threaded** — `TcpListener`, conexiones secuenciales, sin streaming SSE
-- **Persistencia atomica** — write -> fsync -> rename -> fsync(parent)
-- **Chunker UTF-8 safe** — `floor_char_boundary()` en overlaps, no puede entrar en panico con caracteres multibyte
-- **Session flush cada 5 interacciones** — `Session::flush()` -> `MemvidWriter`
-- **FileLock** — `data_dir/.lock` con `aten-ia <PID>`, rechaza instancias concurrentes, detecta locks stale de procesos muertos
-- **Shutdown graceful** — SIGINT/SIGTERM via `libc::signal` + `AtomicBool`, API server se detiene limpiamente, sesion se flusha al salir
-- **llama.cpp verbose suprimido** — `llama_log_set(noop_log)` al inicio
-
-### Estructura de modulos
-
-```
-src/
-  lib.rs              — 22 modulos publicos
-  main.rs             — REPL interactivo + setup wizard + shutdown handler
-  agent.rs            — Agente principal (chat, ingest, RAG)
-  api.rs              — Servidor HTTP OpenAI-compatible (detenible via AtomicBool)
-  books_catalog.rs    — Catalogo de libros gratuitos
-  chunker.rs          — Chunking de texto (Fixed/Paragraph/Heading)
-  config.rs           — Configuracion persistente (config.json)
-  context_policy.rs   — Politica de tamano de contexto
-  extractor.rs        — Extraccion de PDF/EPUB/HTML/MD
-  feeds.rs            — Parseo de feeds RSS/Atom
-  generation.rs       — Generacion de texto via LLM
-  languages_catalog.rs — Catalogo de lenguajes
-  llama/              — FFI bindings para llama.cpp (TurboQuant)
-  memvid/             — Persistencia .mv2 (writer/reader/manifest/playlist)
-  models.rs           — Descarga de modelos GGUF
-  models_catalog.rs   — Catalogo de 20 modelos
-  prompt.rs           — Templates de chat (ChatML/Llama/Alpaca/Mistral/Raw)
-  queue.rs            — Cola de feeds (JSONL persistente)
-  retrieval.rs        — Indice de conocimiento (keyword RAG)
-  session.rs          — Sesion de chat (flush cada 5 interacciones)
-  shutdown.rs         — Manejo de senales SIGINT/SIGTERM
-  types.rs            — Tipos compartidos (KnowledgeEntry, ConversationBatch, etc.)
-  utils.rs           — FileLock, atomic_write, sha256, truncacion UTF-8
-  web_fetcher.rs      — Fetch HTTP con rate limiting y reintentos
+```bash
+cd memvid-agent-core
+cargo test -- --test-threads=1      # ~535 tests (unitarios + integración)
+cargo test --lib -- --test-threads=1
+cargo fmt --all -- --check
+cargo clippy --lib
 ```
 
-### Estructura de datos
+Los tests de integración (`tests/functional.rs`, `tests/writer_integration.rs`, `tests/kv_cache_and_history.rs`) usan `tempfile::tempdir()` y `LlamaContext::null()`, por lo que **no necesitan un GGUF**. Se requiere `--test-threads=1` porque varios tests modifican variables de entorno (`MODEL_PATH`) y comparten estado global.
 
-```
-~/.aten-ia/
-  core.mv2
-  manifest.json
-  feed_queue.jsonl
-  knowledge_index.jsonl
-  conversations/
-  knowledge/
-  archive/
-```
+CI compila para `x86_64` y `aarch64`; los tests, `fmt` y `clippy --lib` se ejecutan solo en `x86_64`. Orden: `build → test → fmt → clippy --lib`.
 
-Por defecto los datos se guardan en `~/.aten-ia`. Puedes cambiarlo con `/config` o la variable `DATA_DIR`.
+Documentación adicional: [`PORTABILITY_SPEC.md`](PORTABILITY_SPEC.md).
 
-## Configuracion
-
-`config.json` en `memvid-agent-core/`:
-
-- `data_dir`: directorio de persistencia (default `~/.aten-ia`, cuando `$HOME` no esta disponible usa `memvid_data`)
-- `model.path`: ruta al archivo GGUF
-- `model.name`: nombre del modelo activo
-- `model.n_ctx`: tamano de contexto
-- `model.kv_type_k` / `model.kv_type_v`: tipo de KV-cache (default `f16`; `f32`, `bf16`, `q8_0`, `q4_0`, o TurboQuant `turbo2/3/4` — los codecs TurboQuant activan flash-attn automaticamente)
-- `generation.top_k`, `top_p`, `temp`, `max_tokens`
-- `api.enabled`, `api.host`, `api.port`, `api.token`
-- `languages.installed`
-- `ingestion.timeout_seconds`, `chunk_max_size`, `chunk_overlap`, etc.
-
-Validacion en `config.validate()`: `n_ctx > 0`, `max_tokens > 0`, `temp >= 0`, `0 <= top_p <= 1`, `top_k >= 0`, `port > 0`, y KV cache types validos.
-
-## Dependencias principales
-
-| Crate | Uso |
-|---|---|
-| `memvid-core` | Persistencia `.mv2` |
-| `llama-cpp-turboquant` (bindgen) | Inferencia LLM via FFI |
-| `ureq` | Descargas HTTP + timeout |
-| `indicatif` | Barras de progreso y spinners |
-| `pdf-extract` / `epub` | Extraccion de texto |
-| `feed-rs` | Parseo de feeds RSS/Atom |
-| `sha2` | Checksums SHA-256 |
-| `colored` | Salida de terminal colorida |
-| `dotenvy` | Carga de `.env` |
-| `libc` | Signal handling para shutdown graceful |
-
-## Fine-tuning (`/finetune <lang>`)
-
-Tras `/learn <lang>` puedes afinar el modelo activo con esos mismos docs. El flujo:
-
-1. **Corpus**: concatena los chunks indexados cuyo `source` empieza por `"<lang>/"`.
-2. **Estimacion previa**: calcula RAM pico (~16 bytes/parametro, full fine-tune
-   AdamW) y tiempo aproximado segun nº de parametros, epocas y threads. Si no cabe
-   en la RAM disponible (`/proc/meminfo`), avisa antes de continuar.
-3. **Ejecucion**: si hay binario `llama-finetune` (via `LLAMA_FINETUNE_BIN`,
-   `config.finetune.binary_path` o `PATH`) lo lanza y produce un GGUF afinado, y
-   ofrece cambiar a el. Si **no** hay binario, escribe el corpus y un script
-   `finetune_<lang>.sh` listo para ejecutar en una maquina con mas RAM.
-
-> ⚠️ Es **full fine-tune** (todos los pesos, salida GGUF del tamaño del modelo),
-> no LoRA. En CPU es lento y consume mucha RAM: pensado para portar a una maquina
-> capaz. aten-ia no compila `llama-finetune`; constrúyelo desde el fork:
-> `cmake -B build -DLLAMA_BUILD_EXAMPLES=ON && cmake --build build --target llama-finetune -j`.
-
-Config en `config.json` → `finetune`: `binary_path`, `epochs` (def. 3),
-`output_dir` (def. `models/finetuned`). Se dispara tambien automaticamente (oferta
-y/N) al terminar un `/learn`.
+---
 
 ## Limitaciones conocidas
 
-- RAG es keyword-based (sin embeddings semanticos)
-- API: un hilo por conexion, inferencia serializada por mutex, sin streaming SSE
-- Template `Raw` ignora historial y RAG context
-- No hay `MODEL_GPU_LAYERS` env var (CPU only por ahora)
-- Token counts en la API son siempre 0 (no se tokeniza la request)
-- `/batch` no incrementa la barra de progreso por URL individual
+- **RAG por keywords**, no embeddings semánticos: no encuentra sinónimos ni paráfrasis.
+- La API **serializa la inferencia** con un mutex: no hay paralelismo real de generación.
+- El streaming SSE envía el contenido en un único chunk (no token a token).
+- Las peticiones a la API no se guardan en la memoria persistente.
+- `usage` en la API siempre informa 0 tokens.
+- La plantilla `raw` ignora historial y contexto RAG.
+- `n_gpu_layers` existe en la configuración, pero los builds no incluyen backends GPU (CUDA/Metal/Vulkan).
+- `/batch` no incrementa la barra por URL individual (sí procesa todas y muestra el resumen final).
+- No hay archivo `LICENSE` en el repositorio, aunque el proyecto se declara Apache 2.0.
+
+---
+
+## Documentación
+
+- [`wiki/`](wiki/) — instalación, uso, arquitectura y desarrollo
+- [`man/aten-ia.1`](man/aten-ia.1) — página de manual
+- [`PORTABILITY_SPEC.md`](PORTABILITY_SPEC.md)
+- [`AGENTS.md`](AGENTS.md) — notas para agentes/desarrolladores
 
 ## Licencia
 
-Apache 2.0
+Apache 2.0.

@@ -1,107 +1,340 @@
-% ATEN-IA(1) aten-ia user manual
-% pietre
-% 2024
-
-# NAME
-
-aten-ia - Agente de IA interactivo CLI con inferencia LLM local
-
-# SYNOPSIS
-
-**aten-ia** [*OPTIONS*]
-
-# DESCRIPTION
-
-**aten-ia** es un agente de IA interactivo que funciona 100% en local usando modelos LLM
-(llama.cpp). No requiere conexión a internet ni API keys externas.
-
-# OPTIONS
-
-**-h**, **--help**
-: Muestra esta ayuda
-
-**--version**
-: Muestra la versión
-
-**--api**
-: Inicia el servidor API OpenAI-compatible
-
-**--api-port** *PORT*
-: Puerto para el servidor API (default: 8080)
-
-**--data-dir** *DIR*
-: Directorio de datos (default: ~/.aten-ia)
-
-# COMANDOS DEL REPL
-
-**/help**
-: Muestra la ayuda
-
-**/quit**, **/exit**
-: Sale del programa
-
-**/debug**
-: Activa modo debug para ver RAG
-
-**/config**
-: Muestra configuración actual
-
-**/kv** [*K*] [*V*]
-: Configura tipos de KV cache (ej: /kv f16 turbo3)
-
-**/models**
-: Lista modelos disponibles
-
-**/model** [*nombre*]
-: Cambia el modelo activo
-
-**/ingest** [*archivo*]
-: Ingesta un archivo (PDF, EPUB, HTML, MD, TXT)
-
-**/search** [*query*]
-: Busca en el conocimiento indexado
-
-# ENTORNO
-
-**MODEL_PATH**
-: Ruta al archivo del modelo GGUF
-
-**MODEL_NAME**
-: Nombre del modelo
-
-**MODEL_CTX**
-: Tamaño del contexto (default: 8192)
-
-# FILES
-
-~/.aten-ia/
-: Directorio de datos por defecto
-
-~/.aten-ia/config.json
-: Archivo de configuración
-
-~/.aten-ia/memvid_data/
-: Datos persistentes (conversaciones, conocimiento)
-
-# EXAMPLES
-
+.\" Página de manual para aten-ia
+.TH ATEN-IA 1 "2026-11-24" "aten-ia 0.3.12" "Manual del usuario"
+.SH NAME
+aten-ia \- agente de IA local con memoria persistente, RAG y API compatible con OpenAI
+.SH SYNOPSIS
+.B aten-ia
+.RB [ \-\-version | \-V ]
+.SH DESCRIPTION
+.B aten-ia
+es un agente conversacional de línea de comandos que ejecuta modelos GGUF en CPU
+mediante llama.cpp (fork TurboQuant). Guarda conversaciones y conocimiento en
+segmentos
+.B .mv2
+(memvid-core v2), busca en su propio índice por palabras clave (RAG) y expone una
+API HTTP compatible con OpenAI.
+.PP
+La inferencia es local: no requiere GPU, API keys ni servicios externos. Solo se
+necesita red para descargar el modelo la primera vez o para ingerir contenido de
+Internet.
+.SH OPTIONS
+.TP
+.B \-\-version, \-V
+Muestra la versión del binario y termina.
+.PP
+El binario no interpreta otros argumentos: toda la configuración se realiza en
+.B config.json
+o con las variables de entorno descritas más abajo.
+.SH "PRIMER ARRANQUE"
+Si no existe
+.B config.json
+en el directorio actual, se inicia un asistente interactivo que configura el
+directorio de datos, el modelo inicial, la documentación de un lenguaje y,
+opcionalmente, el servidor API. Si el modelo GGUF no está en disco, se descarga
+automáticamente desde HuggingFace con barra de progreso.
+.SH "COMANDOS DEL REPL"
+Los comandos se escriben en el prompt
+.B >
+y muchos aceptan mayúsculas.
+.SS "Conversación y estado"
+.TP
+.B <mensaje>
+Envía un mensaje al agente usando el historial de la sesión y el contexto RAG.
+.TP
+.B /help
+Muestra la ayuda completa.
+.TP
+.B /exit, /quit
+Sale del programa. Ctrl+C también provoca un apagado ordenado.
+.TP
+.B /stats
+Muestra el modelo activo, interacciones, resumen de memoria y archivos cargados.
+.TP
+.B /history, /ls
+Muestra el historial de conversaciones persistidas.
+.TP
+.B /config
+Muestra la configuración efectiva.
+.TP
+.B /debug
+Activa o desactiva el modo debug y muestra el RAG de la última consulta.
+.SS "Modelos y generación"
+.TP
+.B /models
+Lista el catálogo de modelos (21 entradas Q4_K_M) con tamaño y descripción.
+.TP
+.B /model
+Muestra el modelo activo.
+.TP
+.B /model current
+Igual que
+.BR /model .
+.TP
+.B /model <id>
+Descarga, si falta, y cambia al modelo indicado del catálogo.
+.TP
+.B /kv
+Muestra los tipos de KV-cache actuales.
+.TP
+.B /kv <k> <v>
+Cambia los tipos K/V y recarga el contexto. Tipos válidos:
+.BR f32 ,
+.BR f16 ,
+.BR bf16 ,
+.BR q8_0 ,
+.BR q4_0 ,
+.BR turbo2 ,
+.BR turbo3 ,
+.BR turbo4
+y las variantes
+\fBturbo2_0\fR, \fBturbo3_0\fR y \fBturbo4_0\fR.
+Los codecs
+.B turbo*
+activan flash-attn automáticamente.
+.SS "Conocimiento e ingesta"
+.TP
+.B /search <query> [from:<source>]
+Busca en el índice (hasta 5 resultados) con filtro opcional por fuente.
+.TP
+.B /load <file>
+Carga un archivo de texto en la sesión sin indexarlo.
+.TP
+.B /ingest <file>
+Extrae e indexa un archivo PDF, EPUB, Markdown, HTML o texto.
+.TP
+.B /ingest-pdf <file>
+Fuerza la extracción de un PDF o EPUB.
+.TP
+.B /fetch <url>
+Descarga una URL, extrae el texto y lo indexa (deduplicado por checksum).
+.TP
+.B /fetch-md <url>
+Descarga una URL y la muestra convertida a Markdown.
+.TP
+.B /batch <file>
+Procesa un archivo con una URL por línea; las líneas que empiezan por
+.B #
+se ignoran.
+.TP
+.B /reindex
+Reconstruye el índice de conocimiento desde los segmentos
+.BR .mv2 .
+.TP
+.B /languages
+Lista los lenguajes con documentación disponible.
+.TP
+.B /languages-installed
+Lista los lenguajes ya instalados.
+.TP
+.B /learn <lang>
+Descarga hasta 10 recursos del lenguaje y los indexa como conocimiento.
+.TP
+.B /unlearn <lang>
+Elimina el conocimiento asociado al lenguaje.
+.TP
+.B /books
+Lista los lenguajes del catálogo free-programming-books.
+.TP
+.B /download-books <lang> [limit]
+Descarga e indexa libros del lenguaje indicado (10 por defecto).
+.TP
+.B /finetune <lang>
+Fine-tune completo del modelo activo sobre los documentos de ese lenguaje.
+.SS "Feeds y cola"
+.TP
+.B /feed <url>
+Descarga un feed RSS/Atom e indexa hasta 20 entradas.
+.TP
+.B /queue
+Muestra el estado de la cola de URLs.
+.TP
+.B /queue-add <url>
+Añade una URL a la cola persistente.
+.TP
+.B /queue-process
+Procesa todas las URLs pendientes de la cola.
+.SS "API"
+.TP
+.B /token
+Habilita la API, genera un token si no existe, arranca el servidor y ofrece
+instrucciones para OpenCode y VS Code (Continue).
+.SH "SERVIDOR API"
+El servidor se inicia con
+.BR /token .
+Endpoints:
+.TP
+.B GET /health
+Estado del servidor, modelo y uptime. No requiere autenticación.
+.TP
+.B GET /v1/models
+Lista de modelos (el activo). Requiere autenticación Bearer.
+.TP
+.B POST /v1/chat/completions
+Chat completion compatible con OpenAI. Acepta
+\fB"stream": true\fR
+para responder por SSE. Requiere autenticación Bearer.
+.TP
+.B GET|POST /token
+Devuelve el token configurado. Requiere autenticación Bearer.
+.PP
+Límites: cuerpo de 10 MB, cabeceras de 64 KB y timeout de conexión de 120 s.
+Cada conexión se atiende en un hilo, pero la inferencia se serializa con un
+mutex, por lo que las generaciones se ejecutan de una en una.
+.PP
+Con token configurado, el servidor escucha en
+.B 0.0.0.0
+y el puerto por defecto es
+.BR 8787 .
+Las peticiones de la API no se guardan en la memoria persistente y el campo
+.B usage
+se informa con ceros.
+.SH "VARIABLES DE ENTORNO"
+.TP
+.B MODEL_PATH
+Sobrescribe la ruta del modelo GGUF.
+.TP
+.B MODEL_NAME
+Sobrescribe el nombre visible del modelo.
+.TP
+.B MODEL_CTX
+Sobrescribe el tamaño de contexto.
+.TP
+.B MODEL_URL
+Sobrescribe la URL de descarga del modelo.
+.TP
+.B LLAMA_LOCAL_LIBS
+Directorio con bibliotecas
+.B .a
+precompiladas; evita la compilación con CMake.
+.TP
+.B LLAMA_LIBS_REPO
+Repositorio de GitHub del que descargar las bibliotecas precompiladas
+(por defecto
+.BR lordpietre/aten-ia ).
+.TP
+.B LLAMA_FINETUNE_BIN
+Ruta al binario
+.B llama-finetune
+usado por
+.BR /finetune .
+.TP
+.B ATEN_PORTABLE
+Si vale
+.BR 1 ,
+enlaza estáticamente
+.B libstdc++
+y
+.BR libgomp .
+.TP
+.B CMAKE_BUILD_PARALLEL_LEVEL
+Nivel de paralelismo de CMake durante la compilación (por defecto 2).
+.TP
+.B TARGET
+Target triple usado en la compilación cruzada.
+.TP
+.B HOME
+Determina el directorio de datos por defecto
+.RB ( ~/.aten-ia ).
+.PP
+Si existe un archivo
+.B .env
+en el directorio de trabajo, se carga automáticamente antes de leer la
+configuración.
+.SH FILES
+.TP
+.B ./config.json
+Configuración del agente (se crea en el primer arranque).
+.TP
+.B ~/.aten-ia/
+Directorio de datos por defecto. Puede cambiarse con
+.B data_dir
+en la configuración.
+.TP
+.B ~/.aten-ia/core.mv2
+Identidad del agente.
+.TP
+.B ~/.aten-ia/manifest.json
+Catálogo de segmentos de conversación y conocimiento.
+.TP
+.B ~/.aten-ia/conversations/
+Segmentos de conversación
+.BR conv_YYYY-MM-DD_NNN.mv2 .
+.TP
+.B ~/.aten-ia/knowledge/
+Segmentos de conocimiento
+.BR know_YYYY-MM-DD_NNN.mv2 .
+.TP
+.B ~/.aten-ia/knowledge_index.jsonl
+Índice de búsqueda por palabras clave.
+.TP
+.B ~/.aten-ia/feed_queue.jsonl
+Cola persistente de URLs.
+.TP
+.B ~/.aten-ia/languages_catalog.json
+Caché del catálogo de lenguajes.
+.TP
+.B ~/.aten-ia/.lock
+PID de la instancia activa; impide ejecuciones concurrentes.
+.SH EXAMPLES
 Iniciar el REPL:
-: **aten-ia**
-
-Iniciar con API:
-: **aten-ia --api**
-
-Cambiar modelo:
-: **/model Qwen2.5-Coder-1.5B-Instruct**
-
-Ingestar documentación:
-: **/ingest mis_notas.pdf**
-
-# SEE ALSO
-
-Proyecto: https://github.com/lordpietre/aten-ia
-Wiki: https://lowai.org/code/pietre/aten-ia/wiki
-
-# BUGS
-
-Reportar bugs en: https://github.com/lordpietre/aten-ia/issues
+.PP
+.RS 4
+.EX
+aten-ia
+.EE
+.RE
+.PP
+Aprender la documentación de Rust e indexarla:
+.PP
+.RS 4
+.EX
+/learn rust
+.EE
+.RE
+.PP
+Ingerir un documento y consultarlo:
+.PP
+.RS 4
+.EX
+/ingest apuntes.pdf
+resume el documento que acabo de cargar
+.EE
+.RE
+.PP
+Arrancar la API y consultarla:
+.PP
+.RS 4
+.EX
+/token
+curl http://localhost:8787/v1/chat/completions \\
+  -H "Authorization: Bearer $TOKEN" \\
+  -H "Content-Type: application/json" \\
+  -d '{"messages":[{"role":"user","content":"hola"}]}'
+.EE
+.RE
+.PP
+Reducir la KV-cache de valores para ahorrar memoria:
+.PP
+.RS 4
+.EX
+/kv f16 turbo3
+.EE
+.RE
+.SH "EXIT STATUS"
+.TP
+.B 0
+Salida normal o por señal manejada.
+.TP
+.B 1
+Error de inicialización, modelo no disponible o lock de datos ocupado.
+.SH "SEE ALSO"
+.BR llama.cpp (1),
+.BR cmake (1)
+.PP
+Documentación del proyecto:
+.BR README.md .
+Wiki:
+.BR wiki/ .
+.SH BUGS
+Reportar errores en:
+.BR https://github.com/lordpietre/aten-ia/issues .
