@@ -418,7 +418,7 @@ También existe un `snapcraft.yaml` que empaqueta el binario ya compilado.
 
 ```bash
 cd memvid-agent-core
-cargo test --locked -- --test-threads=1   # ~555 tests (unitarios + integración)
+cargo test --locked -- --test-threads=1   # ~556 tests (unitarios + integración)
 cargo test --locked --lib -- --test-threads=1
 cargo fmt --all -- --check
 cargo clippy --locked --lib

@@ -389,7 +389,6 @@ impl Agent {
     ) -> Result<Vec<String>> {
         let chunks = chunker::chunk_text(content, chunk_opts, source);
         let mut entries = Vec::with_capacity(chunks.len());
-        let mut ids = Vec::with_capacity(chunks.len());
 
         for chunk in &chunks {
             let checksum = crate::utils::sha256_digest(chunk.content.as_bytes());
@@ -400,14 +399,16 @@ impl Agent {
                 timestamp: Utc::now(),
                 checksum,
             };
-            ids.push(entry.id.clone());
-            entries.push(entry);
+            if !self.knowledge_index.contains_entry(&entry) {
+                entries.push(entry);
+            }
         }
 
+        let ids = entries.iter().map(|e| e.id.clone()).collect();
         for entry in &entries {
             self.memory.append_knowledge(entry.clone())?;
         }
-        // One write + fsync for all chunks instead of one per chunk.
+        // One write + fsync for all new chunks instead of one per chunk.
         self.knowledge_index.add_entries(&entries)?;
         Ok(ids)
     }
@@ -800,6 +801,30 @@ mod tests {
         assert_eq!(removed, 2);
         assert_eq!(agent.knowledge_count(), 1);
         assert!(dir.path().join("knowledge_tombstones.jsonl").exists());
+    }
+
+    #[test]
+    fn store_knowledge_chunked_is_idempotent() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut agent = test_agent(dir.path());
+        let opts = ChunkOptions {
+            max_size: 20,
+            overlap: 5,
+            strategy: ChunkStrategy::Fixed,
+        };
+        let text = "word ".repeat(50);
+
+        let first = agent
+            .store_knowledge_chunked("same-src", &text, &opts)
+            .unwrap();
+        assert!(!first.is_empty());
+        let count = agent.knowledge_count();
+
+        let second = agent
+            .store_knowledge_chunked("same-src", &text, &opts)
+            .unwrap();
+        assert!(second.is_empty(), "re-ingest must not add chunks");
+        assert_eq!(agent.knowledge_count(), count);
     }
 
     #[test]

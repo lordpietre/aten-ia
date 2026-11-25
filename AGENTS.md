@@ -80,7 +80,7 @@ Use `/debug` command in REPL to see RAG retrieval debug info after each query:
 
 ## Testing
 
-~555 unit + integration tests. Integration tests use `tempfile::tempdir()` + `LlamaContext::null()` — no GGUF model required:
+~556 unit + integration tests. Integration tests use `tempfile::tempdir()` + `LlamaContext::null()` — no GGUF model required:
 - `tests/functional.rs`
 - `tests/writer_integration.rs`
 - `tests/kv_cache_and_history.rs`

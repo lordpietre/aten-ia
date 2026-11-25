@@ -57,7 +57,7 @@ Estados: ✅ hecho, 🚧 en curso, ⏳ pendiente, ⚠️ requiere decisión.
 - [x] ✅ `/ingest` de texto guarda un resumen, no el documento completo, en la sesión.
 - [x] ✅ `/unlearn` durable con `knowledge_tombstones.jsonl` (incluye libros).
 - [x] ✅ Deduplicación en `/learn` y `/download-books`.
-- [ ] ⏳ Deduplicación en `/ingest` (chunks repetidos).
+- [x] ✅ Deduplicación en `/ingest` y reingesta idempotente de chunks.
 - [x] ✅ Recuperación de cola: `processing` huérfanas vuelven a `pending`.
 - [ ] ⏳ `/batch`: barra de progreso incremental.
 - [ ] ⏳ API: `model`, `max_tokens`, `temperature`, `top_p`, `usage` real y
@@ -72,7 +72,7 @@ Estados: ✅ hecho, 🚧 en curso, ⏳ pendiente, ⚠️ requiere decisión.
 - [x] ✅ Perfil release: `lto = "thin"`, `codegen-units = 1`, `strip = true`.
 - [ ] ⏳ Cache de prefijo KV entre peticiones (mayor ganancia en OpenCode).
 - [ ] ⏳ RAG: texto normalizado cacheado e índice invertido.
-- [ ] ⏳ Dedup O(1) con `HashSet` en la ingesta.
+- [x] ✅ Dedup O(1) con `HashSet<(source, checksum)>` en la ingesta.
 - [ ] ⏳ Pool acotado de conexiones HTTP.
 - [ ] ⏳ Persistencia de cola por lote.
 
@@ -123,3 +123,4 @@ Estados: ✅ hecho, 🚧 en curso, ⏳ pendiente, ⚠️ requiere decisión.
 | 2026-11-25 | Suite con CLI, red local y API TCP | ✅ 551 tests, 0 fallos |
 | 2026-11-25 | CI GitHub `80754c6` | ✅ x86_64, aarch64 y Docs |
 | 2026-11-25 | Tombstones + pdf-extract 0.12 + cola | ✅ 555 tests, 0 fallos |
+| 2026-11-25 | Dedup O(1) e ingesta idempotente | ✅ 556 tests, 0 fallos |

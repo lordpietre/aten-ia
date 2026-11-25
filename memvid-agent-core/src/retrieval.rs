@@ -1,6 +1,7 @@
 use crate::chunker;
 use crate::types::{ChunkOptions, ChunkStrategy, KnowledgeEntry};
 use anyhow::{Context, Result};
+use std::collections::HashSet;
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 
@@ -15,6 +16,8 @@ pub struct ScoredEntry<'a> {
 
 pub struct KnowledgeIndex {
     entries: Vec<KnowledgeEntry>,
+    /// Fast lookup of `(source, checksum)` for O(1) deduplication.
+    keys: HashSet<(String, String)>,
     jsonl_path: PathBuf,
     tombstones_path: PathBuf,
 }
@@ -30,9 +33,14 @@ impl KnowledgeIndex {
         };
         let tombstones = Self::load_tombstones(&tombstones_path);
         entries.retain(|e| !tombstones.iter().any(|p| e.source.starts_with(p)));
+        let keys = entries
+            .iter()
+            .map(|e| (e.source.clone(), e.checksum.clone()))
+            .collect();
 
         Ok(Self {
             entries,
+            keys,
             jsonl_path,
             tombstones_path,
         })
@@ -43,12 +51,16 @@ impl KnowledgeIndex {
     }
 
     pub fn add_entry(&mut self, entry: KnowledgeEntry) -> Result<()> {
+        self.keys
+            .insert((entry.source.clone(), entry.checksum.clone()));
         self.entries.push(entry.clone());
         self.append_entry_to_jsonl(&entry)
     }
 
     pub fn add_entries(&mut self, entries: &[KnowledgeEntry]) -> Result<()> {
         for entry in entries {
+            self.keys
+                .insert((entry.source.clone(), entry.checksum.clone()));
             self.entries.push(entry.clone());
         }
         // Append the new lines (one write + one fsync) instead of rewriting the
@@ -65,15 +77,17 @@ impl KnowledgeIndex {
     /// repeated content (e.g. chunk tests) are unaffected. Linear scan — fine for
     /// the per-document ingestion path; not for bulk inserts of millions.
     pub fn add_entry_dedup(&mut self, entry: KnowledgeEntry) -> Result<bool> {
-        let is_dup = self
-            .entries
-            .iter()
-            .any(|e| e.source == entry.source && e.checksum == entry.checksum);
-        if is_dup {
+        if self.contains_entry(&entry) {
             return Ok(false);
         }
         self.add_entry(entry)?;
         Ok(true)
+    }
+
+    /// Whether an entry with the same `(source, checksum)` is already indexed.
+    pub fn contains_entry(&self, entry: &KnowledgeEntry) -> bool {
+        self.keys
+            .contains(&(entry.source.clone(), entry.checksum.clone()))
     }
 
     pub fn search(&self, query: &str, limit: usize) -> Vec<&KnowledgeEntry> {
@@ -226,6 +240,11 @@ impl KnowledgeIndex {
         self.entries.retain(|e| !e.source.starts_with(prefix));
         let removed = before - self.entries.len();
         if removed > 0 {
+            self.keys = self
+                .entries
+                .iter()
+                .map(|e| (e.source.clone(), e.checksum.clone()))
+                .collect();
             self.flush_jsonl()?;
         }
         Ok(removed)
@@ -434,8 +453,13 @@ impl KnowledgeIndex {
         let tombstones = Self::load_tombstones(&tombstones_path);
         entries.retain(|e| !tombstones.iter().any(|p| e.source.starts_with(p)));
 
+        let keys = entries
+            .iter()
+            .map(|e| (e.source.clone(), e.checksum.clone()))
+            .collect();
         let index = Self {
             entries,
+            keys,
             jsonl_path,
             tombstones_path,
         };
