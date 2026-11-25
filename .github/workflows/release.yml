@@ -156,7 +156,7 @@ jobs:
           LLAMA_LOCAL_LIBS: llama-libs
           CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: ${{ matrix.cross == true && 'aarch64-linux-gnu-gcc' || '' }}
           BINDGEN_EXTRA_CLANG_ARGS_aarch64_unknown_linux_gnu: ${{ matrix.cross == true && '--sysroot=/usr/aarch64-linux-gnu' || '' }}
-        run: cargo build --release --target ${{ matrix.target }} --verbose
+        run: cargo build --release --locked --target ${{ matrix.target }} --verbose
 
       - name: Strip binary
         run: |
@@ -274,7 +274,7 @@ jobs:
 
       - name: Upload to GitHub Release
         if: github.ref_type == 'tag'
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           files: |
             memvid-agent-core/aten-ia-${{ matrix.target }}.tar.gz

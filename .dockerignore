@@ -2,6 +2,7 @@
 .github
 memvid-agent-core/target
 memvid-agent-core/models
+memvid-agent-core/config.json
 *.gguf
 *.tar.gz
 *.deb

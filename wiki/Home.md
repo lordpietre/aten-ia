@@ -21,7 +21,7 @@ No requiere GPU, API keys ni servicios externos para inferir. Solo se necesita r
 
 | Componente | Tecnología |
 |---|---|
-| Lenguaje | Rust (edition 2024, mínimo 1.85) |
+| Lenguaje | Rust (edition 2024, mínimo 1.89) |
 | LLM | llama.cpp (fork TurboQuant) vía FFI |
 | FFI | bindgen + CMake |
 | Persistencia | memvid-core v2 (`.mv2`) + JSONL |
@@ -49,4 +49,4 @@ La primera ejecución lanza un asistente para elegir modelo, directorio de datos
 
 ## Versión y licencia
 
-Versión actual: **0.3.12**. Licencia: **Apache 2.0**.
+Versión actual: **0.3.12**. Licencia: **Apache 2.0** — Copyright 2026 Dinámicas Electrónicas <dinamicas.electronicas@gmail.com>.

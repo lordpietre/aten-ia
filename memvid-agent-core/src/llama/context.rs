@@ -177,6 +177,20 @@ impl LlamaContext {
             ctx_params.n_batch = n_batch;
             ctx_params.n_ubatch = n_ctx;
 
+            // llama.cpp defaults to 4 threads; use all available cores unless
+            // the user pins a value with ATEN_THREADS.
+            let n_threads = std::env::var("ATEN_THREADS")
+                .ok()
+                .and_then(|v| v.parse::<i32>().ok())
+                .filter(|n| *n > 0)
+                .unwrap_or_else(|| {
+                    std::thread::available_parallelism()
+                        .map(|n| n.get() as i32)
+                        .unwrap_or(4)
+                });
+            ctx_params.n_threads = n_threads;
+            ctx_params.n_threads_batch = n_threads;
+
             let kv_k = kv_cache_ggml_type(kv_type_k);
             let kv_v = kv_cache_ggml_type(kv_type_v);
             ctx_params.type_k = kv_k;

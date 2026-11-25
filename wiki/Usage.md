@@ -124,7 +124,7 @@ Reduce el uso de memoria de la caché de valores sin tocar la de claves.
 
 ## API compatible con OpenAI
 
-Se arranca con `/token`. Por defecto escucha en el puerto **8787** y, al haber token, hace `bind` en `0.0.0.0`.
+Se arranca con `/token`. Por defecto escucha en `api.host` (**127.0.0.1**) y el puerto **8787**. Para exponerlo en la red cambia `api.host` a `0.0.0.0` y usa TLS o un reverse proxy.
 
 ### Endpoints
 

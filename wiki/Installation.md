@@ -2,8 +2,8 @@
 
 ## Requisitos
 
-- **Rust** >= 1.85.0 (edition 2024, fijado por `rust-toolchain.toml`)
-- **Dependencias de build:** `cmake libssl-dev clang libgomp-dev` (en algunas distros también `libclang-dev`)
+- **Rust** >= 1.89.0 (edition 2024, fijado por `rust-toolchain.toml`)
+- **Dependencias de build:** `cmake libssl-dev clang libclang-dev libgomp-dev`
 - **Empaquetado `.deb`:** `fakeroot`
 - Opcional: Docker, solo para el build portable reproducible
 
@@ -102,7 +102,7 @@ Si no existe `config.json` en el directorio de trabajo, se inicia un asistente q
 
 El modelo se descarga automáticamente de HuggingFace si no está en disco.
 
-> El repositorio incluye `memvid-agent-core/config.json` con `data_dir: "memvid_data"`. Bórralo si quieres repetir el asistente o usa otro directorio de trabajo.
+> El repositorio incluye `memvid-agent-core/config.example.json` con `data_dir: "memvid_data"`. Cópialo a `config.json` o bórralo para repetir el asistente. `config.json` está en `.gitignore` porque puede contener el token de la API.
 
 ## Variables de entorno
 
@@ -116,6 +116,7 @@ El modelo se descarga automáticamente de HuggingFace si no está en disco.
 | `LLAMA_LIBS_REPO` | `lordpietre/aten-ia` | Repo de libs precompiladas |
 | `LLAMA_FINETUNE_BIN` | — | Binario `llama-finetune` para `/finetune` |
 | `ATEN_PORTABLE` | — | `1` enlaza `libstdc++`/`libgomp` estáticamente |
+| `ATEN_THREADS` | Núcleos disponibles | Hilos de inferencia |
 | `CMAKE_BUILD_PARALLEL_LEVEL` | `2` | Paralelismo de CMake |
 | `TARGET` | Auto | Target triple de compilación cruzada |
 | `HOME` | — | Define el `data_dir` por defecto |

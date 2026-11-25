@@ -4,7 +4,7 @@
 
 | Herramienta | Versión / notas |
 |---|---|
-| Rust | >= 1.85.0 (edition 2024, fijado en `rust-toolchain.toml`) |
+| Rust | >= 1.89.0 (edition 2024, fijado en `rust-toolchain.toml`) |
 | CMake | Para compilar llama.cpp |
 | clang / libclang | Requerido por `bindgen` |
 | libssl-dev | Dependencia de build |
@@ -62,7 +62,7 @@ El linker se configura en `.cargo/config.toml`.
 │   ├── src/               23 módulos
 │   ├── tests/             Integración
 │   ├── build.rs           CMake, bindgen y libs
-│   ├── config.json        Configuración de ejemplo
+│   ├── config.example.json  Configuración de ejemplo (config.json está ignorado)
 │   └── llama-cpp-turboquant/  Fork de llama.cpp
 ├── docker/Dockerfile.build
 ├── scripts/               build-portable.sh, validate-compat.sh
@@ -77,11 +77,11 @@ El linker se configura en `.cargo/config.toml`.
 ## Tests
 
 ```bash
-cargo test -- --test-threads=1
-cargo test --lib -- --test-threads=1     # solo unitarios
+cargo test --locked -- --test-threads=1
+cargo test --locked --lib -- --test-threads=1  # solo unitarios
 ```
 
-- **~535 tests** entre unitarios e integración.
+- **~541 tests** entre unitarios e integración.
 - Los tests de integración (`tests/functional.rs`, `tests/writer_integration.rs`, `tests/kv_cache_and_history.rs`) usan `tempfile::tempdir()` y `LlamaContext::null()`: **no requieren GGUF**.
 - `--test-threads=1` es obligatorio: varios tests mutan `MODEL_PATH` y comparten estado global del proceso.
 
@@ -102,7 +102,7 @@ Cobertura destacada:
 
 ```bash
 cargo fmt --all -- --check
-cargo clippy --lib          # CI solo analiza la lib, no main.rs
+cargo clippy --locked --lib   # CI solo analiza la lib, no main.rs
 ```
 
 Pipeline en `.github/workflows/ci.yml` y `.gitea/workflows/ci.yml`:
@@ -110,9 +110,9 @@ Pipeline en `.github/workflows/ci.yml` y `.gitea/workflows/ci.yml`:
 1. Instala dependencias del sistema.
 2. Compila llama.cpp y empaqueta las libs.
 3. `cargo build` para `x86_64` y `aarch64`.
-4. `cargo test -- --test-threads=1` (solo nativo).
+4. `cargo test --locked -- --test-threads=1` (solo nativo).
 5. `cargo fmt --all -- --check` (solo nativo).
-6. `cargo clippy --lib` (solo nativo).
+6. `cargo clippy --locked --lib` (solo nativo).
 
 ## Releases
 
@@ -141,7 +141,7 @@ Usa `docker/Dockerfile.build` (Ubuntu 20.04) con `ATEN_PORTABLE=1`. El script de
 ## Convenciones
 
 - Rust edition 2024; ejecuta `cargo fmt` antes de commitear (`rustfmt.toml` fija el estilo).
-- `cargo clippy --lib` debe estar limpio; `main.rs` no entra en ese chequeo.
+- `cargo clippy --locked --lib` debe estar limpio; `main.rs` no entra en ese chequeo.
 - Las escrituras en disco pasan por `utils::atomic_write`.
 - El chunker y cualquier corte de texto deben ser UTF-8 seguros (`floor_char_boundary`, `truncate_chars`).
 - Los tests nuevos no deben requerir modelo ni red.

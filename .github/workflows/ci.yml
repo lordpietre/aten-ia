@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -131,20 +134,20 @@ jobs:
         if: matrix.cross == false
         env:
           LLAMA_LOCAL_LIBS: llama-libs
-        run: cargo build --verbose
+        run: cargo build --verbose --locked
 
       - name: Build (cross aarch64)
         if: matrix.cross == true
         env:
           LLAMA_LOCAL_LIBS: llama-libs
           CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
-        run: cargo build --verbose --target aarch64-unknown-linux-gnu
+        run: cargo build --verbose --locked --target aarch64-unknown-linux-gnu
 
       - name: Test (native only)
         if: matrix.cross == false
         env:
           LLAMA_LOCAL_LIBS: llama-libs
-        run: cargo test --verbose -- --test-threads=1
+        run: cargo test --verbose --locked -- --test-threads=1
 
       - name: Check formatting
         if: matrix.cross == false
@@ -154,4 +157,4 @@ jobs:
         if: matrix.cross == false
         env:
           LLAMA_LOCAL_LIBS: llama-libs
-        run: cargo clippy --lib
+        run: cargo clippy --locked --lib

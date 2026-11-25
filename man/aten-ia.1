@@ -181,10 +181,16 @@ Límites: cuerpo de 10 MB, cabeceras de 64 KB y timeout de conexión de 120 s.
 Cada conexión se atiende en un hilo, pero la inferencia se serializa con un
 mutex, por lo que las generaciones se ejecutan de una en una.
 .PP
-Con token configurado, el servidor escucha en
-.B 0.0.0.0
-y el puerto por defecto es
+El servidor escucha en
+.B api.host
+.RB ( 127.0.0.1
+por defecto) y el puerto por defecto es
 .BR 8787 .
+Para exponerlo en la red, cambia
+.B api.host
+a
+.B 0.0.0.0
+y usa TLS o un proxy inverso.
 Las peticiones de la API no se guardan en la memoria persistente y el campo
 .B usage
 se informa con ceros.
@@ -225,6 +231,9 @@ enlaza estáticamente
 .B libstdc++
 y
 .BR libgomp .
+.TP
+.B ATEN_THREADS
+Número de hilos de inferencia (por defecto, los núcleos disponibles).
 .TP
 .B CMAKE_BUILD_PARALLEL_LEVEL
 Nivel de paralelismo de CMake durante la compilación (por defecto 2).
@@ -335,6 +344,10 @@ Documentación del proyecto:
 .BR README.md .
 Wiki:
 .BR wiki/ .
+.SH COPYRIGHT
+Copyright 2026 Dinámicas Electrónicas
+.RB < dinamicas.electronicas@gmail.com >.
+Licencia Apache 2.0.
 .SH BUGS
 Reportar errores en:
 .BR https://github.com/lordpietre/aten-ia/issues .

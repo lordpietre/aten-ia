@@ -143,7 +143,14 @@ fn cmake_build() -> PathBuf {
     let host = env::var("HOST").unwrap_or_default();
     let cross = is_cross_compiling(&target, &host);
 
-    let parallel = env::var("CMAKE_BUILD_PARALLEL_LEVEL").unwrap_or_else(|_| "2".to_string());
+    let portable = env::var("ATEN_PORTABLE").unwrap_or_default() == "1";
+    let native = !cross && !portable;
+
+    let parallel = env::var("CMAKE_BUILD_PARALLEL_LEVEL").unwrap_or_else(|_| {
+        std::thread::available_parallelism()
+            .map(|n| n.get().to_string())
+            .unwrap_or_else(|_| "2".to_string())
+    });
     unsafe { std::env::set_var("CMAKE_BUILD_PARALLEL_LEVEL", &parallel) };
 
     let mut config = cmake::Config::new("llama-cpp-turboquant");
@@ -155,7 +162,7 @@ fn cmake_build() -> PathBuf {
     config.define("GGML_CUDA", "OFF");
     config.define("GGML_METAL", "OFF");
     config.define("GGML_VULKAN", "OFF");
-    config.define("GGML_NATIVE", "OFF");
+    config.define("GGML_NATIVE", if native { "ON" } else { "OFF" });
 
     if target.contains("aarch64") {
         config.define("GGML_CPU_ARM_ARCH", "armv8-a+dotprod");

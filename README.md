@@ -8,7 +8,7 @@ Inferencia 100% local: no requiere GPU, API keys ni servicios externos. Solo nec
 
 - **Versión:** 0.3.12
 - **Lenguaje:** Rust 2024
-- **Licencia:** Apache 2.0
+- **Licencia:** Apache 2.0 © 2026 Dinámicas Electrónicas
 
 ---
 
@@ -34,7 +34,7 @@ Inferencia 100% local: no requiere GPU, API keys ni servicios externos. Solo nec
 
 | Componente | Tecnología |
 |---|---|
-| Lenguaje | Rust (edition 2024, mínimo 1.85) |
+| Lenguaje | Rust (edition 2024, mínimo 1.89) |
 | Inferencia | llama.cpp (fork TurboQuant) vía FFI generado con `bindgen` + CMake |
 | Persistencia | `memvid-core` v2 (`.mv2`) + JSONL |
 | HTTP cliente | `ureq` (rustls), con timeouts, rate limiting y reintentos |
@@ -49,8 +49,8 @@ Inferencia 100% local: no requiere GPU, API keys ni servicios externos. Solo nec
 
 ## Requisitos
 
-- **Rust** >= 1.85.0 (edition 2024, fijado en `rust-toolchain.toml`)
-- **Dependencias de build:** `cmake libssl-dev clang libgomp-dev` (y `libclang-dev` en algunas distros)
+- **Rust** >= 1.89.0 (edition 2024, fijado en `rust-toolchain.toml`)
+- **Dependencias de build:** `cmake libssl-dev clang libclang-dev libgomp-dev`
 - **Dependencias de empaquetado:** añadir `fakeroot`
 - Opcional: Docker (solo para el build portable reproducible)
 
@@ -87,7 +87,7 @@ Si no existe `config.json`, se lanza un asistente interactivo que configura:
 
 Al terminar, el modelo se descarga automáticamente con barra de progreso si aún no está en disco (por defecto `Qwen2.5-0.5B-Instruct`, ~350 MB).
 
-El repositorio incluye un `memvid-agent-core/config.json` de ejemplo que usa `memvid_data` como directorio de datos. Puedes editarlo o borrarlo para repetir el asistente.
+El repositorio incluye `memvid-agent-core/config.example.json` como plantilla (usa `memvid_data` como directorio de datos). Copia ese archivo a `config.json` o bórralo para repetir el asistente. `config.json` está en `.gitignore` porque puede contener el token de la API.
 
 Opcionalmente se carga `.env` (vía `dotenvy`) antes de leer la configuración.
 
@@ -155,7 +155,7 @@ Los comandos aceptan mayúsculas en muchos casos (`/MODELS`, `/MODEL`, `/SEARCH`
 |---|---|
 | `/token` | Habilita la API, genera token si falta, arranca el servidor y ofrece configurar OpenCode/VS Code |
 
-> Nota: `/token` genera un token si falta y hace `bind` en `0.0.0.0`, por lo que la API queda accesible desde la red. `api.host` solo se usa cuando no hay token configurado.
+> Nota: `/token` genera un token si falta y escucha en `api.host` (**127.0.0.1** por defecto). Para acceder desde la red, cambia `api.host` a `0.0.0.0` y usa TLS/reverse proxy: el token viaja en claro por HTTP.
 
 ---
 
@@ -269,6 +269,7 @@ Por fidelidad se recomienda mantener `K` con precisión igual o mayor que `V` (p
 | `LLAMA_LIBS_REPO` | `lordpietre/aten-ia` | Repo de GitHub para libs precompiladas |
 | `LLAMA_FINETUNE_BIN` | — | Binario `llama-finetune` para `/finetune` |
 | `ATEN_PORTABLE` | — | `1` enlaza estáticamente `libstdc++` y `libgomp` |
+| `ATEN_THREADS` | Núcleos disponibles | Hilos de inferencia (llama.cpp) |
 | `CMAKE_BUILD_PARALLEL_LEVEL` | `2` | Paralelismo de CMake |
 | `TARGET` | Auto | Target triple para cross-compilation |
 | `HOME` | — | Determina el `data_dir` por defecto |
@@ -414,10 +415,10 @@ También existe un `snapcraft.yaml` que empaqueta el binario ya compilado.
 
 ```bash
 cd memvid-agent-core
-cargo test -- --test-threads=1      # ~535 tests (unitarios + integración)
-cargo test --lib -- --test-threads=1
+cargo test --locked -- --test-threads=1   # ~541 tests (unitarios + integración)
+cargo test --locked --lib -- --test-threads=1
 cargo fmt --all -- --check
-cargo clippy --lib
+cargo clippy --locked --lib
 ```
 
 Los tests de integración (`tests/functional.rs`, `tests/writer_integration.rs`, `tests/kv_cache_and_history.rs`) usan `tempfile::tempdir()` y `LlamaContext::null()`, por lo que **no necesitan un GGUF**. Se requiere `--test-threads=1` porque varios tests modifican variables de entorno (`MODEL_PATH`) y comparten estado global.
@@ -447,8 +448,12 @@ Documentación adicional: [`PORTABILITY_SPEC.md`](PORTABILITY_SPEC.md).
 - [`wiki/`](wiki/) — instalación, uso, arquitectura y desarrollo
 - [`man/aten-ia.1`](man/aten-ia.1) — página de manual
 - [`PORTABILITY_SPEC.md`](PORTABILITY_SPEC.md)
+- [`SECURITY.md`](SECURITY.md) — cómo reportar vulnerabilidades
+- [`PLAN.md`](PLAN.md) — plan de auditoría y mejoras
 - [`AGENTS.md`](AGENTS.md) — notas para agentes/desarrolladores
 
 ## Licencia
 
-Apache 2.0.
+Apache 2.0. Copyright 2026 **Dinámicas Electrónicas** <dinamicas.electronicas@gmail.com>.
+
+Contacto: dinamicas.electronicas@gmail.com.

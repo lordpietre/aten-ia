@@ -122,8 +122,7 @@ fn main() -> Result<()> {
         if input_lower == "/debug" {
             {
                 let mut a = agent.lock().unwrap();
-                let current = a.get_last_rag_debug().len() > 0;
-                let new_state = !current;
+                let new_state = !a.is_debug();
                 a.set_debug(new_state);
                 let state_str = if new_state {
                     "ON".bright_green()
@@ -543,17 +542,11 @@ fn main() -> Result<()> {
             let port = config.api.port;
             let token = config.api.token.clone();
 
-            let bind_host = if token.is_some() {
-                "0.0.0.0".to_string()
-            } else {
-                host.clone()
-            };
-
             println!();
             println!(
                 "{} API server starting on http://{}:{}",
                 "●".bright_green(),
-                bind_host,
+                host,
                 port
             );
             if let Some(ref t) = token {
@@ -702,7 +695,7 @@ fn main() -> Result<()> {
             println!();
 
             std::thread::spawn(move || {
-                let server = ApiServer::new(api_agent, model_name, bind_host, port, token);
+                let server = ApiServer::new(api_agent, model_name, host, port, token);
                 if let Err(e) = server.run() {
                     eprintln!("[api] Server error: {}", e);
                 }
@@ -1565,8 +1558,11 @@ fn print_rag_debug(entries: &[memvid_agent_core::generation::RagEntryDebug]) {
             entry.score,
             entry.tokens
         );
-        let preview = if entry.content.len() > 100 {
-            format!("{}...", &entry.content[..100])
+        let preview = if entry.content.chars().count() > 100 {
+            format!(
+                "{}...",
+                memvid_agent_core::utils::truncate_chars(&entry.content, 100, "")
+            )
         } else {
             entry.content.clone()
         };

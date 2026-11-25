@@ -21,10 +21,10 @@
     "max_tokens": 2048
   },
   "api": {
-    "enabled": true,
+    "enabled": false,
     "host": "127.0.0.1",
     "port": 8787,
-    "token": "aca6b333-ec9b-43ab-8cff-f17f21f4fd16"
+    "token": null
   },
   "languages": {
     "installed": [

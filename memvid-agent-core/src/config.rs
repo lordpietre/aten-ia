@@ -205,6 +205,12 @@ impl Config {
             "generation.max_tokens must be > 0"
         );
         anyhow::ensure!(
+            self.generation.max_tokens < self.model.n_ctx,
+            "generation.max_tokens ({}) must be smaller than model.n_ctx ({})",
+            self.generation.max_tokens,
+            self.model.n_ctx
+        );
+        anyhow::ensure!(
             self.generation.temp >= 0.0,
             "generation.temp must be >= 0.0"
         );
@@ -251,6 +257,15 @@ impl Config {
                 self.data_dir.display()
             )
         })?;
+        // Conversations and knowledge are private; keep the directory owner-only.
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&self.data_dir, std::fs::Permissions::from_mode(0o700))
+                .with_context(|| {
+                    format!("Failed to set permissions on {}", self.data_dir.display())
+                })?;
+        }
         Ok(())
     }
 }
@@ -438,6 +453,36 @@ mod tests {
         let mut cfg = Config::default();
         cfg.generation.max_tokens = 0;
         assert!(cfg.validate().is_err());
+    }
+
+    #[test]
+    fn validate_rejects_max_tokens_not_smaller_than_n_ctx() {
+        let mut cfg = Config::default();
+        cfg.generation.max_tokens = cfg.model.n_ctx;
+        assert!(cfg.validate().is_err());
+
+        cfg.generation.max_tokens = cfg.model.n_ctx + 1;
+        assert!(cfg.validate().is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn load_creates_owner_only_data_dir() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = tempfile::tempdir().unwrap();
+        let config_path = dir.path().join("config.json");
+        let data_dir = dir.path().join("private-data");
+
+        let mut cfg = Config::default();
+        cfg.data_dir = data_dir.clone();
+        cfg.save_to_path(&config_path).unwrap();
+
+        let loaded = Config::load_or_create_with_path(&config_path).unwrap();
+        assert_eq!(loaded.data_dir, data_dir);
+
+        let mode = std::fs::metadata(&data_dir).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o700);
     }
 
     #[test]

@@ -2,14 +2,20 @@
 name = "aten-ia"
 version = "0.3.12"
 edition = "2024"
+rust-version = "1.89"
+authors = ["Dinámicas Electrónicas <dinamicas.electronicas@gmail.com>"]
+description = "Agente de IA local con memoria persistente, RAG y API compatible con OpenAI"
+license = "Apache-2.0"
+readme = "../README.md"
 repository = "https://github.com/lordpietre/aten-ia"
+keywords = ["llm", "llama-cpp", "rag", "cli", "local-ai"]
+categories = ["command-line-utilities", "science"]
 
 [lib]
 name = "memvid_agent_core"
 
 [dependencies]
 memvid-core = "2.0.139"
-zip = { version = "7", default-features = false, features = ["deflate"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 chrono = { version = "0.4", features = ["serde"] }
@@ -34,3 +40,8 @@ tempfile = "3"
 [build-dependencies]
 cmake = "0.1"
 bindgen = "0.70"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true

@@ -1,5 +1,7 @@
 target/
 memvid_data/
+memvid-agent-core/config.json
+/config.json
 *.tmp
 *.swp
 *.swo

@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use std::fs;
-use std::io::Read;
+use std::io::{Read, Write};
 use std::path::Path;
 use std::path::PathBuf;
 use uuid::Uuid;
@@ -11,10 +11,17 @@ pub fn atomic_write<P: AsRef<Path>, C: AsRef<[u8]>>(path: P, contents: C) -> Res
     let uuid = Uuid::new_v4();
     let temp_path = parent.join(format!(".tmp_{}", uuid));
 
-    fs::write(&temp_path, contents.as_ref())?;
-
-    // fsync temp file before rename
-    let file = std::fs::File::open(&temp_path)?;
+    // Create the temp file with owner-only permissions: these files may hold
+    // API tokens (config.json) or conversation/knowledge data.
+    let mut options = fs::OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let mut file = options.open(&temp_path)?;
+    file.write_all(contents.as_ref())?;
     file.sync_all()?;
     drop(file);
 
@@ -139,6 +146,17 @@ mod tests {
         atomic_write(&path, b"hello world").unwrap();
         assert!(path.exists());
         assert_eq!(std::fs::read_to_string(&path).unwrap(), "hello world");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn atomic_write_sets_owner_only_permissions() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("secret.json");
+        atomic_write(&path, b"{\"token\":\"x\"}").unwrap();
+        let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600, "sensitive files must not be world-readable");
     }
 
     #[test]

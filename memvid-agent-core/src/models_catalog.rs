@@ -42,12 +42,27 @@ impl ModelsCatalog {
     pub fn download(entry: &ModelEntry, target_dir: &Path) -> Result<PathBuf> {
         let target_path = target_dir.join(format!("{}.gguf", entry.id));
         if target_path.exists() {
-            eprintln!(
-                "  {} Model already exists at {}",
-                "✓".green(),
-                target_path.display()
-            );
-            return Ok(target_path);
+            if let Some(ref expected_sha) = entry.sha256 {
+                let actual_sha = crate::utils::compute_file_checksum(&target_path)?;
+                if &actual_sha != expected_sha {
+                    // Corrupt or tampered file: remove it and download again.
+                    let _ = std::fs::remove_file(&target_path);
+                } else {
+                    eprintln!(
+                        "  {} Model already exists at {}",
+                        "✓".green(),
+                        target_path.display()
+                    );
+                    return Ok(target_path);
+                }
+            } else {
+                eprintln!(
+                    "  {} Model already exists at {}",
+                    "✓".green(),
+                    target_path.display()
+                );
+                return Ok(target_path);
+            }
         }
 
         std::fs::create_dir_all(target_dir).context("Failed to create models directory")?;

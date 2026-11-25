@@ -73,11 +73,17 @@ pub fn generate_chat(
     let prompt = prompt_builder.build(&trimmed, user_input, &rag_context);
     let prompt_tokens = count_tokens(&prompt);
 
-    if prompt_tokens as u32 > context_policy.n_ctx() - context_policy.max_tokens() {
+    if prompt_tokens as u32
+        > context_policy
+            .n_ctx()
+            .saturating_sub(context_policy.max_tokens())
+    {
         anyhow::bail!(
             "Prompt too large: {} tokens (budget: {})",
             prompt_tokens,
-            context_policy.n_ctx() - context_policy.max_tokens()
+            context_policy
+                .n_ctx()
+                .saturating_sub(context_policy.max_tokens())
         );
     }
 

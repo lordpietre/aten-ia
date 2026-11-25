@@ -86,6 +86,10 @@ impl Agent {
         self.debug = enabled;
     }
 
+    pub fn is_debug(&self) -> bool {
+        self.debug
+    }
+
     pub fn get_last_rag_debug(&self) -> &[RagEntryDebug] {
         &self.last_rag_debug
     }
@@ -372,15 +376,11 @@ impl Agent {
         chunk_opts: &ChunkOptions,
     ) -> Result<Vec<String>> {
         let chunks = chunker::chunk_text(content, chunk_opts, source);
+        let mut entries = Vec::with_capacity(chunks.len());
         let mut ids = Vec::with_capacity(chunks.len());
-        for chunk in &chunks {
-            let checksum = {
-                use sha2::{Digest, Sha256};
-                let mut hasher = Sha256::new();
-                hasher.update(chunk.content.as_bytes());
-                format!("{:x}", hasher.finalize())
-            };
 
+        for chunk in &chunks {
+            let checksum = crate::utils::sha256_digest(chunk.content.as_bytes());
             let entry = KnowledgeEntry {
                 id: Uuid::new_v4().to_string(),
                 source: chunk.source.clone(),
@@ -388,11 +388,15 @@ impl Agent {
                 timestamp: Utc::now(),
                 checksum,
             };
-            let id = entry.id.clone();
-            self.memory.append_knowledge(entry.clone())?;
-            self.knowledge_index.add_entry(entry)?;
-            ids.push(id);
+            ids.push(entry.id.clone());
+            entries.push(entry);
         }
+
+        for entry in &entries {
+            self.memory.append_knowledge(entry.clone())?;
+        }
+        // One write + fsync for all chunks instead of one per chunk.
+        self.knowledge_index.add_entries(&entries)?;
         Ok(ids)
     }
 
@@ -620,6 +624,21 @@ mod tests {
             debug: false,
             last_rag_debug: Vec::new(),
         }
+    }
+
+    #[test]
+    fn debug_state_toggles_independently_of_rag_results() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut agent = test_agent(dir.path());
+        assert!(!agent.is_debug());
+
+        agent.set_debug(true);
+        assert!(agent.is_debug());
+        // No RAG results yet, but the flag must stay true.
+        assert!(agent.get_last_rag_debug().is_empty());
+
+        agent.set_debug(false);
+        assert!(!agent.is_debug());
     }
 
     #[test]

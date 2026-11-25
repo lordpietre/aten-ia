@@ -1,0 +1,103 @@
+# PLAN — Auditoría y hoja de ruta de aten-ia
+
+Documento de trabajo derivado de la auditoría de noviembre de 2026.
+Estados: ✅ hecho, 🚧 en curso, ⏳ pendiente, ⚠️ requiere decisión.
+
+## 0. Licencia y metadatos
+
+- [x] ✅ `LICENSE` Apache 2.0 con copyright de **Dinámicas Electrónicas**
+      (`dinamicas.electronicas@gmail.com`).
+- [x] ✅ `LICENSE` y contacto en `README.md`.
+- [x] ✅ Metadatos Cargo: `license`, `authors`, `description`, `readme`,
+      `keywords`, `categories`, `rust-version`.
+- [x] ✅ `SECURITY.md` con correo de contacto.
+- [ ] ⏳ Añadir `NOTICE` si se incorpora código de terceros con atribución.
+
+## 1. Fase 0 — Contención de seguridad
+
+- [x] ✅ Token de API del `config.json` de ejemplo eliminado; `api.token` ahora
+      es `null` y `config.json` está ignorado por git.
+- [x] ✅ `config.example.json` como plantilla versionada.
+- [x] ✅ `atomic_write` crea ficheros con `0600` en Unix.
+- [x] ✅ Directorio de datos con `0700`.
+- [x] ✅ `/token` respeta `api.host` (127.0.0.1 por defecto) en lugar de forzar
+      `0.0.0.0`.
+- [x] ✅ Verificación SHA-256 del modelo configurado, tanto al descargar como si
+      el fichero ya existe.
+- [ ] ⏳ Publicar checksums por defecto en `models_catalog.json`.
+- [ ] ⏳ Verificar el tarball de librerías precompiladas de llama.cpp.
+- [ ] ⏳ Añadir `SECURITY.md` a la documentación de release.
+
+## 2. Fase 1 — Dependencias y cadena de suministro
+
+- [x] ✅ `cargo update` semver: rustls, rustls-webpki, webpki-roots, url,
+      anyhow, quick-xml, zstd, memmap2, rustix, memvid-core y otros.
+- [x] ✅ `time` 0.3.47 (RUSTSEC-2026-0009).
+- [x] ✅ `Cargo.lock` regenerado (raíz `0.3.12`) y `--locked` en CI/release.
+- [x] ✅ Eliminada la dependencia directa `zip` (no se usaba en `src/`).
+- [x] ✅ Toolchain local a Rust 1.100; `rust-version = 1.89`.
+- [x] ✅ `action-gh-release@v2`, `permissions` mínimos y Dependabot.
+- [ ] ⏳ `pdf-extract` 0.12 / `lopdf` 0.42 (RUSTSEC-2026-0187).
+- [ ] ⏳ `feed-rs` 3, `bindgen` 0.73, `indicatif` 0.18, `sha2` 0.11.
+- [ ] ⏳ Resolver `zip` 7.x transitivo (memvid-core) o documentar que no se usan
+      sus APIs de extracción.
+- [ ] ⏳ Revisar avisos transitivos de `memvid-core` (`calamine`, `bincode`,
+      `lopdf`, `quick-xml`).
+- [ ] ⏳ `cargo audit` + `cargo deny` en CI.
+- [ ] ⚠️ Migrar imágenes EOL (`node:20-bullseye`, `ubuntu:20.04`) o asumir
+      explícitamente glibc 2.31.
+- [ ] ⏳ Proceso de sincronización del fork vendorizado de llama.cpp.
+
+## 3. Fase 2 — Correctitud funcional
+
+- [x] ✅ Pánico UTF-8 en el preview de `/debug`.
+- [x] ✅ Validación `max_tokens < n_ctx` y resta saturante.
+- [x] ✅ Toggle real de `/debug` (`Agent::is_debug`).
+- [x] ✅ Escritura JSONL en lote (un `fsync` por documento en vez de por chunk).
+- [ ] ⏳ `/ingest` de texto no debe volcar el documento completo en la sesión.
+- [ ] ⏳ `/unlearn` durable: borrado en `.mv2` y prefijo de libros.
+- [ ] ⏳ Deduplicación en `/learn`, `/ingest` y `/download-books`.
+- [ ] ⏳ Recuperación de cola: entradas `processing` huérfanas y reintentos.
+- [ ] ⏳ `/batch`: barra de progreso incremental.
+- [ ] ⏳ API: `model`, `max_tokens`, `temperature`, `top_p`, `usage` real y
+      contador separado del REPL.
+- [ ] ⏳ `data_dir` independiente del CWD o flag `--data-dir`.
+
+## 4. Fase 3 — Rendimiento
+
+- [x] ✅ Hilos de inferencia = núcleos disponibles (`ATEN_THREADS` para fijarlos).
+- [x] ✅ `GGML_NATIVE=ON` en builds nativos (OFF en portable/cross).
+- [x] ✅ Paralelismo de CMake por defecto = núcleos.
+- [x] ✅ Perfil release: `lto = "thin"`, `codegen-units = 1`, `strip = true`.
+- [ ] ⏳ Cache de prefijo KV entre peticiones (mayor ganancia en OpenCode).
+- [ ] ⏳ RAG: texto normalizado cacheado e índice invertido.
+- [ ] ⏳ Dedup O(1) con `HashSet` en la ingesta.
+- [ ] ⏳ Pool acotado de conexiones HTTP.
+- [ ] ⏳ Persistencia de cola por lote.
+
+## 5. Fase 4 — Calidad y operación
+
+- [ ] ⏳ `cargo audit`, cobertura y fuzzing (HTTP, feeds, PDF, EPUB).
+- [ ] ⏳ SBOM y firma de releases.
+- [ ] ⏳ `CHANGELOG.md` y notas de release.
+- [ ] ⏳ Corregir `Depends: libssl3` del `.deb` (el binario usa rustls).
+- [ ] ⏳ Probar instalación en la distro más antigua soportada.
+- [ ] ⚠️ Decidir si el snap se construye en CI o se retira.
+
+## 6. Fase 5 — Evolución (opcional)
+
+- RAG híbrido (embeddings + keyword).
+- Streaming token a token.
+- API con herramientas/function calling y `/v1/embeddings`.
+- Backend GPU opcional.
+- Cifrado en reposo.
+
+## Registro de verificación
+
+| Fecha | Comprobación | Resultado |
+|---|---|---|
+| 2026-11-25 | `cargo update` + `cargo metadata --locked` | ✅ lock 0.3.12 |
+| 2026-11-25 | `cargo test --locked -- --test-threads=1` | ✅ 541 tests, 0 fallos |
+| 2026-11-25 | `cargo fmt --all -- --check` | ✅ |
+| 2026-11-25 | `cargo clippy --locked --lib` | ✅ 10 avisos de estilo preexistentes |
+| 2026-11-25 | `time 0.3.47` + suite completa | ✅ 541 tests, 0 fallos |
