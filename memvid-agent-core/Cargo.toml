@@ -30,7 +30,7 @@ colored = "3"
 libc = "0.2"
 dotenvy = "0.15"
 regex = "1"
-pdf-extract = "0.10"
+pdf-extract = "0.12"
 epub = "2"
 feed-rs = "2"
 
