@@ -183,8 +183,10 @@ para responder por SSE. Requiere autenticación Bearer.
 Devuelve el token configurado. Requiere autenticación Bearer.
 .PP
 Límites: cuerpo de 10 MB, cabeceras de 64 KB y timeout de conexión de 120 s.
-Cada conexión se atiende en un hilo, pero la inferencia se serializa con un
-mutex, por lo que las generaciones se ejecutan de una en una.
+Cada conexión se atiende en un hilo (máximo 64, configurable con
+.BR ATEN_API_MAX_CONNS ),
+pero la inferencia se serializa con un mutex, por lo que las generaciones se
+ejecutan de una en una.
 .PP
 El servidor escucha en
 .B api.host

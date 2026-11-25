@@ -175,7 +175,7 @@ El servidor se inicia desde el REPL con `/token`. La sección `api` de `config.j
 
 - **Autenticación:** `Authorization: Bearer <token>`.
 - **Límites:** cuerpo máximo 10 MB, cabeceras 64 KB, timeout de conexión 120 s.
-- **Concurrencia:** un hilo por conexión; la inferencia se serializa con un mutex, por lo que las peticiones se atienden de una en una.
+- **Concurrencia:** un hilo por conexión, con máximo 64 conexiones (`ATEN_API_MAX_CONNS`); la inferencia se serializa con un mutex, por lo que las generaciones se atienden de una en una.
 - **SSE:** `stream: true` devuelve un evento `role`, un evento `content` y un evento `finish` con `[DONE]`. El texto se genera completo antes de emitirse, no token a token.
 - **Memoria:** las peticiones de la API **no** se guardan en la sesión persistente del REPL.
 - **Uso de tokens:** `usage.prompt_tokens` se cuenta con el tokenizador y `completion_tokens` se estima (chars/4).
@@ -271,6 +271,7 @@ Por fidelidad se recomienda mantener `K` con precisión igual o mayor que `V` (p
 | `LLAMA_FINETUNE_BIN` | — | Binario `llama-finetune` para `/finetune` |
 | `ATEN_PORTABLE` | — | `1` enlaza estáticamente `libstdc++` y `libgomp` |
 | `ATEN_THREADS` | Núcleos disponibles | Hilos de inferencia (llama.cpp) |
+| `ATEN_API_MAX_CONNS` | `64` | Conexiones HTTP concurrentes máximas |
 | `CMAKE_BUILD_PARALLEL_LEVEL` | `2` | Paralelismo de CMake |
 | `TARGET` | Auto | Target triple para cross-compilation |
 | `HOME` | — | Determina el `data_dir` por defecto |
@@ -446,7 +447,6 @@ Documentación adicional: [`SDD.md`](SDD.md) (especificación y sistema de verif
 - Las peticiones a la API no se guardan en la memoria persistente.
 - La plantilla `raw` ignora historial y contexto RAG.
 - `n_gpu_layers` existe en la configuración, pero los builds no incluyen backends GPU (CUDA/Metal/Vulkan).
-- `/batch` no incrementa la barra por URL individual (sí procesa todas y muestra el resumen final).
 
 ---
 

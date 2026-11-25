@@ -385,6 +385,20 @@ impl Agent {
         urls: &[String],
         ingestion: &IngestionConfig,
     ) -> Result<BatchResult> {
+        self.process_url_batch_with_progress(urls, ingestion, || {})
+    }
+
+    /// Like `process_url_batch`, invoking `on_url` after each URL so callers
+    /// (the REPL) can advance a progress bar.
+    pub fn process_url_batch_with_progress<F>(
+        &mut self,
+        urls: &[String],
+        ingestion: &IngestionConfig,
+        mut on_url: F,
+    ) -> Result<BatchResult>
+    where
+        F: FnMut(),
+    {
         let mut results = BatchResult::default();
         for url in urls {
             match self.fetch_and_ingest(url, ingestion) {
@@ -397,6 +411,7 @@ impl Agent {
                     results.failures.push((url.clone(), format!("{:#}", e)));
                 }
             }
+            on_url();
         }
         Ok(results)
     }

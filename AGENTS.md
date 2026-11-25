@@ -56,14 +56,14 @@ Override download repo: `LLAMA_LIBS_REPO=user/repo`.
 - **No GPU backends** — `n_gpu_layers` defaults to `0`; no CUDA/Metal/Vulkan cmake flags
 - **RAG is keyword-only** — word substring match over `knowledge_index.jsonl`, no embeddings
 - **RAG token budget** — dynamically limits RAG context based on available prompt budget (system + input tokens + 128-token margin subtracted first)
-- **API threaded per connection** — raw TCP `TcpListener`, one thread per connection, inference serialized behind `Arc<Mutex<Agent>>`; SSE supported via `"stream": true`; per-request `max_tokens`/`temperature`/`top_p`/`top_k` and real prompt-token usage
+- **API threaded per connection** — raw TCP `TcpListener`, one thread per connection, inference serialized behind `Arc<Mutex<Agent>>`; SSE supported via `"stream": true`; per-request `max_tokens`/`temperature`/`top_p`/`top_k`, real prompt-token usage and a 64-connection cap (`ATEN_API_MAX_CONNS`)
 - **Session flushes every 5 interactions** — `Session::flush()` → `MemvidWriter` (also on `Drop`)
 - **KV cache type** configurable: `model.kv_type_k` / `model.kv_type_v` (default `f16`; `turbo2/3/4` enable flash-attn automatically)
 - **All persistence atomic**: write → fsync → rename → fsync(parent); sensitive files are `0600` and the data dir `0700` on Unix
 - **License**: Apache 2.0, Copyright 2026 Dinámicas Electrónicas <dinamicas.electronicas@gmail.com>
 - **Chunker UTF-8 safe** — `floor_char_boundary()` on overlap to avoid panics on multi-byte chars
 - **`ingest <file>` auto-detects format** via `Format::from_extension()` (pdf/epub/md/html → text fallback)
-- **Env overrides**: `MODEL_PATH`, `MODEL_NAME`, `MODEL_CTX`, `MODEL_URL` (applied on config load); `ATEN_THREADS` sets inference threads (default: all cores)
+- **Env overrides**: `MODEL_PATH`, `MODEL_NAME`, `MODEL_CTX`, `MODEL_URL` (applied on config load); `ATEN_THREADS` sets inference threads; `ATEN_API_MAX_CONNS` caps HTTP connections
 - **Default model**: `Qwen2.5-0.5B-Instruct` (`n_ctx: 8192`, `chat_template: chatml`, auto-downloads from HuggingFace)
 - **llama.cpp verbose suppressed** at startup via `llama_log_set(noop_log)` in `context.rs`
 - **Decode chunked** — `decode()` processes tokens in chunks of `n_batch` size to avoid GGML_ASSERT failures

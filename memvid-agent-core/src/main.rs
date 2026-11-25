@@ -1195,7 +1195,7 @@ fn main() -> Result<()> {
 
             let result = {
                 let mut a = agent.lock().unwrap();
-                a.process_url_batch(&urls, &config.ingestion)
+                a.process_url_batch_with_progress(&urls, &config.ingestion, || pb.inc(1))
             };
 
             pb.finish_and_clear();

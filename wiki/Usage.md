@@ -154,7 +154,7 @@ curl http://localhost:8787/v1/chat/completions \
 
 Notas:
 
-- Un hilo por conexión, pero la inferencia se serializa con un mutex.
+- Un hilo por conexión (máximo 64, `ATEN_API_MAX_CONNS`); la inferencia se serializa con un mutex.
 - SSE emite `role`, `content` y `finish` (el texto se genera completo antes de enviarse).
 - Las peticiones de la API no se guardan en la sesión persistente.
 - `usage.prompt_tokens` es real; `completion_tokens` se estima (chars/4).

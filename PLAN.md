@@ -60,7 +60,7 @@ Estados: ✅ hecho, 🚧 en curso, ⏳ pendiente, ⚠️ requiere decisión.
 - [x] ✅ Deduplicación en `/learn` y `/download-books`.
 - [x] ✅ Deduplicación en `/ingest` y reingesta idempotente de chunks.
 - [x] ✅ Recuperación de cola: `processing` huérfanas vuelven a `pending`.
-- [ ] ⏳ `/batch`: barra de progreso incremental.
+- [x] ✅ `/batch`: barra de progreso incremental.
 - [x] ✅ API: `max_tokens`, `temperature`, `top_p`, `top_k`, `usage` real y
       contador separado del REPL.
 - [ ] ⏳ API: cambio de modelo por petición (hoy usa el modelo activo).
@@ -75,7 +75,7 @@ Estados: ✅ hecho, 🚧 en curso, ⏳ pendiente, ⚠️ requiere decisión.
 - [ ] ⏳ Cache de prefijo KV entre peticiones (mayor ganancia en OpenCode).
 - [ ] ⏳ RAG: texto normalizado cacheado e índice invertido.
 - [x] ✅ Dedup O(1) con `HashSet<(source, checksum)>` en la ingesta.
-- [ ] ⏳ Pool acotado de conexiones HTTP.
+- [x] ✅ Pool acotado a 64 conexiones HTTP (`ATEN_API_MAX_CONNS`).
 - [ ] ⏳ Persistencia de cola por lote.
 
 ## 5. Fase 4 — Calidad y operación
@@ -130,3 +130,4 @@ Estados: ✅ hecho, 🚧 en curso, ⏳ pendiente, ⚠️ requiere decisión.
 | 2026-11-25 | Dedup O(1) e ingesta idempotente | ✅ 556 tests, 0 fallos |
 | 2026-11-25 | `cargo audit` + `.cargo/audit.toml` | ✅ 0 vulnerabilidades, 6 warnings |
 | 2026-11-25 | API: parámetros por petición y `usage` | ✅ 558 tests, 0 fallos |
+| 2026-11-25 | Límite de conexiones HTTP y progreso `/batch` | ✅ build + tests |

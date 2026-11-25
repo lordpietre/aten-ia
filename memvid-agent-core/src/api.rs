@@ -8,6 +8,7 @@ use serde_json::json;
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
@@ -17,6 +18,24 @@ const MAX_BODY_BYTES: usize = 10 * 1024 * 1024;
 const MAX_HEADER_BYTES: usize = 64 * 1024;
 /// Per-connection read/write timeout so a stalled client can't pin a worker.
 const CONN_TIMEOUT_SECS: u64 = 120;
+/// Hard cap on concurrent client connections (each one gets a thread).
+const MAX_CONNECTIONS: usize = 64;
+
+fn max_connections() -> usize {
+    std::env::var("ATEN_API_MAX_CONNS")
+        .ok()
+        .and_then(|v| v.parse::<usize>().ok())
+        .filter(|n| *n > 0)
+        .unwrap_or(MAX_CONNECTIONS)
+}
+
+struct ActiveGuard(Arc<AtomicUsize>);
+
+impl Drop for ActiveGuard {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, Ordering::SeqCst);
+    }
+}
 
 fn within_body_limit(content_length: usize) -> bool {
     content_length <= MAX_BODY_BYTES
@@ -30,6 +49,7 @@ pub struct ApiServer {
     port: u16,
     token: Option<String>,
     start_time: Instant,
+    active: Arc<AtomicUsize>,
 }
 
 #[derive(Debug)]
@@ -55,6 +75,7 @@ impl ApiServer {
             port,
             token,
             start_time: Instant::now(),
+            active: Arc::new(AtomicUsize::new(0)),
         }
     }
 
@@ -66,9 +87,22 @@ impl ApiServer {
 
         while !shutdown::is_shutdown_requested() {
             match listener.accept() {
-                Ok((stream, _)) => {
+                Ok((mut stream, _)) => {
+                    let current = self.active.fetch_add(1, Ordering::SeqCst);
+                    if current >= max_connections() {
+                        self.active.fetch_sub(1, Ordering::SeqCst);
+                        let resp = json_response(
+                            503,
+                            &json!({"error": {"message": "Too many connections", "type": "overloaded"}}),
+                        );
+                        let _ = stream.write_all(resp.as_bytes());
+                        let _ = stream.flush();
+                        continue;
+                    }
                     let server = self.clone();
+                    let active = self.active.clone();
                     std::thread::spawn(move || {
+                        let _guard = ActiveGuard(active);
                         if let Err(e) = server.handle_one(stream) {
                             eprintln!("[api] Error: {}", e);
                         }
@@ -495,6 +529,7 @@ fn json_response(status: u16, body: &serde_json::Value) -> String {
         401 => "Unauthorized",
         404 => "Not Found",
         500 => "Internal Server Error",
+        503 => "Service Unavailable",
         _ => "Unknown",
     };
 
