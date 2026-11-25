@@ -120,3 +120,4 @@ Estados: ✅ hecho, 🚧 en curso, ⏳ pendiente, ⚠️ requiere decisión.
 | 2026-11-25 | `--self-test` (12 checks) | ✅ |
 | 2026-11-25 | `scripts/ci/verify.sh` completo | ✅ |
 | 2026-11-25 | Suite con CLI, red local y API TCP | ✅ 551 tests, 0 fallos |
+| 2026-11-25 | CI GitHub `80754c6` | ✅ x86_64, aarch64 y Docs |

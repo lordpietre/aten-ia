@@ -324,6 +324,7 @@ Tests solo en nativo por velocidad y porque no requieren modelo.
 8. `.opencode/agents/verifier.md` existe con permisos restringidos.
 9. `cargo test --locked -- --test-threads=1`, `fmt` y `clippy` en verde.
 10. `PLAN.md` y `README.md` enlazan este documento.
+11. CI de GitHub en verde para x86_64, aarch64 y Docs.
 
 ---
 
