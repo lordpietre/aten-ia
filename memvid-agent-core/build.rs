@@ -324,6 +324,10 @@ fn main() {
         .allowlist_var("GGML_TYPE_.*")
         .allowlist_type("ggml_type")
         .allowlist_type("llama_.*")
+        // Layout assertions for opaque types such as `_IO_FILE` and
+        // `llama_sampler` depend on the clang/system headers used to generate
+        // them and break on newer runners. We only need the ABI declarations.
+        .layout_tests(false)
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()));
 
     if cross {
