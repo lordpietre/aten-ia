@@ -24,7 +24,7 @@ Inferencia 100% local: no requiere GPU, API keys ni servicios externos. Solo nec
 | **Ingesta multi-fuente** | Archivos PDF/EPUB/Markdown/HTML/TXT, URLs, lotes de URLs, feeds RSS/Atom y catálogo de free-programming-books |
 | **Aprendizaje de lenguajes** | `/learn <lang>` descarga e indexa documentación de programación; `/unlearn` la elimina |
 | **Fine-tuning** | Full fine-tune del modelo activo sobre los docs aprendidos, con estimación previa de RAM y tiempo |
-| **API OpenAI-compatible** | `/v1/chat/completions` (con SSE opcional), `/v1/models`, `/health`, autenticación Bearer |
+| **API OpenAI-compatible** | `/v1/chat/completions` (SSE y parámetros por petición), `/v1/models`, `/health`, autenticación Bearer |
 | **Integración con clientes** | `/token` genera configuración para OpenCode y muestra la de VS Code (Continue) |
 | **Gestión de estado** | FileLock contra instancias concurrentes, flush de sesión cada 5 interacciones y apagado graceful (SIGINT/SIGTERM) |
 
@@ -178,7 +178,7 @@ El servidor se inicia desde el REPL con `/token`. La sección `api` de `config.j
 - **Concurrencia:** un hilo por conexión; la inferencia se serializa con un mutex, por lo que las peticiones se atienden de una en una.
 - **SSE:** `stream: true` devuelve un evento `role`, un evento `content` y un evento `finish` con `[DONE]`. El texto se genera completo antes de emitirse, no token a token.
 - **Memoria:** las peticiones de la API **no** se guardan en la sesión persistente del REPL.
-- **Uso de tokens:** `usage` se informa con ceros (no se tokeniza la petición).
+- **Uso de tokens:** `usage.prompt_tokens` se cuenta con el tokenizador y `completion_tokens` se estima (chars/4).
 
 ### Ejemplo
 
@@ -444,7 +444,6 @@ Documentación adicional: [`SDD.md`](SDD.md) (especificación y sistema de verif
 - La API **serializa la inferencia** con un mutex: no hay paralelismo real de generación.
 - El streaming SSE envía el contenido en un único chunk (no token a token).
 - Las peticiones a la API no se guardan en la memoria persistente.
-- `usage` en la API siempre informa 0 tokens.
 - La plantilla `raw` ignora historial y contexto RAG.
 - `n_gpu_layers` existe en la configuración, pero los builds no incluyen backends GPU (CUDA/Metal/Vulkan).
 - `/batch` no incrementa la barra por URL individual (sí procesa todas y muestra el resumen final).

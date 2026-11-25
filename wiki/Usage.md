@@ -157,7 +157,7 @@ Notas:
 - Un hilo por conexión, pero la inferencia se serializa con un mutex.
 - SSE emite `role`, `content` y `finish` (el texto se genera completo antes de enviarse).
 - Las peticiones de la API no se guardan en la sesión persistente.
-- `usage` siempre devuelve 0 tokens.
+- `usage.prompt_tokens` es real; `completion_tokens` se estima (chars/4).
 - Límites: cuerpo 10 MB, cabeceras 64 KB, timeout 120 s.
 
 ## Configurar OpenCode

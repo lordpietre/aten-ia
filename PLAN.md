@@ -61,8 +61,9 @@ Estados: ✅ hecho, 🚧 en curso, ⏳ pendiente, ⚠️ requiere decisión.
 - [x] ✅ Deduplicación en `/ingest` y reingesta idempotente de chunks.
 - [x] ✅ Recuperación de cola: `processing` huérfanas vuelven a `pending`.
 - [ ] ⏳ `/batch`: barra de progreso incremental.
-- [ ] ⏳ API: `model`, `max_tokens`, `temperature`, `top_p`, `usage` real y
+- [x] ✅ API: `max_tokens`, `temperature`, `top_p`, `top_k`, `usage` real y
       contador separado del REPL.
+- [ ] ⏳ API: cambio de modelo por petición (hoy usa el modelo activo).
 - [ ] ⏳ `data_dir` independiente del CWD o flag `--data-dir`.
 
 ## 4. Fase 3 — Rendimiento
@@ -128,3 +129,4 @@ Estados: ✅ hecho, 🚧 en curso, ⏳ pendiente, ⚠️ requiere decisión.
 | 2026-11-25 | Tombstones + pdf-extract 0.12 + cola | ✅ 555 tests, 0 fallos |
 | 2026-11-25 | Dedup O(1) e ingesta idempotente | ✅ 556 tests, 0 fallos |
 | 2026-11-25 | `cargo audit` + `.cargo/audit.toml` | ✅ 0 vulnerabilidades, 6 warnings |
+| 2026-11-25 | API: parámetros por petición y `usage` | ✅ 558 tests, 0 fallos |

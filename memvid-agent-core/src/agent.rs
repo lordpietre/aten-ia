@@ -97,23 +97,43 @@ impl Agent {
     /// Chat using externally provided messages (e.g. from API).
     /// Unlike `chat()`, this does NOT push messages to the internal session.
     pub fn chat_with_messages(&mut self, messages: &[Message]) -> Result<String> {
+        Ok(self
+            .chat_with_messages_options(messages, &generation::GenerationOptions::default())?
+            .response)
+    }
+
+    /// Chat with per-request generation options; returns text, prompt tokens and
+    /// estimated completion tokens.
+    pub fn chat_with_messages_options(
+        &mut self,
+        messages: &[Message],
+        options: &generation::GenerationOptions,
+    ) -> Result<generation::GenerationResult> {
         let user_input = messages
             .iter()
             .rfind(|m| m.role == MessageRole::User)
             .map(|m| m.content.as_str())
             .unwrap_or("");
 
-        self.session.increment_interactions();
-        let result = generation::generate_chat(
+        // API callers must not advance the REPL's session/interaction counter:
+        // API conversations are not persisted in the REPL session.
+        generation::generate_chat_with_options(
             &mut self.llm,
             &self.prompt_builder,
             &self.context_policy,
             &self.knowledge_index,
             messages,
             user_input,
-        )?;
+            options,
+        )
+    }
 
-        Ok(result.response)
+    pub fn n_ctx(&self) -> u32 {
+        self.context_policy.n_ctx()
+    }
+
+    pub fn max_tokens(&self) -> u32 {
+        self.context_policy.max_tokens()
     }
 
     pub fn chat(&mut self, user_input: &str) -> Result<String> {

@@ -372,6 +372,18 @@ impl LlamaContext {
     }
 
     pub fn generate(&mut self, prompt: &str, max_tokens: u32) -> Result<String> {
+        self.generate_with(prompt, max_tokens, self.top_k, self.top_p, self.temp)
+    }
+
+    /// Generate with per-request sampling parameters (OpenAI API compatibility).
+    pub fn generate_with(
+        &mut self,
+        prompt: &str,
+        max_tokens: u32,
+        top_k: i32,
+        top_p: f32,
+        temp: f32,
+    ) -> Result<String> {
         self.clear_memory();
         let mut tokens = self
             .tokenize(prompt, false)
@@ -383,7 +395,7 @@ impl LlamaContext {
 
         for i in 0..max_tokens {
             let token = self
-                .sample(self.top_k, self.top_p, self.temp)
+                .sample(top_k, top_p, temp)
                 .context(format!("Failed to sample token at position {}", i))?;
             if self.is_eog(token) {
                 break;
@@ -407,6 +419,11 @@ impl LlamaContext {
 
     pub fn is_valid(&self) -> bool {
         !self.vocab.is_null()
+    }
+
+    /// Current sampling defaults (top_k, top_p, temp).
+    pub fn sampling(&self) -> (i32, f32, f32) {
+        (self.top_k, self.top_p, self.temp)
     }
 
     pub fn clear_memory(&self) {

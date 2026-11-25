@@ -196,9 +196,16 @@ Para exponerlo en la red, cambia
 a
 .B 0.0.0.0
 y usa TLS o un proxy inverso.
-Las peticiones de la API no se guardan en la memoria persistente y el campo
+Las peticiones de la API no se guardan en la memoria persistente.
 .B usage
-se informa con ceros.
+informa los tokens reales del prompt y una estimación de los de respuesta.
+Se aceptan
+.BR max_tokens ,
+.BR temperature ,
+.B top_p
+y
+.B top_k
+por petición.
 .SH "VARIABLES DE ENTORNO"
 .TP
 .B MODEL_PATH

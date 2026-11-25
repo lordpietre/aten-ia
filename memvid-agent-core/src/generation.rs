@@ -16,8 +16,18 @@ pub struct RagEntryDebug {
 
 pub struct GenerationResult {
     pub response: String,
+    pub prompt_tokens: u32,
     pub tokens_estimated: u32,
     pub rag_debug: Vec<RagEntryDebug>,
+}
+
+/// Per-request generation overrides (OpenAI-compatible API).
+#[derive(Debug, Clone, Default)]
+pub struct GenerationOptions {
+    pub max_tokens: Option<u32>,
+    pub top_k: Option<i32>,
+    pub top_p: Option<f32>,
+    pub temp: Option<f32>,
 }
 
 pub fn generate_chat(
@@ -28,6 +38,29 @@ pub fn generate_chat(
     batch: &[Message],
     user_input: &str,
 ) -> Result<GenerationResult> {
+    generate_chat_with_options(
+        llm,
+        prompt_builder,
+        context_policy,
+        knowledge_index,
+        batch,
+        user_input,
+        &GenerationOptions::default(),
+    )
+}
+
+pub fn generate_chat_with_options(
+    llm: &mut LlamaContext,
+    prompt_builder: &PromptBuilder,
+    context_policy: &ContextPolicy,
+    knowledge_index: &KnowledgeIndex,
+    batch: &[Message],
+    user_input: &str,
+    options: &GenerationOptions,
+) -> Result<GenerationResult> {
+    let max_tokens = options.max_tokens.unwrap_or(context_policy.max_tokens());
+    let context_policy = ContextPolicy::new(context_policy.n_ctx(), max_tokens);
+    let context_policy = &context_policy;
     let count_tokens = |text: &str| {
         llm.tokenize(text, false)
             .map(|t| t.len())
@@ -87,12 +120,19 @@ pub fn generate_chat(
         );
     }
 
-    let max_tokens = context_policy.max_tokens();
-    let response = llm.generate(&prompt, max_tokens)?;
+    let (default_top_k, default_top_p, default_temp) = llm.sampling();
+    let response = llm.generate_with(
+        &prompt,
+        max_tokens,
+        options.top_k.unwrap_or(default_top_k),
+        options.top_p.unwrap_or(default_top_p),
+        options.temp.unwrap_or(default_temp),
+    )?;
     let tokens_estimated = estimate_tokens(&response);
 
     Ok(GenerationResult {
         response,
+        prompt_tokens: prompt_tokens as u32,
         tokens_estimated,
         rag_debug,
     })
@@ -120,10 +160,12 @@ mod tests {
     fn generation_result_construction() {
         let result = GenerationResult {
             response: "hello".to_string(),
+            prompt_tokens: 3,
             tokens_estimated: 5,
             rag_debug: Vec::new(),
         };
         assert_eq!(result.response, "hello");
+        assert_eq!(result.prompt_tokens, 3);
         assert_eq!(result.tokens_estimated, 5);
     }
 

@@ -1,4 +1,5 @@
 use crate::agent::Agent;
+use crate::generation::GenerationOptions;
 use crate::shutdown;
 use crate::types::{Message, MessageRole};
 use anyhow::Result;
@@ -186,7 +187,21 @@ impl ApiServer {
         }
 
         let mut agent = self.agent.lock().unwrap();
-        let content = agent.chat_with_messages(&api_messages)?;
+        let options = match parse_generation_options(&body, agent.n_ctx()) {
+            Ok(o) => o,
+            Err(e) => {
+                let resp = json_response(
+                    400,
+                    &json!({"error": {"message": e, "type": "invalid_request_error"}}),
+                );
+                stream.write_all(resp.as_bytes())?;
+                stream.flush()?;
+                return Ok(());
+            }
+        };
+        let content = agent
+            .chat_with_messages_options(&api_messages, &options)?
+            .response;
         drop(agent);
 
         let chunk_id = format!("chatcmpl-{}", uuid::Uuid::new_v4());
@@ -293,7 +308,16 @@ impl ApiServer {
         }
 
         let mut agent = self.agent.lock().unwrap();
-        let content = match agent.chat_with_messages(&api_messages) {
+        let options = match parse_generation_options(&body, agent.n_ctx()) {
+            Ok(o) => o,
+            Err(e) => {
+                return json_response(
+                    400,
+                    &json!({"error": {"message": e, "type": "invalid_request_error"}}),
+                );
+            }
+        };
+        let result = match agent.chat_with_messages_options(&api_messages, &options) {
             Ok(r) => r,
             Err(e) => {
                 return json_response(
@@ -302,6 +326,7 @@ impl ApiServer {
                 );
             }
         };
+        let total_tokens = result.prompt_tokens + result.tokens_estimated;
 
         json_response(
             200,
@@ -313,14 +338,14 @@ impl ApiServer {
                     "index": 0,
                     "message": {
                         "role": "assistant",
-                        "content": content,
+                        "content": result.response,
                     },
                     "finish_reason": "stop",
                 }],
                 "usage": {
-                    "prompt_tokens": 0,
-                    "completion_tokens": 0,
-                    "total_tokens": 0,
+                    "prompt_tokens": result.prompt_tokens,
+                    "completion_tokens": result.tokens_estimated,
+                    "total_tokens": total_tokens,
                 }
             }),
         )
@@ -336,6 +361,58 @@ impl ApiServer {
             }),
         )
     }
+}
+
+fn parse_generation_options(
+    body: &serde_json::Value,
+    n_ctx: u32,
+) -> std::result::Result<GenerationOptions, String> {
+    let mut options = GenerationOptions::default();
+
+    if let Some(v) = body.get("max_tokens") {
+        let n = v
+            .as_u64()
+            .ok_or_else(|| "max_tokens must be a positive integer".to_string())?;
+        if n == 0 || n >= n_ctx as u64 {
+            return Err(format!(
+                "max_tokens must be between 1 and {} (n_ctx - 1)",
+                n_ctx.saturating_sub(1)
+            ));
+        }
+        options.max_tokens = Some(n as u32);
+    }
+
+    if let Some(v) = body.get("temperature") {
+        let t = v
+            .as_f64()
+            .ok_or_else(|| "temperature must be a number".to_string())?;
+        if t < 0.0 {
+            return Err("temperature must be >= 0".to_string());
+        }
+        options.temp = Some(t as f32);
+    }
+
+    if let Some(v) = body.get("top_p") {
+        let p = v
+            .as_f64()
+            .ok_or_else(|| "top_p must be a number".to_string())?;
+        if !(0.0..=1.0).contains(&p) {
+            return Err("top_p must be between 0 and 1".to_string());
+        }
+        options.top_p = Some(p as f32);
+    }
+
+    if let Some(v) = body.get("top_k") {
+        let k = v
+            .as_i64()
+            .ok_or_else(|| "top_k must be an integer".to_string())?;
+        if k < 0 {
+            return Err("top_k must be >= 0".to_string());
+        }
+        options.top_k = Some(k as i32);
+    }
+
+    Ok(options)
 }
 
 fn read_http_request(stream: &mut TcpStream) -> Result<HttpRequest> {
@@ -672,5 +749,29 @@ mod tests {
         let resp = server.route(&req);
         assert!(resp.starts_with("HTTP/1.1 200 OK"));
         assert!(resp.contains("my-token"));
+    }
+
+    #[test]
+    fn generation_options_parse_valid_values() {
+        let body = serde_json::json!({
+            "max_tokens": 128,
+            "temperature": 0.2,
+            "top_p": 0.9,
+            "top_k": 10
+        });
+        let opts = parse_generation_options(&body, 1024).unwrap();
+        assert_eq!(opts.max_tokens, Some(128));
+        assert_eq!(opts.temp, Some(0.2));
+        assert_eq!(opts.top_p, Some(0.9));
+        assert_eq!(opts.top_k, Some(10));
+    }
+
+    #[test]
+    fn generation_options_reject_invalid_values() {
+        assert!(parse_generation_options(&serde_json::json!({"max_tokens": 0}), 1024).is_err());
+        assert!(parse_generation_options(&serde_json::json!({"max_tokens": 1024}), 1024).is_err());
+        assert!(parse_generation_options(&serde_json::json!({"temperature": -0.1}), 1024).is_err());
+        assert!(parse_generation_options(&serde_json::json!({"top_p": 1.5}), 1024).is_err());
+        assert!(parse_generation_options(&serde_json::json!({"top_k": -1}), 1024).is_err());
     }
 }

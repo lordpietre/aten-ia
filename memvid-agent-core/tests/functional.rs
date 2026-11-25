@@ -1506,10 +1506,12 @@ fn generation_result_construction() {
     use memvid_agent_core::generation::GenerationResult;
     let result = GenerationResult {
         response: "hello".to_string(),
+        prompt_tokens: 3,
         tokens_estimated: 5,
         rag_debug: Vec::new(),
     };
     assert_eq!(result.response, "hello");
+    assert_eq!(result.prompt_tokens, 3);
     assert_eq!(result.tokens_estimated, 5);
 }
 

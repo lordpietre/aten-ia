@@ -56,7 +56,7 @@ Override download repo: `LLAMA_LIBS_REPO=user/repo`.
 - **No GPU backends** — `n_gpu_layers` defaults to `0`; no CUDA/Metal/Vulkan cmake flags
 - **RAG is keyword-only** — word substring match over `knowledge_index.jsonl`, no embeddings
 - **RAG token budget** — dynamically limits RAG context based on available prompt budget (system + input tokens + 128-token margin subtracted first)
-- **API threaded per connection** — raw TCP `TcpListener`, one thread per connection, inference serialized behind `Arc<Mutex<Agent>>`; SSE supported via `"stream": true` (single content chunk)
+- **API threaded per connection** — raw TCP `TcpListener`, one thread per connection, inference serialized behind `Arc<Mutex<Agent>>`; SSE supported via `"stream": true`; per-request `max_tokens`/`temperature`/`top_p`/`top_k` and real prompt-token usage
 - **Session flushes every 5 interactions** — `Session::flush()` → `MemvidWriter` (also on `Drop`)
 - **KV cache type** configurable: `model.kv_type_k` / `model.kv_type_v` (default `f16`; `turbo2/3/4` enable flash-attn automatically)
 - **All persistence atomic**: write → fsync → rename → fsync(parent); sensitive files are `0600` and the data dir `0700` on Unix
