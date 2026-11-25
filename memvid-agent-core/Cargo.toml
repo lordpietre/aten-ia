@@ -39,7 +39,7 @@ tempfile = "3"
 
 [build-dependencies]
 cmake = "0.1"
-bindgen = "0.70"
+bindgen = "0.73"
 
 [profile.release]
 lto = "thin"
