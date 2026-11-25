@@ -83,6 +83,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
+          components: rustfmt, clippy
 
       - name: Install cross target
         if: matrix.cross == true
@@ -146,6 +147,16 @@ jobs:
           find build -name "*.a" -exec cp {} llama-libs/ \;
           echo "==> Packaged static libs:"
           ls -lh llama-libs/
+
+      - name: Verify before release (native only)
+        if: matrix.cross == false
+        env:
+          LLAMA_LOCAL_LIBS: llama-libs
+        run: |
+          cargo fmt --all -- --check
+          cargo clippy --locked --lib
+          cargo test --locked -- --test-threads=1
+          cargo run --locked -- --self-test
 
       - name: Build release binary
         env:

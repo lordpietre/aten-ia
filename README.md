@@ -73,7 +73,8 @@ La **primera compilación tarda ~30 min** porque compila llama.cpp desde fuente;
 Comprobar la versión:
 
 ```bash
-cargo run -- --version   # aten-ia 0.3.12
+cargo run -- --version      # aten-ia 0.3.12
+cargo run -- --self-test    # verifica sintaxis y uso sin modelo ni red
 ```
 
 ### Primer arranque
@@ -323,7 +324,7 @@ API HTTP (api.rs) ────────────┘         │
 
 **Scoring RAG** (keyword, sin embeddings): coincidencia en fuente ×20, palabra exacta en contenido ×50, coincidencia parcial ×30 normalizada por densidad, e ID ×5.
 
-### Módulos (23)
+### Módulos (24)
 
 ```
 memvid-agent-core/src/
@@ -347,6 +348,7 @@ memvid-agent-core/src/
   prompt.rs            — Plantillas ChatML/Llama3/Mistral/Raw
   queue.rs             — Cola de URLs persistente
   retrieval.rs         — Índice de conocimiento y chunking de texto
+  selfcheck.rs         — Verificación de runtime (`--self-test`)
   session.rs           — Buffer de sesión y flush a memoria
   shutdown.rs          — Señales SIGINT/SIGTERM
   types.rs             — Tipos compartidos y defaults
@@ -415,17 +417,23 @@ También existe un `snapcraft.yaml` que empaqueta el binario ya compilado.
 
 ```bash
 cd memvid-agent-core
-cargo test --locked -- --test-threads=1   # ~541 tests (unitarios + integración)
+cargo test --locked -- --test-threads=1   # ~551 tests (unitarios + integración)
 cargo test --locked --lib -- --test-threads=1
 cargo fmt --all -- --check
 cargo clippy --locked --lib
 ```
 
-Los tests de integración (`tests/functional.rs`, `tests/writer_integration.rs`, `tests/kv_cache_and_history.rs`) usan `tempfile::tempdir()` y `LlamaContext::null()`, por lo que **no necesitan un GGUF**. Se requiere `--test-threads=1` porque varios tests modifican variables de entorno (`MODEL_PATH`) y comparten estado global.
+Los tests de integración (`tests/functional.rs`, `tests/writer_integration.rs`, `tests/kv_cache_and_history.rs`, `tests/cli.rs`, `tests/network_ingest.rs`, `tests/api_server.rs`) usan `tempfile::tempdir()` y `LlamaContext::null()`: **no necesitan GGUF**. Los de red usan un servidor HTTP local. Se requiere `--test-threads=1` por las variables de entorno (`MODEL_PATH`) y el flag global de shutdown.
 
-CI compila para `x86_64` y `aarch64`; los tests, `fmt` y `clippy --lib` se ejecutan solo en `x86_64`. Orden: `build → test → fmt → clippy --lib`.
+Suite completa (local y CI):
 
-Documentación adicional: [`PORTABILITY_SPEC.md`](PORTABILITY_SPEC.md).
+```bash
+./scripts/ci/verify.sh
+```
+
+Incluye `metadata --locked`, `fmt`, `clippy`, todos los tests, `--version`, `--self-test` y comprobación de documentación. CI añade el job de docs y verifica el binario; el release ejecuta los mismos gates antes de empaquetar.
+
+Documentación adicional: [`SDD.md`](SDD.md) (especificación y sistema de verificación), [`PORTABILITY_SPEC.md`](PORTABILITY_SPEC.md).
 
 ---
 
@@ -439,7 +447,6 @@ Documentación adicional: [`PORTABILITY_SPEC.md`](PORTABILITY_SPEC.md).
 - La plantilla `raw` ignora historial y contexto RAG.
 - `n_gpu_layers` existe en la configuración, pero los builds no incluyen backends GPU (CUDA/Metal/Vulkan).
 - `/batch` no incrementa la barra por URL individual (sí procesa todas y muestra el resumen final).
-- No hay archivo `LICENSE` en el repositorio, aunque el proyecto se declara Apache 2.0.
 
 ---
 
@@ -450,6 +457,8 @@ Documentación adicional: [`PORTABILITY_SPEC.md`](PORTABILITY_SPEC.md).
 - [`PORTABILITY_SPEC.md`](PORTABILITY_SPEC.md)
 - [`SECURITY.md`](SECURITY.md) — cómo reportar vulnerabilidades
 - [`PLAN.md`](PLAN.md) — plan de auditoría y mejoras
+- [`SDD.md`](SDD.md) — especificación y sistema de verificación/CI
+- [`.opencode/agents/verifier.md`](.opencode/agents/verifier.md) — agente verificador
 - [`AGENTS.md`](AGENTS.md) — notas para agentes/desarrolladores
 
 ## Licencia

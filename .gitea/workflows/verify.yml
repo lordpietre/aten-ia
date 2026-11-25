@@ -1,0 +1,42 @@
+name: Verify
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  verify:
+    name: Full verification
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: memvid-agent-core
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install system dependencies
+        run: |
+          apt-get update -y
+          apt-get install -y --no-install-recommends \
+            build-essential cmake libssl-dev clang libclang-dev \
+            libgomp-dev pkg-config groff
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: verify
+
+      - name: Run verification suite
+        run: ../scripts/ci/verify.sh

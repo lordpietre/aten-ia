@@ -27,7 +27,7 @@
 
 El REPL y el servidor API comparten el mismo `Agent` protegido por `Arc<Mutex<_>>`. La inferencia se serializa, aunque cada conexión HTTP se atienda en su propio hilo.
 
-## Módulos (23)
+## Módulos (24)
 
 | Módulo | Archivo | Responsabilidad |
 |---|---|---|
@@ -51,6 +51,7 @@ El REPL y el servidor API comparten el mismo `Agent` protegido por `Arc<Mutex<_>
 | Prompt | `prompt.rs` | Plantillas ChatML, Llama 3, Mistral y Raw |
 | Queue | `queue.rs` | Cola persistente de URLs |
 | Retrieval | `retrieval.rs` | Índice de conocimiento y búsqueda |
+| Self-check | `selfcheck.rs` | Verificación de runtime para `--self-test` |
 | Session | `session.rs` | Buffer de mensajes y flush |
 | Shutdown | `shutdown.rs` | SIGINT/SIGTERM |
 | Types | `types.rs` | Tipos compartidos y defaults |

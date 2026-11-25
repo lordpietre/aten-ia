@@ -92,6 +92,22 @@ Estados: ✅ hecho, 🚧 en curso, ⏳ pendiente, ⚠️ requiere decisión.
 - Backend GPU opcional.
 - Cifrado en reposo.
 
+## 6. Fase 6 — Verificación y CI (SDD)
+
+- [x] ✅ `--self-test` / `--verify`: 12 checks de runtime sin modelo ni red.
+- [x] ✅ `tests/cli.rs`: flags del binario.
+- [x] ✅ `tests/network_ingest.rs`: fetch, feed, lote y límite de tamaño con
+      servidor local.
+- [x] ✅ `tests/api_server.rs`: API TCP real (health, auth, models, 404, JSON).
+- [x] ✅ `scripts/ci/verify.sh` y `scripts/ci/check-docs.sh`.
+- [x] ✅ Agente OpenCode `verifier` con permisos restringidos.
+- [x] ✅ Job `docs` y CLI smoke en CI; `verify.yml` en tags/manual; gate nativo
+      en release.
+- [x] ✅ `SDD.md` con especificación, trazabilidad y criterios de release.
+- [ ] ⏳ `cargo audit` bloqueante y `cargo deny`.
+- [ ] ⏳ Job nightly con GGUF real y benchmarks.
+- [ ] ⏳ Fuzzing de parser HTTP/feeds/PDF.
+
 ## Registro de verificación
 
 | Fecha | Comprobación | Resultado |
@@ -101,3 +117,6 @@ Estados: ✅ hecho, 🚧 en curso, ⏳ pendiente, ⚠️ requiere decisión.
 | 2026-11-25 | `cargo fmt --all -- --check` | ✅ |
 | 2026-11-25 | `cargo clippy --locked --lib` | ✅ 10 avisos de estilo preexistentes |
 | 2026-11-25 | `time 0.3.47` + suite completa | ✅ 541 tests, 0 fallos |
+| 2026-11-25 | `--self-test` (12 checks) | ✅ |
+| 2026-11-25 | `scripts/ci/verify.sh` completo | ✅ |
+| 2026-11-25 | Suite con CLI, red local y API TCP | ✅ 551 tests, 0 fallos |

@@ -16,6 +16,7 @@ No requiere GPU, API keys ni servicios externos para inferir. Solo se necesita r
 - **API OpenAI-compatible** — `/v1/chat/completions` (con SSE opcional), `/v1/models`, `/health` y `/token`, con autenticación Bearer.
 - **Integración** — `/token` genera la configuración de OpenCode y muestra la de VS Code (Continue).
 - **Robustez** — FileLock contra instancias concurrentes, flush cada 5 interacciones y apagado graceful (SIGINT/SIGTERM).
+- **Verificación** — `--self-test`, suite CI multiarquitectura y agente verificador.
 
 ## Tecnologías
 

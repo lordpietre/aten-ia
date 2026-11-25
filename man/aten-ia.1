@@ -4,7 +4,7 @@
 aten-ia \- agente de IA local con memoria persistente, RAG y API compatible con OpenAI
 .SH SYNOPSIS
 .B aten-ia
-.RB [ \-\-version | \-V ]
+.RB [ \-\-version | \-V | \-\-self-test | \-\-verify ]
 .SH DESCRIPTION
 .B aten-ia
 es un agente conversacional de línea de comandos que ejecuta modelos GGUF en CPU
@@ -21,6 +21,11 @@ Internet.
 .TP
 .B \-\-version, \-V
 Muestra la versión del binario y termina.
+.TP
+.B \-\-self-test, \-\-verify
+Ejecuta la verificación interna (config, persistencia, RAG, chunking, extractor,
+feeds, cola, prompts, catálogo y fine-tune) sin cargar modelo ni usar red.
+Devuelve 0 si todo pasa.
 .PP
 El binario no interpreta otros argumentos: toda la configuración se realiza en
 .B config.json

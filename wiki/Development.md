@@ -79,9 +79,11 @@ El linker se configura en `.cargo/config.toml`.
 ```bash
 cargo test --locked -- --test-threads=1
 cargo test --locked --lib -- --test-threads=1  # solo unitarios
+cargo run  --locked -- --self-test              # verificación de uso sin modelo
+../scripts/ci/verify.sh                         # suite completa
 ```
 
-- **~541 tests** entre unitarios e integración.
+- **~551 tests** entre unitarios e integración.
 - Los tests de integración (`tests/functional.rs`, `tests/writer_integration.rs`, `tests/kv_cache_and_history.rs`) usan `tempfile::tempdir()` y `LlamaContext::null()`: **no requieren GGUF**.
 - `--test-threads=1` es obligatorio: varios tests mutan `MODEL_PATH` y comparten estado global del proceso.
 
@@ -97,6 +99,9 @@ Cobertura destacada:
 | API | Parseo HTTP, auth, rutas, health/models |
 | Finetune | Estimaciones puras, corpus, scripts |
 | KV-cache | Tipos válidos, ranking de fidelidad |
+| CLI | `--version`, `--self-test`, `--verify` |
+| Red local | fetch, feeds, lote y límite de tamaño |
+| API TCP | health, auth, models, 404, JSON inválido |
 
 ## Calidad y CI
 
@@ -113,6 +118,11 @@ Pipeline en `.github/workflows/ci.yml` y `.gitea/workflows/ci.yml`:
 4. `cargo test --locked -- --test-threads=1` (solo nativo).
 5. `cargo fmt --all -- --check` (solo nativo).
 6. `cargo clippy --locked --lib` (solo nativo).
+7. CLI smoke: `--version` y `--self-test` (solo nativo).
+8. Job `docs`: enlaces, secretos y render del manual.
+
+En tags y manualmente, `verify.yml` ejecuta `scripts/ci/verify.sh`; el release
+repite los gates nativos antes de empaquetar.
 
 ## Releases
 

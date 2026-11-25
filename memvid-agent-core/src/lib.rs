@@ -16,6 +16,7 @@ pub mod models_catalog;
 pub mod prompt;
 pub mod queue;
 pub mod retrieval;
+pub mod selfcheck;
 pub mod session;
 pub mod shutdown;
 pub mod types;

@@ -22,6 +22,10 @@ fn main() -> Result<()> {
                 println!("aten-ia {}", env!("CARGO_PKG_VERSION"));
                 return Ok(());
             }
+            "--self-test" | "--verify" => {
+                memvid_agent_core::selfcheck::run()?;
+                return Ok(());
+            }
             _ => {}
         }
     }
