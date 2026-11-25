@@ -102,6 +102,7 @@ Plantillas (`prompt.rs`): `chatml`, `llama3`, `mistral`, `raw`. La plantilla `ra
   conversations/conv_YYYY-MM-DD_NNN.mv2
   knowledge/know_YYYY-MM-DD_NNN.mv2
   knowledge_index.jsonl
+  knowledge_tombstones.jsonl
   feed_queue.jsonl
   languages_catalog.json
   .lock

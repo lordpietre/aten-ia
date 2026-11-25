@@ -441,22 +441,27 @@ fn main() -> Result<()> {
             spinner.set_message("Indexing…");
             spinner.enable_steady_tick(std::time::Duration::from_millis(80));
 
-            {
+            let indexed = {
                 let mut a = agent.lock().unwrap();
+                let mut added = 0usize;
                 for entry in &entries {
-                    a.store_knowledge_direct(&entry.source, &entry.content)?;
+                    if a.store_knowledge_dedup(&entry.source, &entry.content)? {
+                        added += 1;
+                    }
                 }
-            }
+                added
+            };
             spinner.finish_and_clear();
 
             config.languages.mark_installed(&lang.key);
             config.save()?;
 
             println!(
-                "{} Installed {} — {} chunks indexed as knowledge.",
+                "{} Installed {} — {} chunks indexed as knowledge ({} already present).",
                 "✓".green(),
                 lang.name.bold(),
-                entries.len()
+                indexed,
+                entries.len().saturating_sub(indexed)
             );
 
             // Auto-offer a fine-tune of the active model on what we just learned.
@@ -1074,6 +1079,19 @@ fn main() -> Result<()> {
             );
             spinner.set_message("Processing queue…");
             spinner.enable_steady_tick(std::time::Duration::from_millis(80));
+
+            let recovered = {
+                let mut q = FeedQueue::new(&config.data_dir);
+                q.reset_stale_processing()?
+            };
+            if recovered > 0 {
+                eprintln!(
+                    "{} Recovered {} queue entr{} from a previous run.",
+                    "i".cyan(),
+                    recovered,
+                    if recovered == 1 { "y" } else { "ies" }
+                );
+            }
 
             let pending: Vec<(String, String)> = {
                 let q = FeedQueue::new(&config.data_dir);

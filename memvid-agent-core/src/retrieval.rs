@@ -5,6 +5,7 @@ use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 
 const JSONL_FILENAME: &str = "knowledge_index.jsonl";
+const TOMBSTONES_FILENAME: &str = "knowledge_tombstones.jsonl";
 
 #[derive(Debug, Clone)]
 pub struct ScoredEntry<'a> {
@@ -15,19 +16,25 @@ pub struct ScoredEntry<'a> {
 pub struct KnowledgeIndex {
     entries: Vec<KnowledgeEntry>,
     jsonl_path: PathBuf,
+    tombstones_path: PathBuf,
 }
 
 impl KnowledgeIndex {
     pub fn load(data_dir: &Path) -> Result<Self> {
         let jsonl_path = data_dir.join(JSONL_FILENAME);
-        let entries = if jsonl_path.exists() {
+        let tombstones_path = data_dir.join(TOMBSTONES_FILENAME);
+        let mut entries = if jsonl_path.exists() {
             Self::load_jsonl(&jsonl_path)?
         } else {
             Vec::new()
         };
+        let tombstones = Self::load_tombstones(&tombstones_path);
+        entries.retain(|e| !tombstones.iter().any(|p| e.source.starts_with(p)));
+
         Ok(Self {
             entries,
             jsonl_path,
+            tombstones_path,
         })
     }
 
@@ -209,8 +216,12 @@ impl KnowledgeIndex {
     }
 
     /// Remove all entries whose source starts with the given prefix.
-    /// Rewrites the full JSONL after removal.
+    /// Rewrites the full JSONL and records a tombstone so `/reindex` cannot
+    /// resurrect entries that are still present in `.mv2` segments.
     pub fn remove_by_source_prefix(&mut self, prefix: &str) -> Result<usize> {
+        if !prefix.is_empty() {
+            self.record_tombstone(prefix)?;
+        }
         let before = self.entries.len();
         self.entries.retain(|e| !e.source.starts_with(prefix));
         let removed = before - self.entries.len();
@@ -328,6 +339,43 @@ impl KnowledgeIndex {
         Ok(entries)
     }
 
+    fn load_tombstones(path: &Path) -> Vec<String> {
+        let Ok(content) = std::fs::read_to_string(path) else {
+            return Vec::new();
+        };
+        content
+            .lines()
+            .map(str::trim)
+            .filter(|line| !line.is_empty())
+            .filter_map(|line| {
+                serde_json::from_str::<String>(line)
+                    .ok()
+                    .or_else(|| Some(line.to_string()))
+            })
+            .collect()
+    }
+
+    fn record_tombstone(&self, prefix: &str) -> Result<()> {
+        let existing = Self::load_tombstones(&self.tombstones_path);
+        if existing.iter().any(|p| p == prefix) {
+            return Ok(());
+        }
+        let parent = self.tombstones_path.parent().unwrap_or(Path::new("."));
+        if !parent.exists() {
+            std::fs::create_dir_all(parent)
+                .context("Failed to create parent directory for tombstones")?;
+        }
+        let mut file = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&self.tombstones_path)
+            .context("Failed to open knowledge_tombstones.jsonl")?;
+        let line = serde_json::to_string(prefix).context("Failed to serialize tombstone")?;
+        writeln!(file, "{}", line).context("Failed to write tombstone")?;
+        file.sync_all().context("Failed to fsync tombstones")?;
+        Ok(())
+    }
+
     /// Rebuild knowledge_index.jsonl by reading all knowledge .mv2 segments.
     /// Returns a fresh KnowledgeIndex with all entries loaded from the .mv2 files.
     pub fn rebuild_from_mv2(data_dir: &Path) -> Result<Self> {
@@ -336,6 +384,7 @@ impl KnowledgeIndex {
 
         let manifest_path = data_dir.join("manifest.json");
         let jsonl_path = data_dir.join(JSONL_FILENAME);
+        let tombstones_path = data_dir.join(TOMBSTONES_FILENAME);
 
         let manifest: Manifest = if manifest_path.exists() {
             let content =
@@ -382,9 +431,13 @@ impl KnowledgeIndex {
             }
         }
 
+        let tombstones = Self::load_tombstones(&tombstones_path);
+        entries.retain(|e| !tombstones.iter().any(|p| e.source.starts_with(p)));
+
         let index = Self {
             entries,
             jsonl_path,
+            tombstones_path,
         };
         index.flush_jsonl()?;
         Ok(index)
@@ -748,5 +801,59 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let index = KnowledgeIndex::rebuild_from_jsonl(dir.path()).unwrap();
         assert_eq!(index.len(), 0);
+    }
+
+    #[test]
+    fn tombstone_filters_entries_on_reload() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut index = KnowledgeIndex::load(dir.path()).unwrap();
+        index.add_entry(make_entry("rust/a", "alpha")).unwrap();
+        index.add_entry(make_entry("python/b", "beta")).unwrap();
+        assert_eq!(index.remove_by_source_prefix("rust/").unwrap(), 1);
+
+        // Simulate a stale/restored JSONL entry that is still in the tombstoned
+        // source: loading must filter it out.
+        {
+            use std::io::Write;
+            let line = serde_json::to_string(&make_entry("rust/a", "alpha")).unwrap();
+            let mut f = std::fs::OpenOptions::new()
+                .append(true)
+                .open(dir.path().join("knowledge_index.jsonl"))
+                .unwrap();
+            writeln!(f, "{line}").unwrap();
+        }
+
+        let reloaded = KnowledgeIndex::load(dir.path()).unwrap();
+        assert_eq!(reloaded.len(), 1);
+        assert_eq!(reloaded.entries()[0].source, "python/b");
+    }
+
+    #[test]
+    fn tombstone_prevents_reindex_resurrection() {
+        use crate::memvid::writer::MemvidWriter;
+        use crate::types::WriterConfig;
+
+        let dir = tempfile::tempdir().unwrap();
+        let mut writer = MemvidWriter::init(WriterConfig {
+            data_dir: dir.path().to_path_buf(),
+            ..Default::default()
+        })
+        .unwrap();
+        writer
+            .append_knowledge(make_entry("rust/a", "alpha"))
+            .unwrap();
+        writer
+            .append_knowledge(make_entry("python/b", "beta"))
+            .unwrap();
+        writer.flush_knowledge().unwrap();
+        drop(writer);
+
+        let mut index = KnowledgeIndex::load(dir.path()).unwrap();
+        assert_eq!(index.remove_by_source_prefix("rust/").unwrap(), 0);
+        assert_eq!(index.len(), 0);
+
+        let rebuilt = KnowledgeIndex::rebuild_from_mv2(dir.path()).unwrap();
+        assert_eq!(rebuilt.len(), 1);
+        assert_eq!(rebuilt.entries()[0].source, "python/b");
     }
 }

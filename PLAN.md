@@ -37,7 +37,7 @@ Estados: ✅ hecho, 🚧 en curso, ⏳ pendiente, ⚠️ requiere decisión.
 - [x] ✅ Eliminada la dependencia directa `zip` (no se usaba en `src/`).
 - [x] ✅ Toolchain local a Rust 1.100; `rust-version = 1.89`.
 - [x] ✅ `action-gh-release@v2`, `permissions` mínimos y Dependabot.
-- [ ] ⏳ `pdf-extract` 0.12 / `lopdf` 0.42 (RUSTSEC-2026-0187).
+- [x] ✅ `pdf-extract` 0.12.1 / `lopdf` 0.42 en la ruta directa (RUSTSEC-2026-0187); `memvid-core` conserva `lopdf` 0.39 como dependencia transitiva.
 - [ ] ⏳ `feed-rs` 3, `bindgen` 0.73, `indicatif` 0.18, `sha2` 0.11.
 - [ ] ⏳ Resolver `zip` 7.x transitivo (memvid-core) o documentar que no se usan
       sus APIs de extracción.
@@ -54,10 +54,11 @@ Estados: ✅ hecho, 🚧 en curso, ⏳ pendiente, ⚠️ requiere decisión.
 - [x] ✅ Validación `max_tokens < n_ctx` y resta saturante.
 - [x] ✅ Toggle real de `/debug` (`Agent::is_debug`).
 - [x] ✅ Escritura JSONL en lote (un `fsync` por documento en vez de por chunk).
-- [ ] ⏳ `/ingest` de texto no debe volcar el documento completo en la sesión.
-- [ ] ⏳ `/unlearn` durable: borrado en `.mv2` y prefijo de libros.
-- [ ] ⏳ Deduplicación en `/learn`, `/ingest` y `/download-books`.
-- [ ] ⏳ Recuperación de cola: entradas `processing` huérfanas y reintentos.
+- [x] ✅ `/ingest` de texto guarda un resumen, no el documento completo, en la sesión.
+- [x] ✅ `/unlearn` durable con `knowledge_tombstones.jsonl` (incluye libros).
+- [x] ✅ Deduplicación en `/learn` y `/download-books`.
+- [ ] ⏳ Deduplicación en `/ingest` (chunks repetidos).
+- [x] ✅ Recuperación de cola: `processing` huérfanas vuelven a `pending`.
 - [ ] ⏳ `/batch`: barra de progreso incremental.
 - [ ] ⏳ API: `model`, `max_tokens`, `temperature`, `top_p`, `usage` real y
       contador separado del REPL.
@@ -80,7 +81,7 @@ Estados: ✅ hecho, 🚧 en curso, ⏳ pendiente, ⚠️ requiere decisión.
 - [ ] ⏳ `cargo audit`, cobertura y fuzzing (HTTP, feeds, PDF, EPUB).
 - [ ] ⏳ SBOM y firma de releases.
 - [ ] ⏳ `CHANGELOG.md` y notas de release.
-- [ ] ⏳ Corregir `Depends: libssl3` del `.deb` (el binario usa rustls).
+- [x] ✅ `.deb` sin `libssl3`; dependencia real `libc6 >= 2.31` y herramientas en `Suggests`.
 - [ ] ⏳ Probar instalación en la distro más antigua soportada.
 - [ ] ⚠️ Decidir si el snap se construye en CI o se retira.
 
@@ -121,3 +122,4 @@ Estados: ✅ hecho, 🚧 en curso, ⏳ pendiente, ⚠️ requiere decisión.
 | 2026-11-25 | `scripts/ci/verify.sh` completo | ✅ |
 | 2026-11-25 | Suite con CLI, red local y API TCP | ✅ 551 tests, 0 fallos |
 | 2026-11-25 | CI GitHub `80754c6` | ✅ x86_64, aarch64 y Docs |
+| 2026-11-25 | Tombstones + pdf-extract 0.12 + cola | ✅ 555 tests, 0 fallos |

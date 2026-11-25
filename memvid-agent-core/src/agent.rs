@@ -167,7 +167,19 @@ impl Agent {
     }
 
     pub fn ingest_knowledge(&mut self, filename: &str, content: &str) -> Result<()> {
-        self.ingest_raw(filename, content)?;
+        // Keep the session small: the document itself is indexed as knowledge
+        // and retrieved via RAG. Pushing the whole file into the system prompt
+        // can exceed the context window and makes every later turn slower.
+        self.session.push_message(Message {
+            role: MessageRole::System,
+            content: format!(
+                "The user has ingested the file '{}' ({} chars). Its content is indexed and available through RAG.",
+                filename,
+                content.chars().count()
+            ),
+            timestamp: Utc::now(),
+            tokens: None,
+        });
         let chunk_opts = ChunkOptions {
             max_size: 4000,
             overlap: 600,
@@ -424,8 +436,15 @@ impl Agent {
     }
 
     pub fn unlearn_language(&mut self, lang_key: &str) -> Result<usize> {
-        let prefix = format!("{}/", lang_key);
-        self.knowledge_index.remove_by_source_prefix(&prefix)
+        let prefixes = [
+            format!("{}/", lang_key),
+            format!("free-programming-books:{}", lang_key),
+        ];
+        let mut removed = 0;
+        for prefix in &prefixes {
+            removed += self.knowledge_index.remove_by_source_prefix(prefix)?;
+        }
+        Ok(removed)
     }
 
     /// Download and ingest free programming books for a language from EbookFoundation index.
@@ -438,9 +457,11 @@ impl Agent {
 
         let knowledge = prepare_knowledge_from_books(&books, limit);
         let source = format!("free-programming-books:{}", language);
-        self.store_knowledge_direct(&source, &knowledge)?;
-
-        Ok(std::cmp::min(limit, books.resources.len()))
+        if self.store_knowledge_dedup(&source, &knowledge)? {
+            Ok(std::cmp::min(limit, books.resources.len()))
+        } else {
+            Ok(0)
+        }
     }
 
     pub fn reindex_from_mv2(&mut self, data_dir: &std::path::Path) -> Result<()> {
@@ -764,6 +785,24 @@ mod tests {
     }
 
     #[test]
+    fn unlearn_language_removes_docs_and_books() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut agent = test_agent(dir.path());
+        agent.store_knowledge_direct("rust/book", "doc").unwrap();
+        agent
+            .store_knowledge_direct("free-programming-books:rust", "books")
+            .unwrap();
+        agent
+            .store_knowledge_direct("python/book", "other")
+            .unwrap();
+
+        let removed = agent.unlearn_language("rust").unwrap();
+        assert_eq!(removed, 2);
+        assert_eq!(agent.knowledge_count(), 1);
+        assert!(dir.path().join("knowledge_tombstones.jsonl").exists());
+    }
+
+    #[test]
     fn ingest_knowledge_adds_to_session_and_index() {
         let dir = tempfile::tempdir().unwrap();
         let mut agent = test_agent(dir.path());
@@ -774,6 +813,12 @@ mod tests {
         agent.ingest_knowledge("doc.txt", "important info").unwrap();
 
         assert_eq!(agent.session.messages().len(), 1);
+        assert!(
+            !agent.session.messages()[0]
+                .content
+                .contains("important info"),
+            "ingest must not dump the document into the session"
+        );
         assert_eq!(agent.knowledge_count(), 1);
     }
 

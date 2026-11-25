@@ -204,9 +204,8 @@ jobs:
            Interactive AI agent CLI with local LLM inference via llama.cpp,
            persistent conversations (.mv2), keyword RAG, OpenAI-compatible API,
            and multi-source ingestion (PDF, EPUB, HTML, MD, TXT, URLs).
-          Depends: libc6 (>= 2.31), libssl3, pkg-config
-          Recommends: gcc, cmake, clang
-          Suggests: libclang-dev
+          Depends: libc6 (>= 2.31)
+          Suggests: gcc, cmake, clang, libclang-dev, pkg-config
           Section: utils
           Priority: optional
           EOF

@@ -115,8 +115,29 @@ impl FeedQueue {
         self.persist()
     }
 
+    /// Recover entries left in `processing` by a previous crash.
+    pub fn reset_stale_processing(&mut self) -> Result<usize> {
+        let mut reset = 0usize;
+        for entry in &mut self.entries {
+            if entry.status == QueueStatus::Processing {
+                entry.status = QueueStatus::Pending;
+                entry.error = None;
+                entry.updated_at = Utc::now();
+                reset += 1;
+            }
+        }
+        if reset > 0 {
+            self.persist()?;
+        }
+        Ok(reset)
+    }
+
     pub fn len(&self) -> usize {
         self.entries.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.entries.is_empty()
     }
 }
 
@@ -252,5 +273,23 @@ mod tests {
         }
         let q = FeedQueue::new(dir.path());
         assert_eq!(q.list()[0].status, QueueStatus::Done);
+    }
+
+    #[test]
+    fn reset_stale_processing_returns_entries_to_pending() {
+        let dir = tempdir().unwrap();
+        let mut q = FeedQueue::new(dir.path());
+        q.add("https://example.com/feed").unwrap();
+        let id = q.list()[0].id.clone();
+        q.mark_processing(&id).unwrap();
+        assert_eq!(q.stats().processing, 1);
+
+        assert_eq!(q.reset_stale_processing().unwrap(), 1);
+        assert_eq!(q.stats().processing, 0);
+        assert_eq!(q.stats().pending, 1);
+        assert_eq!(q.list()[0].status, QueueStatus::Pending);
+
+        // Idempotent when nothing is stale.
+        assert_eq!(q.reset_stale_processing().unwrap(), 0);
     }
 }

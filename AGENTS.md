@@ -37,7 +37,7 @@ Override download repo: `LLAMA_LIBS_REPO=user/repo`.
 - **Model catalog**: `src/models_catalog.json` — 21 GGUF Q4_K_M models, loaded at runtime
 - **Fine-tuning**: `src/finetune.rs` — `/finetune <lang>` builds a corpus from `/learn` knowledge, estimates RAM (~16 B/param AdamW full fine-tune + ~1.5 GB overhead) + time, then runs `llama-finetune` (`LLAMA_FINETUNE_BIN`/`config.finetune.binary_path`/`PATH`) or writes a portable run script. aten-ia never builds the finetune binary itself.
 - **Config**: `config.json` — version 1, fields with serde defaults; first-run wizard creates if absent. `config.json` is git-ignored; `config.example.json` is the versioned template.
-- **Persistence dir**: `~/.aten-ia/` by default (repo example uses `memvid_data/`) — `core.mv2`, `conversations/`, `knowledge/`, `knowledge_index.jsonl`, `manifest.json`, `feed_queue.jsonl`, `languages_catalog.json`, `.lock`
+- **Persistence dir**: `~/.aten-ia/` by default (repo example uses `memvid_data/`) — `core.mv2`, `conversations/`, `knowledge/`, `knowledge_index.jsonl`, `knowledge_tombstones.jsonl`, `manifest.json`, `feed_queue.jsonl`, `languages_catalog.json`, `.lock`
 - **FFI**: `wrapper.h` → `llama-cpp-turboquant/include/llama.h` → bindgen → patched `unsafe extern "C"`
 
 ## Gotchas
@@ -80,7 +80,7 @@ Use `/debug` command in REPL to see RAG retrieval debug info after each query:
 
 ## Testing
 
-~551 unit + integration tests. Integration tests use `tempfile::tempdir()` + `LlamaContext::null()` — no GGUF model required:
+~555 unit + integration tests. Integration tests use `tempfile::tempdir()` + `LlamaContext::null()` — no GGUF model required:
 - `tests/functional.rs`
 - `tests/writer_integration.rs`
 - `tests/kv_cache_and_history.rs`

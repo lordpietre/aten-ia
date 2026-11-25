@@ -288,6 +288,7 @@ Por fidelidad se recomienda mantener `K` con precisión igual o mayor que `V` (p
   conversations/            # conv_YYYY-MM-DD_NNN.mv2
   knowledge/                # know_YYYY-MM-DD_NNN.mv2
   knowledge_index.jsonl     # índice de búsqueda por keywords
+  knowledge_tombstones.jsonl # fuentes borradas con /unlearn
   feed_queue.jsonl          # cola persistente de URLs
   languages_catalog.json    # caché del catálogo de lenguajes
   .lock                     # PID de la instancia activa
@@ -417,7 +418,7 @@ También existe un `snapcraft.yaml` que empaqueta el binario ya compilado.
 
 ```bash
 cd memvid-agent-core
-cargo test --locked -- --test-threads=1   # ~551 tests (unitarios + integración)
+cargo test --locked -- --test-threads=1   # ~555 tests (unitarios + integración)
 cargo test --locked --lib -- --test-threads=1
 cargo fmt --all -- --check
 cargo clippy --locked --lib
