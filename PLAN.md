@@ -43,7 +43,8 @@ Estados: ✅ hecho, 🚧 en curso, ⏳ pendiente, ⚠️ requiere decisión.
       sus APIs de extracción.
 - [ ] ⏳ Revisar avisos transitivos de `memvid-core` (`calamine`, `bincode`,
       `lopdf`, `quick-xml`).
-- [ ] ⏳ `cargo audit` + `cargo deny` en CI.
+- [x] ✅ `cargo audit` en CI con ignores documentados para dependencias transitivas de `memvid-core`.
+- [ ] ⏳ `cargo deny` y política de licencias.
 - [ ] ⚠️ Migrar imágenes EOL (`node:20-bullseye`, `ubuntu:20.04`) o asumir
       explícitamente glibc 2.31.
 - [ ] ⏳ Proceso de sincronización del fork vendorizado de llama.cpp.
@@ -78,7 +79,8 @@ Estados: ✅ hecho, 🚧 en curso, ⏳ pendiente, ⚠️ requiere decisión.
 
 ## 5. Fase 4 — Calidad y operación
 
-- [ ] ⏳ `cargo audit`, cobertura y fuzzing (HTTP, feeds, PDF, EPUB).
+- [x] ✅ `cargo audit` en CI.
+- [ ] ⏳ Cobertura y fuzzing (HTTP, feeds, PDF, EPUB).
 - [ ] ⏳ SBOM y firma de releases.
 - [ ] ⏳ `CHANGELOG.md` y notas de release.
 - [x] ✅ `.deb` sin `libssl3`; dependencia real `libc6 >= 2.31` y herramientas en `Suggests`.
@@ -105,7 +107,8 @@ Estados: ✅ hecho, 🚧 en curso, ⏳ pendiente, ⚠️ requiere decisión.
 - [x] ✅ Job `docs` y CLI smoke en CI; `verify.yml` en tags/manual; gate nativo
       en release.
 - [x] ✅ `SDD.md` con especificación, trazabilidad y criterios de release.
-- [ ] ⏳ `cargo audit` bloqueante y `cargo deny`.
+- [x] ✅ `cargo audit` en CI.
+- [ ] ⏳ `cargo deny` y SBOM/firma.
 - [ ] ⏳ Job nightly con GGUF real y benchmarks.
 - [ ] ⏳ Fuzzing de parser HTTP/feeds/PDF.
 
@@ -124,3 +127,4 @@ Estados: ✅ hecho, 🚧 en curso, ⏳ pendiente, ⚠️ requiere decisión.
 | 2026-11-25 | CI GitHub `80754c6` | ✅ x86_64, aarch64 y Docs |
 | 2026-11-25 | Tombstones + pdf-extract 0.12 + cola | ✅ 555 tests, 0 fallos |
 | 2026-11-25 | Dedup O(1) e ingesta idempotente | ✅ 556 tests, 0 fallos |
+| 2026-11-25 | `cargo audit` + `.cargo/audit.toml` | ✅ 0 vulnerabilidades, 6 warnings |

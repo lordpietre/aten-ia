@@ -1,0 +1,21 @@
+# Configuración de cargo-audit para aten-ia.
+#
+# Las vulnerabilidades ignoradas son dependencias transitivas de memvid-core
+# (lectura/escritura de .mv2). aten-ia no usa sus rutas de extracción de ZIP,
+# parseo de PDF/Excel ni el lector XML con namespaces; el PDF directo usa
+# pdf-extract 0.12/lopdf 0.42. Se revisan en cada actualización de memvid-core.
+[advisories]
+ignore = [
+    "RUSTSEC-2026-0436", # calamine 0.22 (CFB/OLE2), vía memvid-core
+    "RUSTSEC-2026-0187", # lopdf 0.38/0.39, vía memvid-core
+    "RUSTSEC-2026-0194", # quick-xml 0.30/0.31, vía memvid-core
+    "RUSTSEC-2026-0195", # quick-xml 0.30/0.31, vía memvid-core
+    "RUSTSEC-2026-0367", # zip: SUID/SGID en extract(), vía memvid-core
+    "RUSTSEC-2026-0368", # zip: symlinks fuera del destino, vía memvid-core
+    "RUSTSEC-2026-0369", # zip: permisos Unix en extract(), vía memvid-core
+    "RUSTSEC-2026-0429", # zip: abort en symlink grande, vía memvid-core
+    "RUSTSEC-2026-0545", # zip: AES sin MAC, vía memvid-core
+    "RUSTSEC-2026-0546", # zip: symlink absoluto/encadenado, vía memvid-core
+    "RUSTSEC-2026-0547", # zip: decoders legacy preasignan tamaño
+    "RUSTSEC-2026-0548", # zip: nombre local vs central, vía memvid-core
+]

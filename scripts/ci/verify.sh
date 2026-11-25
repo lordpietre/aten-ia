@@ -28,6 +28,13 @@ cargo fmt --all -- --check
 step "cargo clippy --lib"
 cargo clippy --locked --lib
 
+step "cargo audit"
+if command -v cargo-audit >/dev/null 2>&1; then
+    cargo audit
+else
+    echo "  skip  cargo-audit not installed"
+fi
+
 step "cargo test"
 cargo test --locked -- --test-threads=1
 

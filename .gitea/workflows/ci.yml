@@ -164,3 +164,13 @@ jobs:
           apt-get install -y -qq groff
       - name: Documentation checks
         run: ./scripts/ci/check-docs.sh
+
+  audit:
+    name: Security audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: taiki-e/install-action@cargo-audit
+      - name: cargo audit
+        working-directory: memvid-agent-core
+        run: cargo audit

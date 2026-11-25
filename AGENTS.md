@@ -94,6 +94,7 @@ Use `/debug` command in REPL to see RAG retrieval debug info after each query:
   tests, `--version`, `--self-test`, docs.
 - Runtime self-check: `cargo run --locked -- --self-test` — no GGUF/network.
 - Docs check: `scripts/ci/check-docs.sh`.
+- Audit: `cargo audit` (config en `memvid-agent-core/.cargo/audit.toml`).
 - OpenCode verifier agent: `.opencode/agents/verifier.md` (read-only, restricted shell).
 - CI runs CLI smoke on native and a `docs` job; `.github/workflows/verify.yml`
   runs the full suite on tags/manual; release has a native verification gate.

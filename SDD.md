@@ -280,7 +280,7 @@ Tests solo en nativo por velocidad y porque no requieren modelo.
 | API en loopback por defecto | ✅ |
 | Checksum de modelo | ✅ |
 | `cargo update` de advisories altos | ✅ |
-| `cargo audit` bloqueante en CI | ⏳ pendiente |
+| `cargo audit` en CI con ignores documentados | ✅ |
 | `cargo deny` / SBOM / firma | ⏳ pendiente |
 | Imágenes base EOL | ⏳ decisión pendiente |
 
@@ -306,7 +306,7 @@ Tests solo en nativo por velocidad y porque no requieren modelo.
 |---|---|---|
 | V1 | Self-test + CLI tests + scripts + CI docs/CLI smoke | ✅ este incremento |
 | V2 | `verify.yml` + gate de release + agente `verifier` | ✅ este incremento |
-| V3 | `cargo audit` bloqueante + `cargo deny` + SBOM | ⏳ |
+| V3 | `cargo deny` + SBOM + firma (audit ya activo) | ⏳ |
 | V4 | Job nightly con GGUF real y benchmarks | ⏳ |
 | V5 | Fuzzing de parser HTTP/feeds/PDF y cobertura | ⏳ |
 
