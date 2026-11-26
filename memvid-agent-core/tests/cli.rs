@@ -38,9 +38,12 @@ fn self_test_flag_runs_full_smoke_suite() {
         out.status.success(),
         "self-test failed\nstdout:\n{stdout}\nstderr:\n{stderr}"
     );
-    assert!(stdout.contains("self-test"), "missing banner: {stdout}");
     assert!(
-        stdout.contains("all checks passed"),
+        stdout.contains("autodiagnóstico"),
+        "missing banner: {stdout}"
+    );
+    assert!(
+        stdout.contains("todo correcto"),
         "missing success: {stdout}"
     );
 }
@@ -53,5 +56,5 @@ fn verify_alias_behaves_like_self_test() {
         "verify failed: {}",
         String::from_utf8_lossy(&out.stderr)
     );
-    assert!(String::from_utf8_lossy(&out.stdout).contains("all checks passed"));
+    assert!(String::from_utf8_lossy(&out.stdout).contains("todo correcto"));
 }

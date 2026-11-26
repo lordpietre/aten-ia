@@ -31,7 +31,17 @@ fn main() -> Result<()> {
     }
 
     dotenvy::dotenv().ok();
-    tracing_subscriber::fmt::init();
+    // Keep the terminal clean: dependency crates (tantivy, memvid, rustls…)
+    // log at INFO by default and flood the UI. Only warnings/errors are shown
+    // unless ATEN_LOG explicitly requests another level.
+    let log_level = std::env::var("ATEN_LOG")
+        .ok()
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(tracing::Level::WARN);
+    tracing_subscriber::fmt()
+        .with_max_level(log_level)
+        .with_target(false)
+        .init();
     shutdown::install_handlers();
 
     let config_path = std::path::Path::new("config.json");
@@ -52,8 +62,8 @@ fn main() -> Result<()> {
         Ok(lock) => lock,
         Err(e) => {
             eprintln!(
-                "{} Could not acquire data directory lock ({}).\n  Another aten-ia instance may be running. \
-                If not, delete {} and try again.",
+                "{} No se pudo bloquear el directorio de datos ({}).\n  Puede haber otra instancia de aten-ia en ejecución. \
+                Si no es así, borra {} e inténtalo de nuevo.",
                 "✗".red(),
                 e,
                 config.data_dir.join(".lock").display()
@@ -68,7 +78,7 @@ fn main() -> Result<()> {
             .template("{spinner:.cyan} {msg}")
             .expect("Invalid spinner template"),
     );
-    spinner.set_message("Loading model…");
+    spinner.set_message("Cargando modelo…");
     spinner.enable_steady_tick(std::time::Duration::from_millis(80));
     let agent = Arc::new(Mutex::new(Agent::init(&config)?));
     spinner.finish_and_clear();
@@ -77,18 +87,17 @@ fn main() -> Result<()> {
 
     {
         let a = agent.lock().unwrap();
+        print_banner();
         eprintln!(
-            "{} Agent initialized. Model: {}",
-            "●".bright_green(),
+            "  {} {}",
+            "Modelo   ".dimmed(),
             config.model.name.bright_cyan()
         );
-        eprintln!(
-            "{} {} knowledge entries indexed",
-            "↳".dimmed(),
-            a.knowledge_count()
-        );
+        eprintln!("  {} {} tokens", "Contexto ".dimmed(), config.model.n_ctx);
+        eprintln!("  {} {}", "Datos    ".dimmed(), config.data_dir.display());
+        eprintln!("  {} {}", "Memoria  ".dimmed(), a.memory_summary()?);
         if is_first_run {
-            eprintln!("{} First-time setup complete.", "↳".dimmed());
+            eprintln!("  {} Configuración inicial completada.", "↳".dimmed());
         }
         print_startup_help();
         eprintln!();
@@ -135,7 +144,7 @@ fn main() -> Result<()> {
                 };
                 println!("{} Debug mode {}", "↳".dimmed(), state_str);
                 if new_state && a.get_last_rag_debug().is_empty() {
-                    println!("{} Run a query to see RAG debug info", "↳".dimmed());
+                    println!("{} Ejecuta una consulta para ver el RAG", "↳".dimmed());
                 } else if !a.get_last_rag_debug().is_empty() {
                     print_rag_debug(a.get_last_rag_debug());
                 }
@@ -147,18 +156,18 @@ fn main() -> Result<()> {
             let args: Vec<&str> = input.split_whitespace().skip(1).collect();
             if args.is_empty() {
                 println!(
-                    "{} KV cache: K={} / V={}",
+                    "{} Caché KV: K={} / V={}",
                     "↳".dimmed(),
                     config.model.kv_type_k,
                     config.model.kv_type_v
                 );
                 println!(
-                    "  usage: /kv <type_k> <type_v>  (f16 f32 bf16 q8_0 q4_0 turbo2 turbo3 turbo4)"
+                    "  uso: /kv <tipo_k> <tipo_v>  (f16 f32 bf16 q8_0 q4_0 turbo2 turbo3 turbo4)"
                 );
                 continue;
             }
             if args.len() != 2 {
-                eprintln!("{} usage: /kv <type_k> <type_v>", "✗".red());
+                eprintln!("{} uso: /kv <tipo_k> <tipo_v>", "✗".red());
                 continue;
             }
             let (k, v) = (args[0], args[1]);
@@ -168,7 +177,7 @@ fn main() -> Result<()> {
                 .collect();
             if !invalid.is_empty() {
                 eprintln!(
-                    "{} unknown KV cache type(s): {}. Valid: f16 f32 bf16 q8_0 q4_0 turbo2 turbo3 turbo4",
+                    "{} tipo(s) de caché KV desconocidos: {}. Válidos: f16 f32 bf16 q8_0 q4_0 turbo2 turbo3 turbo4",
                     "✗".red(),
                     invalid.join(", ")
                 );
@@ -178,7 +187,7 @@ fn main() -> Result<()> {
             config.model.kv_type_k = k.to_string();
             config.model.kv_type_v = v.to_string();
             if let Err(e) = config.save() {
-                eprintln!("{} Failed to save config: {:#}", "✗".red(), e);
+                eprintln!("{} No se pudo guardar la configuración: {:#}", "✗".red(), e);
                 continue;
             }
 
@@ -200,7 +209,7 @@ fn main() -> Result<()> {
             };
             match switch {
                 Ok(()) => println!(
-                    "{} KV cache set to K={} / V={} (context reloaded)",
+                    "{} Caché KV establecida en K={} / V={} (contexto recargado)",
                     "✓".green(),
                     config.model.kv_type_k,
                     config.model.kv_type_v
@@ -227,26 +236,7 @@ fn main() -> Result<()> {
         }
 
         if input_lower == "/models" || input == "/MODELS" {
-            println!("{} Available Models", "━━━ Models ━━━".bold());
-            println!();
-            for (i, entry) in catalog.list().iter().enumerate() {
-                let num = format!("{}.", i + 1);
-                let current = if entry.name == config.model.name {
-                    format!(" {}", "◄ active".green())
-                } else {
-                    String::new()
-                };
-                println!(
-                    "  {:<3} {:<20} {} ({} MB){}",
-                    num.bright_cyan(),
-                    entry.id.bright_cyan(),
-                    entry.name,
-                    entry.size_mb,
-                    current,
-                );
-                println!("  {:<3} {}", "", entry.description.dimmed());
-                println!();
-            }
+            print_models_table(&catalog, &config.model.name, true);
             continue;
         }
 
@@ -265,7 +255,7 @@ fn main() -> Result<()> {
                 Some(e) => e,
                 None => {
                     eprintln!(
-                        "{} Unknown model '{}'. Use /models to list available.",
+                        "{} Modelo desconocido '{}'. Usa /models para ver los disponibles.",
                         "✗".red(),
                         model_id
                     );
@@ -283,7 +273,7 @@ fn main() -> Result<()> {
                             .template("{spinner:.cyan} {msg}")
                             .expect("Invalid spinner template"),
                     );
-                    spinner.set_message("Loading new model…");
+                    spinner.set_message("Cargando nuevo modelo…");
                     spinner.enable_steady_tick(std::time::Duration::from_millis(80));
                     {
                         let mut a = agent.lock().unwrap();
@@ -302,14 +292,14 @@ fn main() -> Result<()> {
                     }
                     spinner.finish_and_clear();
                     println!(
-                        "{} Switched to model: {} ({})",
+                        "{} Modelo cambiado a: {} ({})",
                         "✓".green(),
                         entry.name.bold(),
                         config.model.n_ctx
                     );
                 }
                 Err(e) => {
-                    eprintln!("{} Failed to download model: {:#}", "✗".red(), e);
+                    eprintln!("{} No se pudo descargar el modelo: {:#}", "✗".red(), e);
                 }
             }
             continue;
@@ -322,24 +312,23 @@ fn main() -> Result<()> {
                     .template("{spinner:.cyan} {msg}")
                     .expect("Invalid spinner template"),
             );
-            spinner.set_message("Fetching language catalog…");
+            spinner.set_message("Obteniendo catálogo de lenguajes…");
             spinner.enable_steady_tick(std::time::Duration::from_millis(80));
             let lang_catalog = LanguagesCatalog::load_or_fetch(&config.data_dir)?;
             spinner.finish_and_clear();
 
             println!(
-                "{} Available Languages ({})",
-                "━━━ Languages ━━━".bold(),
-                lang_catalog.len()
+                "{}",
+                format!("━━━ Lenguajes disponibles ({}) ━━━", lang_catalog.len()).bold()
             );
             for entry in lang_catalog.list().iter().take(30) {
                 let installed = if config.languages.installed.contains(&entry.key) {
-                    " ◄ installed".green().to_string()
+                    " ◄ instalado".green().to_string()
                 } else {
                     String::new()
                 };
                 println!(
-                    "  {:<20} {} resources{}",
+                    "  {:<20} {} recursos{}",
                     entry.key.bright_cyan(),
                     entry.resources.len(),
                     installed
@@ -361,13 +350,17 @@ fn main() -> Result<()> {
                     .template("{spinner:.cyan} {msg}")
                     .expect("Invalid spinner template"),
             );
-            spinner.set_message("Fetching books catalog…");
+            spinner.set_message("Obteniendo catálogo de libros…");
             spinner.enable_steady_tick(std::time::Duration::from_millis(80));
             let catalog = match BooksCatalog::fetch() {
                 Ok(c) => c,
                 Err(e) => {
                     spinner.finish_and_clear();
-                    eprintln!("{} Failed to fetch books catalog: {}", "✗".red(), e);
+                    eprintln!(
+                        "{} No se pudo obtener el catálogo de libros: {}",
+                        "✗".red(),
+                        e
+                    );
                     continue;
                 }
             };
@@ -375,25 +368,24 @@ fn main() -> Result<()> {
 
             let langs = catalog.list_languages();
             println!(
-                "{} Free Programming Books - Languages ({})",
-                "━━━ Books ━━━".bold(),
-                langs.len()
+                "{}",
+                format!("━━━ Libros gratuitos — Lenguajes ({}) ━━━", langs.len()).bold()
             );
             for lang in langs.iter().take(60) {
                 println!("  • {}", lang.bright_cyan());
             }
             if langs.len() > 60 {
-                println!("  ... and {} more", langs.len() - 60);
+                println!("  ... y {} más", langs.len() - 60);
             }
-            println!("Use /download-books <language> [limit] to download and ingest.");
+            println!("Usa /download-books <lenguaje> [límite] para descargar e indexar.");
             continue;
         }
 
         if input_lower == "/languages-installed" || input_lower == "/lang-installed" {
             if config.languages.installed.is_empty() {
-                println!("  No languages installed. Use /learn <lang> to install one.");
+                println!("  No hay lenguajes instalados. Usa /learn <lang> para instalar uno.");
             } else {
-                println!("{} Installed Languages", "━━━ Installed ━━━".bold());
+                println!("{}", "━━━ Lenguajes instalados ━━━".bold());
                 for lang in &config.languages.installed {
                     println!("  • {}", lang.bright_cyan());
                 }
@@ -404,7 +396,7 @@ fn main() -> Result<()> {
         if let Some(lang_id) = input.strip_prefix("/learn ") {
             let lang_id = lang_id.trim().to_string();
             if lang_id.is_empty() {
-                eprintln!("{} Usage: /learn <language>", "✗".red());
+                eprintln!("{} Uso: /learn <language>", "✗".red());
                 continue;
             }
 
@@ -413,7 +405,7 @@ fn main() -> Result<()> {
                 Some(l) => l,
                 None => {
                     eprintln!(
-                        "{} Unknown language '{}'. Use /languages to list available.",
+                        "{} Lenguaje desconocido '{}'. Usa /languages para ver los disponibles.",
                         "✗".red(),
                         lang_id
                     );
@@ -428,7 +420,11 @@ fn main() -> Result<()> {
             )?;
 
             if entries.is_empty() {
-                eprintln!("{} No resources downloaded for {}.", "✗".red(), lang.name);
+                eprintln!(
+                    "{} No se descargaron recursos para {}.",
+                    "✗".red(),
+                    lang.name
+                );
                 continue;
             }
 
@@ -438,7 +434,7 @@ fn main() -> Result<()> {
                     .template("{spinner:.cyan} {msg}")
                     .expect("Invalid spinner template"),
             );
-            spinner.set_message("Indexing…");
+            spinner.set_message("Indexando…");
             spinner.enable_steady_tick(std::time::Duration::from_millis(80));
 
             let indexed = {
@@ -457,7 +453,7 @@ fn main() -> Result<()> {
             config.save()?;
 
             println!(
-                "{} Installed {} — {} chunks indexed as knowledge ({} already present).",
+                "{} Instalado {} — {} fragmentos indexados como conocimiento ({} ya presentes).",
                 "✓".green(),
                 lang.name.bold(),
                 indexed,
@@ -474,7 +470,7 @@ fn main() -> Result<()> {
         if let Some(lang_key) = input.strip_prefix("/unlearn ") {
             let lang_key = lang_key.trim();
             if lang_key.is_empty() {
-                eprintln!("{} Usage: /unlearn <language>", "✗".red());
+                eprintln!("{} Uso: /unlearn <language>", "✗".red());
                 continue;
             }
 
@@ -486,7 +482,7 @@ fn main() -> Result<()> {
             config.save()?;
 
             println!(
-                "{} Unlearned '{}' — {} knowledge entries removed.",
+                "{} Olvidado '{}' — {} entradas de conocimiento eliminadas.",
                 "✓".green(),
                 lang_key.bold(),
                 removed
@@ -497,7 +493,7 @@ fn main() -> Result<()> {
         if let Some(lang_id) = input.strip_prefix("/finetune ") {
             let lang_id = lang_id.trim().to_string();
             if lang_id.is_empty() {
-                eprintln!("{} Usage: /finetune <language>", "✗".red());
+                eprintln!("{} Uso: /finetune <language>", "✗".red());
                 continue;
             }
             // Resolve the canonical key + display name (same source as /learn).
@@ -521,7 +517,7 @@ fn main() -> Result<()> {
                     .template("{spinner:.cyan} {msg}")
                     .expect("Invalid spinner template"),
             );
-            spinner.set_message("Rebuilding index from .mv2 files…");
+            spinner.set_message("Reconstruyendo índice desde los .mv2…");
             spinner.enable_steady_tick(std::time::Duration::from_millis(80));
             {
                 let mut a = agent.lock().unwrap();
@@ -529,7 +525,7 @@ fn main() -> Result<()> {
             }
             spinner.finish_and_clear();
             println!(
-                "{} Reindex complete. {} knowledge entries indexed.",
+                "{} Reindexación completada. {} knowledge entradas indexadas.",
                 "✓".green(),
                 agent.lock().unwrap().knowledge_count()
             );
@@ -553,28 +549,28 @@ fn main() -> Result<()> {
 
             println!();
             println!(
-                "{} API server starting on http://{}:{}",
+                "{} Servidor API escuchando en http://{}:{}",
                 "●".bright_green(),
                 host,
                 port
             );
             if let Some(ref t) = token {
-                println!("{} Token: {}", "  key".dimmed(), t.bright_yellow());
-                println!("{} Use: Authorization: Bearer {}", "  auth".dimmed(), t);
+                println!("{} Token: {}", "  clave".dimmed(), t.bright_yellow());
+                println!("{} Usa: Authorization: Bearer {}", "  auth".dimmed(), t);
             } else {
-                println!("{} No authentication configured", "  auth".dimmed());
+                println!("{} Sin autenticación configurada", "  auth".dimmed());
             }
 
             println!();
-            println!("{}", "━━━ Client Setup Instructions ━━━".bold());
+            println!("{}", "━━━ Configuración de clientes ━━━".bold());
             println!();
-            println!("  1. OpenCode     - AI coding assistant (opencode.ai)");
-            println!("  2. VS Code      - VS Code with extension");
-            println!("  3. Skip         - No instructions");
+            println!("  1. OpenCode     - asistente de código (opencode.ai)");
+            println!("  2. VS Code      - con la extensión Continue");
+            println!("  3. Omitir       - sin instrucciones");
             println!();
 
             loop {
-                print!("{} Select client (1/2/3): ", "?".yellow());
+                print!("{} Elige cliente (1/2/3): ", "?".yellow());
                 std::io::stdout().flush().ok();
                 let mut choice = String::new();
                 if std::io::stdin().read_line(&mut choice).is_err() {
@@ -617,7 +613,7 @@ fn main() -> Result<()> {
                             }
                             memvid_agent_core::utils::atomic_write(path, &config_content)?;
                             println!(
-                                "{} OpenCode config written to {}",
+                                "{} Configuración de OpenCode escrita en {}",
                                 "✓".green(),
                                 path.display()
                             );
@@ -631,7 +627,11 @@ fn main() -> Result<()> {
                             })
                             .unwrap_or_else(|_| std::path::PathBuf::from(".opencode.json"));
                         if let Err(e) = write_config(&global_path) {
-                            println!("{} Failed to write global config: {}", "✗".red(), e);
+                            println!(
+                                "{} No se pudo escribir la configuración global: {}",
+                                "✗".red(),
+                                e
+                            );
                         }
 
                         // Project-level config (parent of CWD, i.e. project root)
@@ -642,7 +642,7 @@ fn main() -> Result<()> {
                                     true
                                 } else {
                                     let ans = read_line_prompt(&format!(
-                                        "{} Write project config to {}? (Y/n): ",
+                                        "{} ¿Escribir configuración del proyecto en {}? (S/n): ",
                                         "?".yellow(),
                                         project_path.display()
                                     ));
@@ -651,7 +651,7 @@ fn main() -> Result<()> {
                                 if should_write {
                                     if let Err(e) = write_config(&project_path) {
                                         println!(
-                                            "{} Failed to write project config: {}",
+                                            "{} No se pudo escribir la configuración del proyecto: {}",
                                             "✗".red(),
                                             e
                                         );
@@ -660,19 +660,16 @@ fn main() -> Result<()> {
                             }
                         }
 
-                        println!(
-                            "  {} Restart opencode after creating the config file",
-                            "↳".dimmed()
-                        );
+                        println!("  {} Reinicia opencode tras crear el archivo", "↳".dimmed());
                         break;
                     }
                     "2" => {
                         println!();
-                        println!("{} VS Code Configuration", "━━━".dimmed());
+                        println!("{} Configuración de VS Code", "━━━".dimmed());
                         println!();
-                        println!("  1. Install 'Continue' extension in VS Code");
-                        println!("  2. Go to VS Code Settings → Extensions → Continue");
-                        println!("  3. Configure:");
+                        println!("  1. Instala la extensión 'Continue' en VS Code");
+                        println!("  2. Ve a Ajustes → Extensiones → Continue");
+                        println!("  3. Configura:");
                         println!();
                         let config_lines = format!(
                             r#"{{
@@ -689,15 +686,18 @@ fn main() -> Result<()> {
                             println!("    {}", line);
                         }
                         println!();
-                        println!("  {} Or use config.json in .continue folder", "↳".dimmed());
+                        println!(
+                            "  {} O usa config.json en la carpeta .continue",
+                            "↳".dimmed()
+                        );
                         break;
                     }
                     "3" | "" => {
-                        println!("  {} Skipped", "↳".dimmed());
+                        println!("  {} Omitido", "↳".dimmed());
                         break;
                     }
                     _ => {
-                        println!("  {} Invalid option, try again", "✗".red());
+                        println!("  {} Opción no válida, inténtalo de nuevo", "✗".red());
                     }
                 }
             }
@@ -706,11 +706,14 @@ fn main() -> Result<()> {
             std::thread::spawn(move || {
                 let server = ApiServer::new(api_agent, model_name, host, port, token);
                 if let Err(e) = server.run() {
-                    eprintln!("[api] Server error: {}", e);
+                    eprintln!("[api] Error del servidor: {}", e);
                 }
             });
 
-            println!("{} API server is running in the background.", "✓".green());
+            println!(
+                "{} La API se está ejecutando en segundo plano.",
+                "✓".green()
+            );
             continue;
         }
 
@@ -721,7 +724,7 @@ fn main() -> Result<()> {
                 .unwrap_or("")
                 .trim();
             if raw.is_empty() {
-                eprintln!("{} Usage: /search <query> [from:<source>]", "✗".red());
+                eprintln!("{} Uso: /search <query> [from:<source>]", "✗".red());
                 continue;
             }
             let (query, source_filter) = if let Some(pos) = raw.find(" from:") {
@@ -737,22 +740,22 @@ fn main() -> Result<()> {
             };
 
             if query.is_empty() {
-                eprintln!("{} Usage: /search <query> [from:<source>]", "✗".red());
+                eprintln!("{} Uso: /search <query> [from:<source>]", "✗".red());
                 continue;
             }
 
             let a = agent.lock().unwrap();
             let results = a.search_knowledge_filtered(&query, 5, source_filter.as_deref());
             if results.is_empty() {
-                println!("  No matching knowledge found.");
+                println!("  No se encontró conocimiento coincidente.");
             } else {
                 let display_query = if let Some(ref f) = source_filter {
-                    format!("{} (source: {})", query, f)
+                    format!("{} (fuente: {})", query, f)
                 } else {
                     query.clone()
                 };
                 println!(
-                    "{} Search results for '{}':",
+                    "{} Resultados de búsqueda para '{}':",
                     "━━━".bold(),
                     display_query.bold()
                 );
@@ -782,13 +785,13 @@ fn main() -> Result<()> {
                     }
                     loaded_files.push(filename.to_string());
                     println!(
-                        "{} Loaded {} ({} bytes)",
+                        "{} Cargado {} ({} bytes)",
                         "✓".green(),
                         filename.bold(),
                         content.len()
                     );
                 }
-                Err(e) => eprintln!("{} Error reading {}: {}", "✗".red(), path, e),
+                Err(e) => eprintln!("{} Error al leer {}: {}", "✗".red(), path, e),
             }
             continue;
         }
@@ -806,7 +809,7 @@ fn main() -> Result<()> {
             if is_binary {
                 match agent.lock().unwrap().ingest_file(file_path) {
                     Ok(extracted) => {
-                        let title = extracted.title.as_deref().unwrap_or("untitled");
+                        let title = extracted.title.as_deref().unwrap_or("sin título");
                         println!(
                             "{} Ingested: {} ({} format, {} chars)",
                             "✓".green(),
@@ -832,7 +835,7 @@ fn main() -> Result<()> {
                                 .template("{spinner:.cyan} {msg}")
                                 .expect("Invalid spinner template"),
                         );
-                        spinner.set_message("Indexing…");
+                        spinner.set_message("Indexando…");
                         spinner.enable_steady_tick(std::time::Duration::from_millis(80));
                         let response = {
                             let mut a = agent.lock().unwrap();
@@ -844,7 +847,7 @@ fn main() -> Result<()> {
                         spinner.finish_and_clear();
                         println!("{}", response.bright_cyan());
                     }
-                    Err(e) => eprintln!("{} Error reading {}: {}", "✗".red(), path, e),
+                    Err(e) => eprintln!("{} Error al leer {}: {}", "✗".red(), path, e),
                 }
             }
             continue;
@@ -859,7 +862,7 @@ fn main() -> Result<()> {
             let file_path = std::path::Path::new(path);
             match agent.lock().unwrap().ingest_file(file_path) {
                 Ok(extracted) => {
-                    let title = extracted.title.as_deref().unwrap_or("untitled");
+                    let title = extracted.title.as_deref().unwrap_or("sin título");
                     let preview: String = extracted.content.chars().take(200).collect();
                     println!(
                         "{} Ingested: {} ({} format, {} chars)",
@@ -868,9 +871,9 @@ fn main() -> Result<()> {
                         extracted.format,
                         extracted.content.len()
                     );
-                    println!("  {} preview: {}", "↳".dimmed(), preview.dimmed());
+                    println!("  {} vista previa: {}", "↳".dimmed(), preview.dimmed());
                 }
-                Err(e) => eprintln!("{} Failed to ingest: {:#}", "✗".red(), e),
+                Err(e) => eprintln!("{} No se pudo indexar: {:#}", "✗".red(), e),
             }
             continue;
         }
@@ -882,7 +885,7 @@ fn main() -> Result<()> {
                 .unwrap_or("")
                 .trim();
             if url.is_empty() {
-                eprintln!("{} Usage: /fetch <url>", "✗".red());
+                eprintln!("{} Uso: /fetch <url>", "✗".red());
                 continue;
             }
 
@@ -892,7 +895,7 @@ fn main() -> Result<()> {
                     .template("{spinner:.cyan} {msg}")
                     .expect("Invalid spinner template"),
             );
-            spinner.set_message("Fetching…");
+            spinner.set_message("Descargando…");
             spinner.enable_steady_tick(std::time::Duration::from_millis(80));
 
             let result = {
@@ -904,21 +907,21 @@ fn main() -> Result<()> {
 
             match result {
                 Ok((content, indexed)) => {
-                    let title = content.title.as_deref().unwrap_or("untitled");
+                    let title = content.title.as_deref().unwrap_or("sin título");
                     let preview: String = content.content.chars().take(200).collect();
                     println!(
-                        "{} Fetched: {} ({})",
+                        "{} Descargado: {} ({})",
                         "✓".green(),
                         title.bold(),
                         url.dimmed()
                     );
-                    println!("  {} type: {}", "↳".dimmed(), content.content_type);
-                    println!("  {} size: {} bytes", "↳".dimmed(), content.size_bytes);
-                    println!("  {} chunks indexed: {}", "↳".dimmed(), indexed);
-                    println!("  {} preview: {}", "↳".dimmed(), preview.dimmed());
+                    println!("  {} tipo: {}", "↳".dimmed(), content.content_type);
+                    println!("  {} tamaño: {} bytes", "↳".dimmed(), content.size_bytes);
+                    println!("  {} fragmentos indexados: {}", "↳".dimmed(), indexed);
+                    println!("  {} vista previa: {}", "↳".dimmed(), preview.dimmed());
                 }
                 Err(e) => {
-                    eprintln!("{} Failed to fetch: {:#}", "✗".red(), e);
+                    eprintln!("{} No se pudo descargar: {:#}", "✗".red(), e);
                 }
             }
             continue;
@@ -931,7 +934,7 @@ fn main() -> Result<()> {
                 .unwrap_or("")
                 .trim();
             if url.is_empty() {
-                eprintln!("{} Usage: /fetch-md <url>", "✗".red());
+                eprintln!("{} Uso: /fetch-md <url>", "✗".red());
                 continue;
             }
 
@@ -941,7 +944,7 @@ fn main() -> Result<()> {
                     .template("{spinner:.cyan} {msg}")
                     .expect("Invalid spinner template"),
             );
-            spinner.set_message("Fetching…");
+            spinner.set_message("Descargando…");
             spinner.enable_steady_tick(std::time::Duration::from_millis(80));
 
             // No agent lock here: /fetch-md only fetches and prints. Locking the
@@ -967,9 +970,9 @@ fn main() -> Result<()> {
                     } else {
                         content.content.clone()
                     };
-                    let title = content.title.as_deref().unwrap_or("untitled");
+                    let title = content.title.as_deref().unwrap_or("sin título");
                     println!(
-                        "{} {} — Markdown ({} chars)",
+                        "{} {} — Markdown ({} caracteres)",
                         "━━━".bold(),
                         title.bold(),
                         md.len()
@@ -977,7 +980,7 @@ fn main() -> Result<()> {
                     println!("{}", md.dimmed());
                 }
                 Err(e) => {
-                    eprintln!("{} Failed to fetch: {:#}", "✗".red(), e);
+                    eprintln!("{} No se pudo descargar: {:#}", "✗".red(), e);
                 }
             }
             continue;
@@ -990,7 +993,7 @@ fn main() -> Result<()> {
                 .unwrap_or("")
                 .trim();
             if url.is_empty() {
-                eprintln!("{} Usage: /feed <url>", "✗".red());
+                eprintln!("{} Uso: /feed <url>", "✗".red());
                 continue;
             }
 
@@ -1000,7 +1003,7 @@ fn main() -> Result<()> {
                     .template("{spinner:.cyan} {msg}")
                     .expect("Invalid spinner template"),
             );
-            spinner.set_message("Fetching feed…");
+            spinner.set_message("Descargando feed…");
             spinner.enable_steady_tick(std::time::Duration::from_millis(80));
 
             let result = {
@@ -1017,21 +1020,25 @@ fn main() -> Result<()> {
                         "✓".green(),
                         stats.feed_title.as_deref().unwrap_or(url).bold()
                     );
-                    println!("  {} entries found: {}", "↳".dimmed(), stats.entries_found);
                     println!(
-                        "  {} entries indexed: {}",
+                        "  {} entradas encontradas: {}",
+                        "↳".dimmed(),
+                        stats.entries_found
+                    );
+                    println!(
+                        "  {} entradas indexadas: {}",
                         "↳".dimmed(),
                         stats.entries_indexed
                     );
                     if !stats.failures.is_empty() {
-                        println!("  {} failures:", "↳".dimmed());
+                        println!("  {} fallos:", "↳".dimmed());
                         for f in &stats.failures {
                             eprintln!("    {} {}", "✗".red(), f);
                         }
                     }
                 }
                 Err(e) => {
-                    eprintln!("{} Failed to fetch feed: {:#}", "✗".red(), e);
+                    eprintln!("{} No se pudo descargar feed: {:#}", "✗".red(), e);
                 }
             }
             continue;
@@ -1041,13 +1048,13 @@ fn main() -> Result<()> {
             let queue = FeedQueue::new(&config.data_dir);
             let stats = queue.stats();
             if queue.len() == 0 {
-                println!("{} Queue is empty.", "ℹ".cyan());
+                println!("{} La cola está vacía.", "ℹ".cyan());
             } else {
-                println!("{} Feed Queue ({} total):", "ℹ".cyan(), queue.len());
-                println!("  {} pending:    {}", "↳".dimmed(), stats.pending);
-                println!("  {} processing: {}", "↳".dimmed(), stats.processing);
-                println!("  {} done:       {}", "↳".dimmed(), stats.done);
-                println!("  {} failed:     {}", "↳".dimmed(), stats.failed);
+                println!("{} Cola de feeds ({} en total):", "ℹ".cyan(), queue.len());
+                println!("  {} pendientes:   {}", "↳".dimmed(), stats.pending);
+                println!("  {} en proceso:  {}", "↳".dimmed(), stats.processing);
+                println!("  {} completadas: {}", "↳".dimmed(), stats.done);
+                println!("  {} fallidas:    {}", "↳".dimmed(), stats.failed);
             }
             continue;
         }
@@ -1059,13 +1066,13 @@ fn main() -> Result<()> {
                 .unwrap_or("")
                 .trim();
             if url.is_empty() {
-                eprintln!("{} Usage: /queue-add <url>", "✗".red());
+                eprintln!("{} Uso: /queue-add <url>", "✗".red());
                 continue;
             }
             let mut queue = FeedQueue::new(&config.data_dir);
             match queue.add(url) {
-                Ok(()) => println!("{} Added to queue: {}", "✓".green(), url.dimmed()),
-                Err(e) => eprintln!("{} Failed to add: {:#}", "✗".red(), e),
+                Ok(()) => println!("{} Añadido a la cola: {}", "✓".green(), url.dimmed()),
+                Err(e) => eprintln!("{} No se pudo añadir: {:#}", "✗".red(), e),
             }
             continue;
         }
@@ -1077,7 +1084,7 @@ fn main() -> Result<()> {
                     .template("{spinner:.cyan} {msg}")
                     .expect("Invalid spinner template"),
             );
-            spinner.set_message("Processing queue…");
+            spinner.set_message("Procesando cola…");
             spinner.enable_steady_tick(std::time::Duration::from_millis(80));
 
             let recovered = {
@@ -1104,7 +1111,7 @@ fn main() -> Result<()> {
 
             if total == 0 {
                 spinner.finish_and_clear();
-                println!("{} No pending URLs in queue.", "ℹ".cyan());
+                println!("{} No hay URLs pendientes en la cola.", "ℹ".cyan());
                 continue;
             }
 
@@ -1138,7 +1145,7 @@ fn main() -> Result<()> {
             spinner.finish_and_clear();
 
             println!(
-                "{} Queue processed: {} success, {} failed (of {} total)",
+                "{} Cola procesada: {} correctas, {} fallidas (de {} en total)",
                 "✓".green(),
                 successes,
                 failures,
@@ -1154,14 +1161,14 @@ fn main() -> Result<()> {
                 .unwrap_or("")
                 .trim();
             if path.is_empty() {
-                eprintln!("{} Usage: /batch <file>", "✗".red());
+                eprintln!("{} Uso: /batch <file>", "✗".red());
                 continue;
             }
 
             let content = match std::fs::read_to_string(path) {
                 Ok(c) => c,
                 Err(e) => {
-                    eprintln!("{} Error reading {}: {}", "✗".red(), path, e);
+                    eprintln!("{} Error al leer {}: {}", "✗".red(), path, e);
                     continue;
                 }
             };
@@ -1174,12 +1181,12 @@ fn main() -> Result<()> {
                 .collect();
 
             if urls.is_empty() {
-                eprintln!("{} No URLs found in {}", "✗".red(), path);
+                eprintln!("{} No se encontraron URLs en {}", "✗".red(), path);
                 continue;
             }
 
             println!(
-                "{} Processing {} URLs from {}…",
+                "{} Procesando {} URLs desde {}…",
                 "↓".yellow(),
                 urls.len(),
                 path.dimmed()
@@ -1203,7 +1210,7 @@ fn main() -> Result<()> {
             match result {
                 Ok(stats) => {
                     println!(
-                        "{} Batch complete: {} ok, {} failed, ~{} chunks",
+                        "{} Lote completado: {} correctas, {} fallidas, ~{} fragmentos",
                         "✓".green(),
                         stats.success.len(),
                         stats.failures.len(),
@@ -1214,7 +1221,7 @@ fn main() -> Result<()> {
                     }
                 }
                 Err(e) => {
-                    eprintln!("{} Batch failed: {:#}", "✗".red(), e);
+                    eprintln!("{} Lote fallido: {:#}", "✗".red(), e);
                 }
             }
             continue;
@@ -1229,7 +1236,7 @@ fn main() -> Result<()> {
                 .unwrap_or("")
                 .trim();
             if rest.is_empty() {
-                eprintln!("{} Usage: /download-books <language> [limit]", "✗".red());
+                eprintln!("{} Uso: /download-books <lenguaje> [límite]", "✗".red());
                 continue;
             }
 
@@ -1237,14 +1244,14 @@ fn main() -> Result<()> {
             let lang = match parts.next() {
                 Some(l) => l,
                 None => {
-                    eprintln!("{} Usage: /download-books <language> [limit]", "✗".red());
+                    eprintln!("{} Uso: /download-books <lenguaje> [límite]", "✗".red());
                     continue;
                 }
             };
             let limit: usize = parts.next().and_then(|s| s.parse().ok()).unwrap_or(10);
 
             println!(
-                "{} Downloading and ingesting up to {} resources for '{}'…",
+                "{} Descargando e indexando hasta {} recursos para '{}'…",
                 "↓".yellow(),
                 limit,
                 lang.bold()
@@ -1255,7 +1262,7 @@ fn main() -> Result<()> {
                     .template("{spinner:.cyan} {msg}")
                     .expect("Invalid spinner template"),
             );
-            spinner.set_message("Processing…");
+            spinner.set_message("Procesando…");
             spinner.enable_steady_tick(std::time::Duration::from_millis(80));
 
             let result = {
@@ -1269,7 +1276,7 @@ fn main() -> Result<()> {
                 Ok(count) => {
                     config.languages.mark_installed(lang);
                     if let Err(e) = config.save() {
-                        eprintln!("{} Failed to save config: {}", "✗".red(), e);
+                        eprintln!("{} No se pudo guardar la configuración: {}", "✗".red(), e);
                     }
                     println!(
                         "{} Ingested {} resource(s) for '{}'.",
@@ -1279,7 +1286,11 @@ fn main() -> Result<()> {
                     );
                 }
                 Err(e) => {
-                    eprintln!("{} Failed to download/ingest books: {:#}", "✗".red(), e);
+                    eprintln!(
+                        "{} No se pudo descargar/indexar los libros: {:#}",
+                        "✗".red(),
+                        e
+                    );
                 }
             }
             continue;
@@ -1291,7 +1302,7 @@ fn main() -> Result<()> {
                 .template("{spinner:.cyan} {msg}")
                 .expect("Invalid spinner template"),
         );
-        spinner.set_message("Thinking…");
+        spinner.set_message("Pensando…");
         spinner.enable_steady_tick(std::time::Duration::from_millis(80));
 
         let response = {
@@ -1320,7 +1331,7 @@ fn main() -> Result<()> {
     if shutdown::is_shutdown_requested() {
         eprintln!("{} Shutting down aten-ia…", "●".bright_yellow());
     } else {
-        eprintln!("{} Bye!", "●".bright_green());
+        eprintln!("{} ¡Hasta luego!", "●".bright_green());
     }
     Ok(())
 }
@@ -1356,128 +1367,199 @@ fn read_line() -> Option<String> {
 }
 
 fn print_startup_help() {
-    eprintln!("{}", "━━━ Quick ━━━".bold());
-    eprintln!("  {:<20}  Chat with the agent", "<message>".dimmed());
+    eprintln!();
+    eprintln!("{}", "━━━ Inicio rápido ━━━".bold());
+    eprintln!("  {:<20}  Chatea con el agente", "<mensaje>".dimmed());
     eprintln!(
-        "  {:<20}  List / switch models",
+        "  {:<20}  Lista y cambia de modelo",
         "/models | /model <id>".dimmed()
     );
-    eprintln!("  {:<20}  List all commands", "/help".dimmed());
-    eprintln!("  {:<20}  Exit", "/exit".dimmed());
+    eprintln!("  {:<20}  Muestra todos los comandos", "/help".dimmed());
+    eprintln!("  {:<20}  Salir", "/exit".dimmed());
 }
 
 fn print_help() {
     println!();
-    println!("{} Commands", "━━━ Commands ━━━".bold());
-    println!("  {:<20}  Chat with the agent", "<message>".dimmed());
-    println!("  {:<20}  List available models", "/models".bright_blue());
+    println!("{}", "━━━ Comandos ━━━".bold());
+    println!("  {:<20}  Chatea con el agente", "<mensaje>".dimmed());
     println!(
-        "  {:<20}  Show / download / switch model",
+        "  {:<20}  Lista los modelos disponibles",
+        "/models".bright_blue()
+    );
+    println!(
+        "  {:<20}  Muestra, descarga o cambia de modelo",
         "/model [id|current]".bright_blue()
     );
     println!(
-        "  {:<20}  List available languages",
+        "  {:<20}  Lista los lenguajes disponibles",
         "/languages".bright_blue()
     );
     println!(
-        "  {:<20}  List installed languages",
+        "  {:<20}  Lista los lenguajes instalados",
         "/languages-installed".bright_blue()
     );
     println!(
-        "  {:<20}  List programming-book languages (free-programming-books)",
+        "  {:<20}  Lista lenguajes con libros gratuitos",
         "/books".bright_blue()
     );
     println!(
-        "  {:<20}  Download & ingest books for a language",
+        "  {:<20}  Descarga e indexa libros de un lenguaje",
         "/download-books <lang> [limit]".bright_blue()
     );
     println!(
-        "  {:<20}  Download docs for a language",
+        "  {:<20}  Descarga documentación de un lenguaje",
         "/learn <lang>".bright_blue()
     );
     println!(
-        "  {:<20}  Remove language docs from knowledge",
+        "  {:<20}  Elimina la documentación de un lenguaje",
         "/unlearn <lang>".bright_blue()
     );
     println!(
-        "  {:<20}  Fine-tune the model on a learned language",
+        "  {:<20}  Ajusta el modelo con un lenguaje aprendido",
         "/finetune <lang>".bright_blue()
     );
     println!(
-        "  {:<20}  Fetch URL and index as knowledge",
+        "  {:<20}  Descarga una URL y la indexa",
         "/fetch <url>".bright_blue()
     );
     println!(
-        "  {:<20}  Fetch URL and show markdown",
+        "  {:<20}  Descarga una URL y la muestra en Markdown",
         "/fetch-md <url>".bright_blue()
     );
     println!(
-        "  {:<20}  Process batch of URLs from file",
+        "  {:<20}  Procesa un lote de URLs desde archivo",
         "/batch <file>".bright_blue()
     );
     println!(
-        "  {:<20}  Load a text file into session context",
+        "  {:<20}  Carga un archivo de texto en la sesión",
         "/load <file>".bright_blue()
     );
     println!(
-        "  {:<20}  Load file and index as knowledge (auto-detects PDF/EPUB)",
+        "  {:<20}  Carga e indexa un archivo (PDF/EPUB/MD/HTML/TXT)",
         "/ingest <file>".bright_blue()
     );
     println!(
-        "  {:<20}  Extract & index a PDF/EPUB file",
+        "  {:<20}  Extrae e indexa un PDF/EPUB",
         "/ingest-pdf <file>".bright_blue()
     );
     println!(
-        "  {:<20}  Search indexed knowledge",
+        "  {:<20}  Busca en el conocimiento indexado",
         "/search <query>".bright_blue()
     );
     println!(
-        "  {:<20}  Rebuild knowledge index from .mv2 files",
+        "  {:<20}  Reconstruye el índice desde los .mv2",
         "/reindex".bright_blue()
     );
     println!(
-        "  {:<20}  Start API server / show token",
+        "  {:<20}  Inicia la API o muestra el token",
         "/token".bright_blue()
     );
     println!(
-        "  {:<20}  Show conversation history",
+        "  {:<20}  Muestra el historial de conversaciones",
         "/history".bright_blue()
     );
-    println!("  {:<20}  Show agent statistics", "/stats".bright_blue());
     println!(
-        "  {:<20}  Show current configuration",
+        "  {:<20}  Muestra estadísticas del agente",
+        "/stats".bright_blue()
+    );
+    println!(
+        "  {:<20}  Muestra la configuración actual",
         "/config".bright_blue()
     );
     println!(
-        "  {:<20}  Show RAG debug info for last query",
+        "  {:<20}  Muestra el RAG de la última consulta",
         "/debug".bright_blue()
     );
     println!(
-        "  {:<20}  Get/set KV-cache types (e.g. /kv f16 turbo3)",
+        "  {:<20}  Consulta o cambia la caché KV (ej. /kv f16 turbo3)",
         "/kv [k] [v]".bright_blue()
     );
-    println!("  {:<20}  Show this help", "/help".bright_blue());
-    println!("  {:<20}  Exit the agent", "/exit".bright_blue());
+    println!("  {:<20}  Muestra esta ayuda", "/help".bright_blue());
+    println!("  {:<20}  Sale del agente", "/exit".bright_blue());
     println!();
     println!(
-        "{} Commands also accept uppercase: /MODELS, /MODEL, /LANGUAGES, /SEARCH, /REINDEX, /TOKEN, /LOAD, /INGEST",
+        "{} Los comandos también aceptan mayúsculas: /MODELS, /MODEL, /LANGUAGES, /SEARCH, /REINDEX, /TOKEN, /LOAD, /INGEST",
         "↳".dimmed()
     );
     println!();
 }
 
+fn print_models_table(catalog: &ModelsCatalog, active_name: &str, show_desc: bool) {
+    println!();
+    println!(
+        "{}",
+        format!("━━━ Modelos disponibles ({}) ━━━", catalog.list().len()).bold()
+    );
+    println!();
+    println!(
+        "  {:<3} {:<19} {:<28} {:>8} {:>8}  {}",
+        "#".dimmed(),
+        "ID".dimmed(),
+        "Modelo".dimmed(),
+        "Tamaño".dimmed(),
+        "Contexto".dimmed(),
+        "Estado".dimmed()
+    );
+    println!("  {}", "─".repeat(80).dimmed());
+    for (i, entry) in catalog.list().iter().enumerate() {
+        let id = format!("{:<19}", entry.id);
+        let size = format!("{} MB", entry.size_mb);
+        let active = if entry.name == active_name {
+            "◄ activo".green().to_string()
+        } else {
+            String::new()
+        };
+        println!(
+            "  {:<3} {} {:<28} {:>8} {:>8}  {}",
+            format!("{}.", i + 1).bright_cyan(),
+            id.bright_cyan(),
+            entry.name,
+            size,
+            entry.n_ctx_recommended,
+            active
+        );
+        if show_desc {
+            println!("      {}", entry.description.dimmed());
+        }
+    }
+    println!();
+    if !show_desc {
+        println!("  {} Usa el número o el ID con /model <id>.", "↳".dimmed());
+        println!();
+    }
+}
+
+fn print_banner() {
+    eprintln!();
+    eprintln!(
+        "  {}  {}",
+        "aten-ia".bold().bright_cyan(),
+        format!("v{}", env!("CARGO_PKG_VERSION")).dimmed()
+    );
+    eprintln!(
+        "  {}",
+        "IA local · memoria persistente · RAG · API OpenAI".dimmed()
+    );
+    eprintln!("  {}", "─".repeat(48).dimmed());
+    eprintln!();
+}
+
 fn print_stats(agent: &Agent, config: &Config, files: &[String]) -> Result<()> {
     println!();
-    println!("{} Agent Stats", "━━━ Stats ━━━".bold());
-    println!("  {} {}", "Model:".dimmed(), config.model.name);
+    println!("{}", "━━━ Estadísticas ━━━".bold());
+    println!("  {} {}", "Modelo:".dimmed(), config.model.name);
     println!(
-        "  {} {} interactions",
-        "Chats:".dimmed(),
+        "  {} {} interacciones",
+        "Interacciones:".dimmed(),
         agent.interaction_count()
     );
-    println!("  {} {}", "Memory:".dimmed(), agent.memory_summary()?);
+    println!("  {} {}", "Memoria:".dimmed(), agent.memory_summary()?);
     if !files.is_empty() {
-        println!("  {} {} files loaded", "Files:".dimmed(), files.len());
+        println!(
+            "  {} {} archivos cargados",
+            "Archivos:".dimmed(),
+            files.len()
+        );
         for f in files {
             println!("    • {}", f.dimmed());
         }
@@ -1488,14 +1570,14 @@ fn print_stats(agent: &Agent, config: &Config, files: &[String]) -> Result<()> {
 
 fn print_history(agent: &Agent) -> Result<()> {
     println!();
-    println!("{} Conversation History", "━━━ History ━━━".bold());
+    println!("{}", "━━━ Historial de conversaciones ━━━".bold());
     let lines = agent.read_conversation_history()?;
     for line in &lines {
-        if line.starts_with("  You:") {
+        if line.starts_with("  Tú:") {
             println!("{}", line.bright_green());
-        } else if line.starts_with("  Assistant:") {
+        } else if line.starts_with("  Asistente:") {
             println!("{}", line.bright_cyan());
-        } else if line.starts_with("  System:") {
+        } else if line.starts_with("  Sistema:") {
             println!("{}", line.dimmed());
         } else {
             println!("{}", line);
@@ -1507,35 +1589,38 @@ fn print_history(agent: &Agent) -> Result<()> {
 
 fn print_config(config: &Config) {
     println!();
-    println!("{} Configuration", "━━━ Config ━━━".bold());
+    println!("{}", "━━━ Configuración ━━━".bold());
     println!("  {} {}", "data_dir:".dimmed(), config.data_dir.display());
     println!("  {} {}", "developer_mode:".dimmed(), config.developer_mode);
     println!(
         "  {} {}",
         "developer_prompt:".dimmed(),
-        config.developer_prompt.as_deref().unwrap_or("(default)")
+        config
+            .developer_prompt
+            .as_deref()
+            .unwrap_or("(por defecto)")
     );
-    println!("  {} Model", "──".dimmed());
-    println!("    {} {}", "name:".dimmed(), config.model.name);
-    println!("    {} {}", "path:".dimmed(), config.model.path);
-    println!("    {} {}", "n_ctx:".dimmed(), config.model.n_ctx);
+    println!("  {} Modelo", "──".dimmed());
+    println!("    {} {}", "nombre:".dimmed(), config.model.name);
+    println!("    {} {}", "ruta:".dimmed(), config.model.path);
+    println!("    {} {}", "contexto:".dimmed(), config.model.n_ctx);
     println!(
         "    {} {}",
-        "n_gpu_layers:".dimmed(),
+        "capas_gpu:".dimmed(),
         config.model.n_gpu_layers
     );
     println!(
         "    {} {}",
-        "chat_template:".dimmed(),
+        "plantilla:".dimmed(),
         config.model.chat_template
     );
     println!(
         "    {} K={} / V={}",
-        "kv_cache:".dimmed(),
+        "caché_kv:".dimmed(),
         config.model.kv_type_k,
         config.model.kv_type_v
     );
-    println!("  {} Generation", "──".dimmed());
+    println!("  {} Generación", "──".dimmed());
     println!("    {} {}", "top_k:".dimmed(), config.generation.top_k);
     println!("    {} {}", "top_p:".dimmed(), config.generation.top_p);
     println!("    {} {}", "temp:".dimmed(), config.generation.temp);
@@ -1545,17 +1630,17 @@ fn print_config(config: &Config) {
         config.generation.max_tokens
     );
     println!("  {} API", "──".dimmed());
-    println!("    {} {}", "enabled:".dimmed(), config.api.enabled);
+    println!("    {} {}", "activada:".dimmed(), config.api.enabled);
     println!("    {} {}", "host:".dimmed(), config.api.host);
     println!("    {} {}", "port:".dimmed(), config.api.port);
     println!(
         "    {} {}",
         "token:".dimmed(),
-        config.api.token.as_deref().unwrap_or("(none)")
+        config.api.token.as_deref().unwrap_or("(ninguno)")
     );
-    println!("  {} Languages", "──".dimmed());
+    println!("  {} Lenguajes", "──".dimmed());
     if config.languages.installed.is_empty() {
-        println!("    {} (none installed)", "installed:".dimmed());
+        println!("    {} (ninguno instalado)", "instalados:".dimmed());
     } else {
         for lang in &config.languages.installed {
             println!("    • {}", lang);
@@ -1567,8 +1652,8 @@ fn print_config(config: &Config) {
 fn print_rag_debug(entries: &[memvid_agent_core::generation::RagEntryDebug]) {
     println!();
     let title = format!(
-        "{} RAG Debug ({} entries)",
-        "━━━ Debug ━━━".bold(),
+        "{} RAG ({} entradas)",
+        "━━━ Diagnóstico RAG ━━━".bold(),
         entries.len()
     );
     println!("{}", title);
@@ -1595,15 +1680,19 @@ fn print_rag_debug(entries: &[memvid_agent_core::generation::RagEntryDebug]) {
 
 fn print_model_current(config: &Config) {
     println!();
-    println!("{} Active Model", "━━━ Model ━━━".bold());
-    println!("  {} {}", "Name:".dimmed(), config.model.name.bright_cyan());
-    println!("  {} {}", "Path:".dimmed(), config.model.path);
-    println!("  {} {}", "Context:".dimmed(), config.model.n_ctx);
-    println!("  {} {}", "GPU layers:".dimmed(), config.model.n_gpu_layers);
-    println!("  {} {}", "Template:".dimmed(), config.model.chat_template);
+    println!("{}", "━━━ Modelo activo ━━━".bold());
+    println!(
+        "  {} {}",
+        "Nombre:".dimmed(),
+        config.model.name.bright_cyan()
+    );
+    println!("  {} {}", "Ruta:".dimmed(), config.model.path);
+    println!("  {} {}", "Contexto:".dimmed(), config.model.n_ctx);
+    println!("  {} {}", "Capas GPU:".dimmed(), config.model.n_gpu_layers);
+    println!("  {} {}", "Plantilla:".dimmed(), config.model.chat_template);
     println!(
         "  {} K={} / V={}",
-        "KV cache:".dimmed(),
+        "Caché KV:".dimmed(),
         config.model.kv_type_k,
         config.model.kv_type_v
     );
@@ -1651,7 +1740,7 @@ fn run_finetune_flow(
     };
     if chunks == 0 || corpus.trim().is_empty() {
         eprintln!(
-            "{} No indexed knowledge for '{}'. Run /learn {} first.",
+            "{} No hay conocimiento indexado para '{}'. Ejecuta /learn {} primero.",
             "✗".red(),
             lang_key,
             lang_key
@@ -1676,28 +1765,28 @@ fn run_finetune_flow(
 
     // 3. Show the estimate.
     println!();
-    println!("{} Fine-tune estimate", "━━━ Fine-tune ━━━".bold());
-    println!("  {} {}", "Language:".dimmed(), lang_name.bright_cyan());
-    println!("  {} {}", "Base model:".dimmed(), config.model.name);
+    println!("{}", "━━━ Estimación de ajuste fino ━━━".bold());
+    println!("  {} {}", "Lenguaje:".dimmed(), lang_name.bright_cyan());
+    println!("  {} {}", "Modelo base:".dimmed(), config.model.name);
     println!(
-        "  {} {} chunks (~{} tokens)",
+        "  {} {} fragmentos (~{} tokens)",
         "Corpus:".dimmed(),
         chunks,
         tokens
     );
     println!(
-        "  {} ~{:.1}B params · {} epochs · {} threads",
-        "Run:".dimmed(),
+        "  {} ~{:.1} B parámetros · {} épocas · {} hilos",
+        "Ejecución:".dimmed(),
         param_count as f64 / 1e9,
         epochs,
         threads
     );
     println!(
-        "  {} ~{:.1} GB peak RAM (full AdamW fine-tune)",
-        "Memory:".dimmed(),
+        "  {} ~{:.1} GB de RAM pico (ajuste completo AdamW)",
+        "Memoria:".dimmed(),
         est.ram_gb()
     );
-    println!("  {} {} (rough)", "Time:".dimmed(), est.human_time());
+    println!("  {} {} (aproximado)", "Tiempo:".dimmed(), est.human_time());
 
     // 4. RAM pre-flight.
     if let Some(avail) = finetune::available_ram_bytes() {
@@ -1705,17 +1794,17 @@ fn run_finetune_flow(
         if !est.fits_in_ram(avail) {
             println!();
             eprintln!(
-                "{} Not enough RAM: need ~{:.1} GB, only ~{:.1} GB available.",
+                "{} RAM insuficiente: se necesitan ~{:.1} GB y solo hay ~{:.1} GB disponibles.",
                 "⚠".yellow(),
                 est.ram_gb(),
                 avail_gb
             );
             eprintln!(
-                "  {} This machine will likely OOM. Set finetune.binary_path / LLAMA_FINETUNE_BIN",
+                "  {} Esta máquina probablemente se quede sin memoria. Configura finetune.binary_path / LLAMA_FINETUNE_BIN",
                 "→".dimmed()
             );
             eprintln!(
-                "  {} on a bigger box, or continue to just write the corpus + run script.",
+                "  {} en una máquina mayor, o continúa solo para escribir el corpus y el script.",
                 "→".dimmed()
             );
         }
@@ -1726,13 +1815,13 @@ fn run_finetune_flow(
     println!();
     let prompt = match &binary {
         Some(bin) => format!(
-            "{} Run {} now? It may take {}. (y/N): ",
+            "{} ¿Ejecutar {} ahora? Puede tardar {}. (s/N): ",
             "•".dimmed(),
             bin.display(),
             est.human_time()
         ),
         None => format!(
-            "{} No llama-finetune found — write corpus + run script for another machine? (Y/n): ",
+            "{} No se encontró llama-finetune. ¿Escribir corpus y script para otra máquina? (S/n): ",
             "•".dimmed()
         ),
     };
@@ -1743,7 +1832,7 @@ fn run_finetune_flow(
         None => !ans.eq_ignore_ascii_case("n"),
     };
     if !proceed {
-        println!("  {} Cancelled.", "i".yellow());
+        println!("  {} Cancelado.", "i".yellow());
         return Ok(());
     }
 
@@ -1765,12 +1854,12 @@ fn run_finetune_flow(
     match finetune::prepare_and_run(&corpus, &plan)? {
         FinetuneOutcome::Trained(path) => {
             println!(
-                "{} Fine-tune complete: {}",
+                "{} Ajuste fino completado: {}",
                 "✓".green(),
                 path.display().to_string().bright_cyan()
             );
             let switch = read_line_prompt(&format!(
-                "{} Switch to the fine-tuned model now? (y/N): ",
+                "{} ¿Cambiar ahora al modelo ajustado? (s/N): ",
                 "•".dimmed()
             ));
             if switch.eq_ignore_ascii_case("y") {
@@ -1795,15 +1884,18 @@ fn run_finetune_flow(
                     config.generation.top_p,
                     config.generation.temp,
                 )?;
-                println!("{} Now using {}", "✓".green(), config.model.name.bold());
+                println!("{} Ahora usando {}", "✓".green(), config.model.name.bold());
             }
         }
         FinetuneOutcome::Deferred { corpus, script } => {
-            println!("{} No training run on this machine. Wrote:", "i".yellow());
+            println!(
+                "{} No se ejecutó el entrenamiento. Se escribió:",
+                "i".yellow()
+            );
             println!("  {} {}", "corpus:".dimmed(), corpus.display());
             println!("  {} {}", "script:".dimmed(), script.display());
             println!(
-                "  {} Build llama-finetune and run the script on a machine with ~{:.0} GB RAM.",
+                "  {} Compila llama-finetune y ejecuta el script en una máquina con ~{:.0} GB de RAM.",
                 "→".dimmed(),
                 est.ram_gb()
             );
@@ -1815,14 +1907,14 @@ fn run_finetune_flow(
 fn run_setup_wizard(config: &mut Config, catalog: &ModelsCatalog) -> Result<()> {
     println!();
     println!(
-        "{} Welcome to aten-ia!",
-        "━━━ Setup ━━━".bold().bright_green()
+        "{} ¡Bienvenido a aten-ia!",
+        "━━━ Configuración inicial ━━━".bold().bright_green()
     );
-    println!("  First-time setup — let's get you configured.");
+    println!("  Configuración inicial en unos pasos.");
     println!();
 
     let data_dir = read_line_prompt(&format!(
-        "{} Data directory [{}]: ",
+        "{} Directorio de datos [{}]: ",
         "•".dimmed(),
         config.data_dir.display()
     ));
@@ -1831,17 +1923,8 @@ fn run_setup_wizard(config: &mut Config, catalog: &ModelsCatalog) -> Result<()> 
     }
 
     println!();
-    println!("  {} Available models:", "•".dimmed());
-    for (i, entry) in catalog.list().iter().enumerate() {
-        println!(
-            "     {}. {:<16} {} — {}",
-            i + 1,
-            entry.id.bright_cyan(),
-            entry.name,
-            entry.description
-        );
-    }
-    let model_choice = read_line_prompt(&format!("{} Select model [1]: ", "•".dimmed()));
+    print_models_table(catalog, "", false);
+    let model_choice = read_line_prompt(&format!("{} Elige modelo [1]: ", "•".dimmed()));
     let model_idx: usize = loop {
         let parsed = model_choice.parse::<usize>();
         if model_choice.is_empty() {
@@ -1853,7 +1936,7 @@ fn run_setup_wizard(config: &mut Config, catalog: &ModelsCatalog) -> Result<()> 
             }
         }
         eprintln!(
-            "{} Invalid choice. Enter a number 1-{}.",
+            "{} Opción no válida. Escribe un número entre 1 y {}.",
             "✗".red(),
             catalog.list().len()
         );
@@ -1862,26 +1945,38 @@ fn run_setup_wizard(config: &mut Config, catalog: &ModelsCatalog) -> Result<()> 
     if model_idx > 0 && model_idx <= catalog.list().len() {
         let entry = &catalog.list()[model_idx - 1];
         let models_dir = std::path::Path::new("models");
-        let model_path = models_dir.join(&entry.id).with_extension("gguf");
-        if models_catalog::download_model(entry, models_dir).is_ok() {
-            println!("  {} Selected model: {}", "✓".green(), entry.name.bold());
-        } else {
-            println!(
-                "  {} Model download deferred — will download on next launch.",
-                "i".yellow()
-            );
-        }
-        models_catalog::apply_model_to_config(&model_path, entry, config)?;
+        // Use the exact filename `download_model` writes. `with_extension`
+        // corrupts ids that contain a dot (qwen2.5-1.5b -> qwen2.5-1.gguf).
+        let expected_path = models_catalog::model_path(models_dir, &entry.id);
+        let selected_path = match models_catalog::download_model(entry, models_dir) {
+            Ok(path) => {
+                println!(
+                    "  {} Modelo seleccionado: {}",
+                    "✓".green(),
+                    entry.name.bold()
+                );
+                path
+            }
+            Err(e) => {
+                println!(
+                    "  {} Descarga diferida (se reintentará al arrancar): {:#}",
+                    "i".yellow(),
+                    e
+                );
+                expected_path.clone()
+            }
+        };
+        models_catalog::apply_model_to_config(&selected_path, entry, config)?;
     }
 
     let install_langs = read_line_prompt(&format!(
-        "{} Install language documentation? (y/N): ",
+        "{} ¿Instalar documentación de un lenguaje? (s/N): ",
         "•".dimmed()
     ));
     if install_langs.to_lowercase() == "y" {
         match LanguagesCatalog::load_or_fetch(&config.data_dir) {
             Ok(lang_catalog) => {
-                println!("  {} Fetching language catalog…", "↳".dimmed());
+                println!("  {} Obteniendo catálogo de lenguajes…", "↳".dimmed());
                 for entry in lang_catalog.list().iter().take(5) {
                     println!("     • {}", entry.key.bright_cyan());
                 }
@@ -1892,26 +1987,33 @@ fn run_setup_wizard(config: &mut Config, catalog: &ModelsCatalog) -> Result<()> 
                     );
                 }
                 let lang_choice =
-                    read_line_prompt("  Enter language key (or leave blank to skip): ");
+                    read_line_prompt("  Escribe la clave del lenguaje (vacío para omitir): ");
                 if !lang_choice.is_empty() && lang_catalog.find(&lang_choice).is_some() {
                     println!(
-                        "  {} Language '{}' will be installed on next /learn",
+                        "  {} El lenguaje '{}' se instalará en el próximo /learn",
                         "↳".dimmed(),
                         lang_choice
                     );
                 }
             }
             Err(e) => {
-                println!("  {} Could not fetch language catalog: {}", "✗".red(), e);
+                println!(
+                    "  {} No se pudo obtener el catálogo de lenguajes: {}",
+                    "✗".red(),
+                    e
+                );
             }
         }
     }
 
-    let enable_api = read_line_prompt(&format!("{} Enable API server? (y/N): ", "•".dimmed()));
+    let enable_api = read_line_prompt(&format!(
+        "{} ¿Activar el servidor API? (s/N): ",
+        "•".dimmed()
+    ));
     if enable_api.to_lowercase() == "y" {
         config.api.enabled = true;
         let port = read_line_prompt(&format!(
-            "{} API port [{}]: ",
+            "{} Puerto de la API [{}]: ",
             "•".dimmed(),
             config.api.port
         ));
@@ -1923,13 +2025,13 @@ fn run_setup_wizard(config: &mut Config, catalog: &ModelsCatalog) -> Result<()> 
         config.api.token = Some(uuid::Uuid::new_v4().to_string());
         let token = config.api.token.as_ref().unwrap().clone();
         println!(
-            "  {} API token generated: {}",
+            "  {} Token de API generado: {}",
             "✓".green(),
             token.bright_yellow()
         );
 
         let setup_opencode = read_line_prompt(&format!(
-            "{} Generate OpenCode config? (Y/n): ",
+            "{} ¿Generar configuración de OpenCode? (S/n): ",
             "•".dimmed()
         ));
         if setup_opencode.is_empty() || setup_opencode.to_lowercase() == "y" {
@@ -1968,7 +2070,7 @@ fn run_setup_wizard(config: &mut Config, catalog: &ModelsCatalog) -> Result<()> 
             }
             if memvid_agent_core::utils::atomic_write(&global_path, &oc_content).is_ok() {
                 println!(
-                    "  {} OpenCode global config written to {}",
+                    "  {} Configuración global de OpenCode escrita en {}",
                     "✓".green(),
                     global_path.display()
                 );
@@ -1979,7 +2081,7 @@ fn run_setup_wizard(config: &mut Config, catalog: &ModelsCatalog) -> Result<()> 
                     let project_path = parent.join("opencode.json");
                     if project_path.exists() || {
                         let ans = read_line_prompt(&format!(
-                            "{} Write project config to {}? (Y/n): ",
+                            "{} ¿Escribir configuración del proyecto en {}? (S/n): ",
                             "•".dimmed(),
                             project_path.display()
                         ));
@@ -1989,7 +2091,7 @@ fn run_setup_wizard(config: &mut Config, catalog: &ModelsCatalog) -> Result<()> 
                             .is_ok()
                         {
                             println!(
-                                "  {} OpenCode project config written to {}",
+                                "  {} Configuración del proyecto de OpenCode escrita en {}",
                                 "✓".green(),
                                 project_path.display()
                             );
@@ -1998,14 +2100,17 @@ fn run_setup_wizard(config: &mut Config, catalog: &ModelsCatalog) -> Result<()> 
                 }
             }
 
-            println!("  {} Restart opencode after updating config", "↳".dimmed());
+            println!(
+                "  {} Reinicia opencode después de actualizar la configuración",
+                "↳".dimmed()
+            );
         }
     }
 
     config.save()?;
     println!();
     println!(
-        "{} Setup complete! Configuration saved.",
+        "{} ¡Configuración completada! Guardada.",
         "✓".green().bold()
     );
     println!();

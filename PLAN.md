@@ -114,6 +114,15 @@ Estados: ✅ hecho, 🚧 en curso, ⏳ pendiente, ⚠️ requiere decisión.
 - [ ] ⏳ Job nightly con GGUF real y benchmarks.
 - [ ] ⏳ Fuzzing de parser HTTP/feeds/PDF.
 
+## 7. Fase 7 — Experiencia de usuario
+
+- [x] ✅ Banner de arranque, resumen de modelo/contexto/datos/memoria y ayuda rápida.
+- [x] ✅ Tabla de modelos alineada (ID, nombre, tamaño, contexto, activo) y descripciones en español.
+- [x] ✅ Mensajes, spinners, ayuda, configuración, estadísticas, historial y fine-tune en español.
+- [x] ✅ Logs de dependencias (tantivy/memvid) silenciados por defecto; `ATEN_LOG` para depurar.
+- [x] ✅ Corregida la doble descarga: `with_extension` convertía `qwen2.5-1.5b` en `qwen2.5-1`; ahora hay `model_path()` canónico.
+- [x] ✅ Limpiado el duplicado de 941 MB y corregido `~/config.json` al nombre correcto.
+
 ## Registro de verificación
 
 | Fecha | Comprobación | Resultado |
@@ -131,5 +140,6 @@ Estados: ✅ hecho, 🚧 en curso, ⏳ pendiente, ⚠️ requiere decisión.
 | 2026-11-25 | Dedup O(1) e ingesta idempotente | ✅ 556 tests, 0 fallos |
 | 2026-11-25 | `cargo audit` + `.cargo/audit.toml` | ✅ 0 vulnerabilidades, 6 warnings |
 | 2026-11-25 | API: parámetros por petición y `usage` | ✅ 558 tests, 0 fallos |
+| 2026-11-26 | UI en español, logs silenciados y fix doble descarga | ✅ 559 tests, 0 fallos |
 | 2026-11-25 | Límite de conexiones HTTP y progreso `/batch` | ✅ build + tests |
 | 2026-11-26 | `.deb` portable 0.3.12 | ✅ Ubuntu 20.04/22.04, Debian 11/12 |

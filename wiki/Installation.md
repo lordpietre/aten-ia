@@ -121,6 +121,7 @@ El modelo se descarga automáticamente de HuggingFace si no está en disco.
 | `LLAMA_FINETUNE_BIN` | — | Binario `llama-finetune` para `/finetune` |
 | `ATEN_PORTABLE` | — | `1` enlaza `libstdc++`/`libgomp` estáticamente |
 | `ATEN_THREADS` | Núcleos disponibles | Hilos de inferencia |
+| `ATEN_LOG` | `warn` | Nivel de log (`error`, `warn`, `info`, `debug`, `trace`) |
 | `CMAKE_BUILD_PARALLEL_LEVEL` | `2` | Paralelismo de CMake |
 | `TARGET` | Auto | Target triple de compilación cruzada |
 | `HOME` | — | Define el `data_dir` por defecto |

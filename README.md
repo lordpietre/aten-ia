@@ -272,6 +272,7 @@ Por fidelidad se recomienda mantener `K` con precisión igual o mayor que `V` (p
 | `ATEN_PORTABLE` | — | `1` enlaza estáticamente `libstdc++` y `libgomp` |
 | `ATEN_THREADS` | Núcleos disponibles | Hilos de inferencia (llama.cpp) |
 | `ATEN_API_MAX_CONNS` | `64` | Conexiones HTTP concurrentes máximas |
+| `ATEN_LOG` | `warn` | Nivel de log (`error`, `warn`, `info`, `debug`, `trace`) |
 | `CMAKE_BUILD_PARALLEL_LEVEL` | `2` | Paralelismo de CMake |
 | `TARGET` | Auto | Target triple para cross-compilation |
 | `HOME` | — | Determina el `data_dir` por defecto |
@@ -432,7 +433,7 @@ También existe un `snapcraft.yaml` que empaqueta el binario ya compilado.
 
 ```bash
 cd memvid-agent-core
-cargo test --locked -- --test-threads=1   # ~556 tests (unitarios + integración)
+cargo test --locked -- --test-threads=1   # ~559 tests (unitarios + integración)
 cargo test --locked --lib -- --test-threads=1
 cargo fmt --all -- --check
 cargo clippy --locked --lib

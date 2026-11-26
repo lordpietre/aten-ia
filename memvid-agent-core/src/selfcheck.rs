@@ -56,11 +56,11 @@ where
 
 /// Run all self-checks. Returns an error if any check fails.
 pub fn run() -> Result<()> {
-    println!("aten-ia self-test {}", env!("CARGO_PKG_VERSION"));
+    println!("aten-ia · autodiagnóstico {}", env!("CARGO_PKG_VERSION"));
 
     let root = std::env::temp_dir().join(format!("aten-ia-selfcheck-{}", Uuid::new_v4()));
     std::fs::create_dir_all(&root)
-        .with_context(|| format!("failed to create {}", root.display()))?;
+        .with_context(|| format!("no se pudo crear {}", root.display()))?;
 
     let outcome = run_checks(&root);
     let _ = std::fs::remove_dir_all(&root);
@@ -70,60 +70,68 @@ pub fn run() -> Result<()> {
 fn run_checks(root: &Path) -> Result<()> {
     let mut failed = 0usize;
 
-    run!(failed, "config: defaults + validate + save/load", || {
-        let mut cfg = Config::default();
-        cfg.data_dir = root.join("data");
-        cfg.validate()?;
-        cfg.save_to_path(root.join("config.json"))?;
-        let loaded = Config::load_or_create_with_path(root.join("config.json"))?;
-        anyhow::ensure!(loaded.data_dir == cfg.data_dir, "data_dir mismatch");
-        anyhow::ensure!(loaded.model.n_ctx > 0, "n_ctx not loaded");
-        Ok(())
-    });
+    run!(
+        failed,
+        "configuración: valores por defecto, validación y guardado",
+        || {
+            let mut cfg = Config::default();
+            cfg.data_dir = root.join("data");
+            cfg.validate()?;
+            cfg.save_to_path(root.join("config.json"))?;
+            let loaded = Config::load_or_create_with_path(root.join("config.json"))?;
+            anyhow::ensure!(loaded.data_dir == cfg.data_dir, "data_dir no coincide");
+            anyhow::ensure!(loaded.model.n_ctx > 0, "n_ctx no cargado");
+            Ok(())
+        }
+    );
 
-    run!(failed, "utils: atomic write + SHA-256", || {
+    run!(failed, "utilidades: escritura atómica y SHA-256", || {
         let path = root.join("atomic.txt");
         utils::atomic_write(&path, b"selfcheck")?;
         let file_sha = utils::compute_file_checksum(&path)?;
         let direct_sha = utils::sha256_digest(b"selfcheck");
-        anyhow::ensure!(file_sha == direct_sha, "checksum mismatch");
+        anyhow::ensure!(file_sha == direct_sha, "checksum no coincide");
         Ok(())
     });
 
-    run!(failed, "chunker: Fixed / Paragraph / Heading", || {
-        let text = "# Title\n\nword word word word word word\n\nsecond paragraph\n";
-        for strategy in [
-            ChunkStrategy::Fixed,
-            ChunkStrategy::Paragraph,
-            ChunkStrategy::Heading,
-        ] {
-            let opts = ChunkOptions {
-                max_size: 24,
-                overlap: 4,
-                strategy,
-            };
-            let chunks = chunker::chunk_text(text, &opts, "selfcheck");
-            anyhow::ensure!(!chunks.is_empty(), "empty chunks for {strategy:?}");
+    run!(
+        failed,
+        "fragmentación: fija, por párrafos y por encabezados",
+        || {
+            let text = "# Title\n\nword word word word word word\n\nsecond paragraph\n";
+            for strategy in [
+                ChunkStrategy::Fixed,
+                ChunkStrategy::Paragraph,
+                ChunkStrategy::Heading,
+            ] {
+                let opts = ChunkOptions {
+                    max_size: 24,
+                    overlap: 4,
+                    strategy,
+                };
+                let chunks = chunker::chunk_text(text, &opts, "selfcheck");
+                anyhow::ensure!(!chunks.is_empty(), "fragmentos vacíos para {strategy:?}");
+            }
+            Ok(())
         }
-        Ok(())
-    });
+    );
 
-    run!(failed, "extractor: format detection + HTML", || {
+    run!(failed, "extracción: detección de formato y HTML", || {
         anyhow::ensure!(
             Format::from_extension(Path::new("doc.pdf")) == Format::Pdf,
-            "pdf detection failed"
+            "detección de PDF fallida"
         );
         let text = extractor::extract_text("<html><body><h1>Hola</h1></body></html>", "text/html");
-        anyhow::ensure!(text.contains("Hola"), "HTML text missing");
+        anyhow::ensure!(text.contains("Hola"), "falta el texto HTML");
         let md = extractor::html_to_markdown("<h1>Hola</h1><p>mundo</p>");
         anyhow::ensure!(
             md.contains("# Hola") && md.contains("mundo"),
-            "markdown failed"
+            "fallo de Markdown"
         );
         Ok(())
     });
 
-    run!(failed, "retrieval: add + search + reload", || {
+    run!(failed, "RAG: alta, búsqueda y recarga", || {
         let dir = root.join("index");
         let mut index = KnowledgeIndex::load(&dir)?;
         let content = "selfcheck knowledge entry";
@@ -137,14 +145,14 @@ fn run_checks(root: &Path) -> Result<()> {
         index.add_entry(entry)?;
         anyhow::ensure!(
             !index.search("selfcheck", 5).is_empty(),
-            "search returned nothing"
+            "la búsqueda no devolvió nada"
         );
         let reloaded = KnowledgeIndex::load(&dir)?;
-        anyhow::ensure!(reloaded.len() == 1, "reload lost entries");
+        anyhow::ensure!(reloaded.len() == 1, "la recarga perdió entradas");
         Ok(())
     });
 
-    run!(failed, "memvid: conversation + knowledge roundtrip", || {
+    run!(failed, "memoria .mv2: conversación y conocimiento", || {
         let dir = root.join("mv2");
         let mut writer = MemvidWriter::init(WriterConfig {
             data_dir: dir.clone(),
@@ -171,15 +179,15 @@ fn run_checks(root: &Path) -> Result<()> {
             .conversation_segments
             .last()
             .map(|s| s.filename.clone())
-            .ok_or_else(|| anyhow::anyhow!("conversation segment missing"))?;
+            .ok_or_else(|| anyhow::anyhow!("falta el segmento de conversación"))?;
         let conv_path = dir.join("conversations").join(conv_name);
         let mut reader = Reader::open(&conv_path)?;
         let frames = reader.enumerate()?;
-        anyhow::ensure!(!frames.is_empty(), "conversation has no frames");
+        anyhow::ensure!(!frames.is_empty(), "la conversación no tiene frames");
         let text = reader.read_text(frames[0].id)?;
         anyhow::ensure!(
             text.contains("selfcheck conversation"),
-            "conversation payload missing"
+            "falta el contenido de la conversación"
         );
 
         let content = "selfcheck knowledge";
@@ -198,27 +206,33 @@ fn run_checks(root: &Path) -> Result<()> {
             .knowledge_segments
             .last()
             .map(|s| s.filename.clone())
-            .ok_or_else(|| anyhow::anyhow!("knowledge segment missing"))?;
+            .ok_or_else(|| anyhow::anyhow!("falta el segmento de conocimiento"))?;
         let know_path = dir.join("knowledge").join(know_name);
         let mut reader = Reader::open(&know_path)?;
         let frames = reader.enumerate()?;
-        anyhow::ensure!(!frames.is_empty(), "knowledge has no frames");
+        anyhow::ensure!(!frames.is_empty(), "el conocimiento no tiene frames");
         Ok(())
     });
 
-    run!(failed, "queue: add + pending + mark done", || {
+    run!(failed, "cola: alta, pendiente y completado", || {
         let mut queue = FeedQueue::new(root);
         queue.add("https://example.com/selfcheck")?;
-        anyhow::ensure!(queue.pending().len() == 1, "pending count wrong");
+        anyhow::ensure!(
+            queue.pending().len() == 1,
+            "recuento de pendientes incorrecto"
+        );
         let id = queue.pending()[0].id.clone();
         queue.mark_done(&id)?;
-        anyhow::ensure!(queue.stats().done == 1, "done count wrong");
+        anyhow::ensure!(
+            queue.stats().done == 1,
+            "recuento de completados incorrecto"
+        );
         let reloaded = FeedQueue::new(root);
-        anyhow::ensure!(reloaded.stats().done == 1, "queue not persisted");
+        anyhow::ensure!(reloaded.stats().done == 1, "la cola no se persistió");
         Ok(())
     });
 
-    run!(failed, "feeds: parse RSS", || {
+    run!(failed, "feeds: lectura de RSS", || {
         let xml = r#"<?xml version="1.0"?>
 <rss version="2.0"><channel>
 <title>SelfCheck</title><link>https://example.com</link><description>d</description>
@@ -226,12 +240,12 @@ fn run_checks(root: &Path) -> Result<()> {
 <description>body</description></item>
 </channel></rss>"#;
         let entries = feeds::parse_feed_xml(xml, "https://example.com/feed")?;
-        anyhow::ensure!(entries.len() == 1, "feed entries wrong");
-        anyhow::ensure!(entries[0].url.contains("entry"), "feed URL wrong");
+        anyhow::ensure!(entries.len() == 1, "entradas de feed incorrectas");
+        anyhow::ensure!(entries[0].url.contains("entry"), "URL de feed incorrecta");
         Ok(())
     });
 
-    run!(failed, "books: prepare catalog snippet", || {
+    run!(failed, "libros: preparación del catálogo", || {
         let books = LanguageBooks {
             language: "SelfCheck".to_string(),
             resources: vec![BookResource {
@@ -243,12 +257,12 @@ fn run_checks(root: &Path) -> Result<()> {
         let text = prepare_knowledge_from_books(&books, 10);
         anyhow::ensure!(
             text.contains("Book") && text.contains("example.com"),
-            "books failed"
+            "fallo en libros"
         );
         Ok(())
     });
 
-    run!(failed, "prompts: ChatML + RAG context", || {
+    run!(failed, "prompts: ChatML y contexto RAG", || {
         let prompt = PromptBuilder::new(ChatTemplate::ChatML).build(
             &[Message {
                 role: MessageRole::User,
@@ -259,36 +273,36 @@ fn run_checks(root: &Path) -> Result<()> {
             "hola",
             &["[doc] contexto".to_string()],
         );
-        anyhow::ensure!(prompt.contains("hola"), "user input missing");
-        anyhow::ensure!(prompt.contains("contexto"), "RAG context missing");
+        anyhow::ensure!(prompt.contains("hola"), "falta la entrada del usuario");
+        anyhow::ensure!(prompt.contains("contexto"), "falta el contexto RAG");
         Ok(())
     });
 
-    run!(failed, "models: catalog loads", || {
+    run!(failed, "modelos: carga del catálogo", || {
         let catalog = ModelsCatalog::load();
-        anyhow::ensure!(catalog.list().len() >= 20, "catalog too small");
+        anyhow::ensure!(catalog.list().len() >= 20, "catálogo demasiado pequeño");
         anyhow::ensure!(
             catalog.find("qwen2.5-0.5b").is_some(),
-            "default model missing"
+            "falta el modelo por defecto"
         );
         Ok(())
     });
 
-    run!(failed, "finetune: estimate + command render", || {
+    run!(failed, "ajuste fino: estimación y comando", || {
         let est = finetune::estimate(1_000, 500_000_000, 3, 4);
-        anyhow::ensure!(est.ram_gb() > 0.0, "invalid RAM estimate");
+        anyhow::ensure!(est.ram_gb() > 0.0, "estimación de RAM inválida");
         let cmd = finetune::render_command(
             "llama-finetune",
             &["-m".to_string(), "model path".to_string()],
         );
-        anyhow::ensure!(cmd.contains("\"model path\""), "command not quoted");
+        anyhow::ensure!(cmd.contains("\"model path\""), "comando sin comillas");
         Ok(())
     });
 
     if failed > 0 {
         bail!("{failed} self-check(s) failed");
     }
-    println!("self-test: all checks passed");
+    println!("autodiagnóstico: todo correcto");
     Ok(())
 }
 

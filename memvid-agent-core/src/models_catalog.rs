@@ -40,7 +40,7 @@ impl ModelsCatalog {
     }
 
     pub fn download(entry: &ModelEntry, target_dir: &Path) -> Result<PathBuf> {
-        let target_path = target_dir.join(format!("{}.gguf", entry.id));
+        let target_path = model_path(target_dir, &entry.id);
         if target_path.exists() {
             if let Some(ref expected_sha) = entry.sha256 {
                 let actual_sha = crate::utils::compute_file_checksum(&target_path)?;
@@ -49,7 +49,7 @@ impl ModelsCatalog {
                     let _ = std::fs::remove_file(&target_path);
                 } else {
                     eprintln!(
-                        "  {} Model already exists at {}",
+                        "  {} El modelo ya existe en {}",
                         "✓".green(),
                         target_path.display()
                     );
@@ -57,7 +57,7 @@ impl ModelsCatalog {
                 }
             } else {
                 eprintln!(
-                    "  {} Model already exists at {}",
+                    "  {} El modelo ya existe en {}",
                     "✓".green(),
                     target_path.display()
                 );
@@ -65,7 +65,7 @@ impl ModelsCatalog {
             }
         }
 
-        std::fs::create_dir_all(target_dir).context("Failed to create models directory")?;
+        std::fs::create_dir_all(target_dir).context("No se pudo crear el directorio de modelos")?;
 
         let spinner = indicatif::ProgressBar::new_spinner();
         spinner.set_style(
@@ -73,14 +73,14 @@ impl ModelsCatalog {
                 .template("{spinner:.cyan} {msg}")
                 .expect("Invalid spinner template"),
         );
-        spinner.set_message(format!("Connecting to download {}…", entry.name));
+        spinner.set_message(format!("Conectando para descargar {}…", entry.name));
         spinner.enable_steady_tick(std::time::Duration::from_millis(80));
 
         let resp = match ureq::get(&entry.url).call() {
             Ok(r) => r,
             Err(e) => {
-                spinner.finish_with_message(format!("{} Download failed", "✗".red()));
-                return Err(e).context("Failed to start model download");
+                spinner.finish_with_message(format!("{} Descarga fallida", "✗".red()));
+                return Err(e).context("No se pudo iniciar la descarga del modelo");
             }
         };
 
@@ -102,13 +102,13 @@ impl ModelsCatalog {
                     .progress_chars("##-"),
             );
             pb.set_message(format!(
-                "Downloading {} ({:.1} MB)",
+                "Descargando {} ({:.1} MB)",
                 entry.name,
                 total as f64 / 1_048_576.0
             ));
 
-            let mut out =
-                std::fs::File::create(&target_path).context("Failed to create model file")?;
+            let mut out = std::fs::File::create(&target_path)
+                .context("No se pudo crear el archivo del modelo")?;
             let mut downloaded: u64 = 0;
             let mut buf = [0u8; 65536];
             let mut reader = resp.into_body().into_reader();
@@ -120,23 +120,24 @@ impl ModelsCatalog {
                     Err(e) => {
                         drop(out);
                         let _ = std::fs::remove_file(&target_path);
-                        pb.finish_with_message(format!("{} Download failed", "✗".red()));
-                        return Err(e).context("Failed to read download stream");
+                        pb.finish_with_message(format!("{} Descarga fallida", "✗".red()));
+                        return Err(e).context("No se pudo leer el flujo de descarga");
                     }
                 };
                 if let Err(e) = out.write_all(&buf[..n]) {
                     drop(out);
                     let _ = std::fs::remove_file(&target_path);
-                    pb.finish_with_message(format!("{} Download failed", "✗".red()));
-                    return Err(e).context("Failed to write model file");
+                    pb.finish_with_message(format!("{} Descarga fallida", "✗".red()));
+                    return Err(e).context("No se pudo escribir el archivo del modelo");
                 }
                 downloaded += n as u64;
                 pb.set_position(downloaded);
             }
 
-            out.sync_all().context("Failed to sync model file")?;
+            out.sync_all()
+                .context("No se pudo sincronizar el archivo del modelo")?;
             drop(out);
-            pb.finish_with_message(format!("{} Model downloaded", "✓".green()));
+            pb.finish_with_message(format!("{} Modelo descargado", "✓".green()));
             eprintln!();
         } else {
             let pb = indicatif::ProgressBar::new_spinner();
@@ -145,11 +146,11 @@ impl ModelsCatalog {
                     .template("{spinner:.cyan} {msg}")
                     .expect("Invalid spinner template"),
             );
-            pb.set_message(format!("Downloading {}…", entry.name));
+            pb.set_message(format!("Descargando {}…", entry.name));
             pb.enable_steady_tick(std::time::Duration::from_millis(80));
 
-            let mut out =
-                std::fs::File::create(&target_path).context("Failed to create model file")?;
+            let mut out = std::fs::File::create(&target_path)
+                .context("No se pudo crear el archivo del modelo")?;
             let mut buf = [0u8; 65536];
             let mut reader = resp.into_body().into_reader();
 
@@ -160,21 +161,22 @@ impl ModelsCatalog {
                     Err(e) => {
                         drop(out);
                         let _ = std::fs::remove_file(&target_path);
-                        pb.finish_with_message(format!("{} Download failed", "✗".red()));
-                        return Err(e).context("Failed to read download stream");
+                        pb.finish_with_message(format!("{} Descarga fallida", "✗".red()));
+                        return Err(e).context("No se pudo leer el flujo de descarga");
                     }
                 };
                 if let Err(e) = out.write_all(&buf[..n]) {
                     drop(out);
                     let _ = std::fs::remove_file(&target_path);
-                    pb.finish_with_message(format!("{} Download failed", "✗".red()));
-                    return Err(e).context("Failed to write model file");
+                    pb.finish_with_message(format!("{} Descarga fallida", "✗".red()));
+                    return Err(e).context("No se pudo escribir el archivo del modelo");
                 }
             }
 
-            out.sync_all().context("Failed to sync model file")?;
+            out.sync_all()
+                .context("No se pudo sincronizar el archivo del modelo")?;
             drop(out);
-            pb.finish_with_message(format!("{} Model downloaded", "✓".green()));
+            pb.finish_with_message(format!("{} Modelo descargado", "✓".green()));
             eprintln!();
         }
 
@@ -185,7 +187,7 @@ impl ModelsCatalog {
                     .template("{spinner:.cyan} {msg}")
                     .expect("Invalid spinner template"),
             );
-            spinner.set_message("Verifying checksum…");
+            spinner.set_message("Verificando checksum…");
             spinner.enable_steady_tick(std::time::Duration::from_millis(80));
 
             let actual_sha = crate::utils::compute_file_checksum(&target_path)?;
@@ -199,11 +201,20 @@ impl ModelsCatalog {
                     actual_sha
                 );
             }
-            eprintln!("  {} Checksum verified", "✓".green());
+            eprintln!("  {} Checksum verificado", "✓".green());
         }
 
         Ok(target_path)
     }
+}
+
+/// Canonical on-disk path for a catalog model.
+///
+/// Do not use `Path::with_extension` here: ids such as `qwen2.5-1.5b` contain
+/// a dot and `with_extension("gguf")` would produce `qwen2.5-1.gguf`, causing a
+/// second download under a different name.
+pub fn model_path(target_dir: &Path, id: &str) -> PathBuf {
+    target_dir.join(format!("{}.gguf", id))
 }
 
 pub fn download_model(entry: &ModelEntry, target_dir: &Path) -> Result<PathBuf> {
@@ -242,6 +253,12 @@ pub fn apply_model_to_config_with_path(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn model_path_preserves_dots_in_id() {
+        let path = model_path(std::path::Path::new("models"), "qwen2.5-1.5b");
+        assert_eq!(path, std::path::Path::new("models/qwen2.5-1.5b.gguf"));
+    }
 
     #[test]
     fn catalog_loads() {

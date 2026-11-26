@@ -64,7 +64,7 @@ Override download repo: `LLAMA_LIBS_REPO=user/repo`.
 - **License**: Apache 2.0, Copyright 2026 Dinámicas Electrónicas <dinamicas.electronicas@gmail.com>
 - **Chunker UTF-8 safe** — `floor_char_boundary()` on overlap to avoid panics on multi-byte chars
 - **`ingest <file>` auto-detects format** via `Format::from_extension()` (pdf/epub/md/html → text fallback)
-- **Env overrides**: `MODEL_PATH`, `MODEL_NAME`, `MODEL_CTX`, `MODEL_URL` (applied on config load); `ATEN_THREADS` sets inference threads; `ATEN_API_MAX_CONNS` caps HTTP connections
+- **Env overrides**: `MODEL_PATH`, `MODEL_NAME`, `MODEL_CTX`, `MODEL_URL` (applied on config load); `ATEN_THREADS` sets inference threads; `ATEN_API_MAX_CONNS` caps HTTP connections; `ATEN_LOG` sets the tracing level (default `warn`)
 - **Default model**: `Qwen2.5-0.5B-Instruct` (`n_ctx: 8192`, `chat_template: chatml`, auto-downloads from HuggingFace)
 - **llama.cpp verbose suppressed** at startup via `llama_log_set(noop_log)` in `context.rs`
 - **Decode chunked** — `decode()` processes tokens in chunks of `n_batch` size to avoid GGML_ASSERT failures
@@ -81,7 +81,7 @@ Use `/debug` command in REPL to see RAG retrieval debug info after each query:
 
 ## Testing
 
-~556 unit + integration tests. Integration tests use `tempfile::tempdir()` + `LlamaContext::null()` — no GGUF model required:
+~559 unit + integration tests. Integration tests use `tempfile::tempdir()` + `LlamaContext::null()` — no GGUF model required:
 - `tests/functional.rs`
 - `tests/writer_integration.rs`
 - `tests/kv_cache_and_history.rs`

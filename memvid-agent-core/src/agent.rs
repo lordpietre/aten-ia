@@ -177,7 +177,7 @@ impl Agent {
         self.session.push_message(Message {
             role: MessageRole::System,
             content: format!(
-                "The user has loaded the file '{}' with the following content:\n\n{}",
+                "El usuario ha cargado el archivo '{}' con el siguiente contenido:\n\n{}",
                 filename, content
             ),
             timestamp: Utc::now(),
@@ -193,7 +193,7 @@ impl Agent {
         self.session.push_message(Message {
             role: MessageRole::System,
             content: format!(
-                "The user has ingested the file '{}' ({} chars). Its content is indexed and available through RAG.",
+                "El usuario ha indexado el archivo '{}' ({} caracteres). Su contenido está disponible mediante RAG.",
                 filename,
                 content.chars().count()
             ),
@@ -219,7 +219,7 @@ impl Agent {
         self.session.push_message(Message {
             role: MessageRole::System,
             content: format!(
-                "The user has loaded the file '{}' ({} format, {} chars).",
+                "El usuario ha cargado el archivo '{}' (formato {}, {} caracteres).",
                 source,
                 extracted.format,
                 extracted.content.len(),
@@ -309,7 +309,7 @@ impl Agent {
         self.session.push_message(Message {
             role: MessageRole::System,
             content: format!(
-                "The user fetched URL '{}'{} — {} chunks indexed as knowledge.",
+                "El usuario descargó la URL '{}'{} — {} fragmentos indexados como conocimiento.",
                 url, title_info, indexed
             ),
             timestamp: Utc::now(),
@@ -362,7 +362,7 @@ impl Agent {
         self.session.push_message(Message {
             role: MessageRole::System,
             content: format!(
-                "Feed '{}' fetched — {} entries found, {} indexed, {} failed.",
+                "Feed '{}' descargado — {} entradas encontradas, {} indexadas, {} fallidas.",
                 url,
                 total,
                 indexed,
@@ -581,7 +581,7 @@ impl Agent {
             .map(|s| s.message_count)
             .sum();
         Ok(format!(
-            "{} conversations stored ({} segments), {} knowledge entries ({} indexed)",
+            "{} conversaciones guardadas ({} segmentos), {} entradas de conocimiento ({} indexadas)",
             total_chats,
             conv_count,
             know_count,
@@ -623,10 +623,10 @@ impl Agent {
                         let role = msg["role"].as_str().unwrap_or("unknown");
                         let content = msg["content"].as_str().unwrap_or("");
                         let label = match role {
-                            "user" => "You",
-                            "assistant" => "Assistant",
-                            "system" => "System",
-                            "tool" => "Tool",
+                            "user" => "Tú",
+                            "assistant" => "Asistente",
+                            "system" => "Sistema",
+                            "tool" => "Herramienta",
                             _ => role,
                         };
                         // UTF-8-safe truncation: byte slicing `&content[..500]`
@@ -786,9 +786,9 @@ mod tests {
         let agent = test_agent(dir.path());
 
         let summary = agent.memory_summary().unwrap();
-        assert!(summary.contains("0 conversations"));
-        assert!(summary.contains("0 knowledge entries"));
-        assert!(summary.contains("0 indexed"));
+        assert!(summary.contains("0 conversaciones"));
+        assert!(summary.contains("0 entradas de conocimiento"));
+        assert!(summary.contains("0 indexadas"));
     }
 
     #[test]
@@ -799,7 +799,7 @@ mod tests {
         agent.store_knowledge_direct("src", "some content").unwrap();
         let summary = agent.memory_summary().unwrap();
         // Indexed entries visible immediately; segments appear after flush
-        assert!(summary.contains("1 indexed"));
+        assert!(summary.contains("1 indexadas"));
     }
 
     #[test]
@@ -1026,6 +1026,6 @@ mod tests {
             .store_knowledge_chunked("src", "some content", &opts)
             .unwrap();
         let summary = agent.memory_summary().unwrap();
-        assert!(summary.contains("1 indexed"));
+        assert!(summary.contains("1 indexadas"));
     }
 }

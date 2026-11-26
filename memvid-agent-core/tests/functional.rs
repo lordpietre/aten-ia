@@ -326,13 +326,13 @@ fn agent_memory_summary_tracks_counts() {
     let dir = tempfile::tempdir().unwrap();
     let agent = test_agent(dir.path());
     let summary = agent.memory_summary().unwrap();
-    assert!(summary.contains("0 conversations"));
-    assert!(summary.contains("0 knowledge entries"));
+    assert!(summary.contains("0 conversaciones"));
+    assert!(summary.contains("0 entradas de conocimiento"));
 
     let mut agent = agent;
     agent.store_knowledge_direct("src", "content").unwrap();
     let summary = agent.memory_summary().unwrap();
-    assert!(summary.contains("1 indexed"));
+    assert!(summary.contains("1 indexadas"));
 }
 
 #[test]
