@@ -11,7 +11,6 @@ use memvid_agent_core::models_catalog::{self, ModelsCatalog};
 use memvid_agent_core::queue::FeedQueue;
 use memvid_agent_core::shutdown;
 use memvid_agent_core::utils::FileLock;
-use std::io::Write;
 use std::sync::{Arc, Mutex};
 
 fn main() -> Result<()> {
@@ -554,159 +553,23 @@ fn main() -> Result<()> {
             let token = config.api.token.clone();
 
             println!();
-            println!(
-                "{} Servidor API escuchando en http://{}:{}",
-                "●".bright_green(),
-                host,
-                port
-            );
+            println!("{}", "━━━ API ━━━".bold());
+            println!("  URL base: http://{}:{}/v1", host, port);
             if let Some(ref t) = token {
-                println!("{} Token: {}", "  clave".dimmed(), t.bright_yellow());
-                println!("{} Usa: Authorization: Bearer {}", "  auth".dimmed(), t);
+                println!("  Token: {}", t.bright_yellow());
+                println!("  Cabecera: Authorization: Bearer {}", t);
             } else {
-                println!("{} Sin autenticación configurada", "  auth".dimmed());
+                println!("  Sin autenticación configurada");
             }
-
             println!();
-            println!("{}", "━━━ Configuración de clientes ━━━".bold());
-            println!();
-            println!("  1. OpenCode     - asistente de código (opencode.ai)");
-            println!("  2. VS Code      - con la extensión Continue");
-            println!("  3. Omitir       - sin instrucciones");
-            println!();
-
-            loop {
-                print!("{} Elige cliente (1/2/3): ", "?".yellow());
-                std::io::stdout().flush().ok();
-                let mut choice = String::new();
-                if std::io::stdin().read_line(&mut choice).is_err() {
-                    break;
-                }
-                let choice = choice.trim();
-
-                match choice {
-                    "1" => {
-                        let config_content = format!(
-                            r#"{{
-  "$schema": "https://opencode.ai/config.json",
-  "model": "openai/{model}",
-  "provider": {{
-    "openai": {{
-      "options": {{
-        "baseURL": "http://localhost:{port}/v1",
-        "apiKey": "{token}"
-      }}
-    }}
-  }},
-  "agent": {{
-    "aten-ia": {{
-      "description": "Agente local de aten-ia — conoce toda la codebase y arquitectura del proyecto. Usa el LLM local para responder preguntas sobre el código, RAG, persistencia, y más.",
-      "mode": "primary",
-      "model": "openai/{model}",
-      "instructions": ["AGENTS.md"]
-    }}
-  }},
-  "default_agent": "aten-ia"
-}}"#,
-                            model = model_name,
-                            port = port,
-                            token = token.as_ref().unwrap()
-                        );
-
-                        let write_config = |path: &std::path::Path| -> Result<()> {
-                            if let Some(parent) = path.parent() {
-                                std::fs::create_dir_all(parent).ok();
-                            }
-                            memvid_agent_core::utils::atomic_write(path, &config_content)?;
-                            println!(
-                                "{} Configuración de OpenCode escrita en {}",
-                                "✓".green(),
-                                path.display()
-                            );
-                            Ok(())
-                        };
-
-                        // Global config
-                        let global_path = std::env::var("HOME")
-                            .map(|h| {
-                                std::path::PathBuf::from(h).join(".config/opencode/opencode.json")
-                            })
-                            .unwrap_or_else(|_| std::path::PathBuf::from(".opencode.json"));
-                        if let Err(e) = write_config(&global_path) {
-                            println!(
-                                "{} No se pudo escribir la configuración global: {}",
-                                "✗".red(),
-                                e
-                            );
-                        }
-
-                        // Project-level config (parent of CWD, i.e. project root)
-                        if let Ok(cwd) = std::env::current_dir() {
-                            if let Some(parent) = cwd.parent() {
-                                let project_path = parent.join("opencode.json");
-                                let should_write = if project_path.exists() {
-                                    true
-                                } else {
-                                    let ans = read_line_prompt(&format!(
-                                        "{} ¿Escribir configuración del proyecto en {}? (S/n): ",
-                                        "?".yellow(),
-                                        project_path.display()
-                                    ));
-                                    ans.is_empty() || ans.to_lowercase() == "y"
-                                };
-                                if should_write {
-                                    if let Err(e) = write_config(&project_path) {
-                                        println!(
-                                            "{} No se pudo escribir la configuración del proyecto: {}",
-                                            "✗".red(),
-                                            e
-                                        );
-                                    }
-                                }
-                            }
-                        }
-
-                        println!("  {} Reinicia opencode tras crear el archivo", "↳".dimmed());
-                        break;
-                    }
-                    "2" => {
-                        println!();
-                        println!("{} Configuración de VS Code", "━━━".dimmed());
-                        println!();
-                        println!("  1. Instala la extensión 'Continue' en VS Code");
-                        println!("  2. Ve a Ajustes → Extensiones → Continue");
-                        println!("  3. Configura:");
-                        println!();
-                        let config_lines = format!(
-                            r#"{{
-  "openai-compatible": {{
-    "api_base": "http://localhost:{port}/v1",
-    "api_key": "{token}",
-    "title": "aten-ia"
-  }}
-}}"#,
-                            port = port,
-                            token = token.as_ref().unwrap()
-                        );
-                        for line in config_lines.lines() {
-                            println!("    {}", line);
-                        }
-                        println!();
-                        println!(
-                            "  {} O usa config.json en la carpeta .continue",
-                            "↳".dimmed()
-                        );
-                        break;
-                    }
-                    "3" | "" => {
-                        println!("  {} Omitido", "↳".dimmed());
-                        break;
-                    }
-                    _ => {
-                        println!("  {} Opción no válida, inténtalo de nuevo", "✗".red());
-                    }
-                }
-            }
+            println!(
+                "  {} Configura en OpenCode un proveedor OpenAI-compatible con esa URL y token.",
+                "↳".dimmed()
+            );
+            println!(
+                "  {} No se escriben archivos de configuración automáticamente.",
+                "↳".dimmed()
+            );
             println!();
 
             std::thread::spawn(move || {
@@ -2036,81 +1899,11 @@ fn run_setup_wizard(config: &mut Config, catalog: &ModelsCatalog) -> Result<()> 
             token.bright_yellow()
         );
 
-        let setup_opencode = read_line_prompt(&format!(
-            "{} ¿Generar configuración de OpenCode? (S/n): ",
-            "•".dimmed()
-        ));
-        if setup_opencode.is_empty() || setup_opencode.to_lowercase() == "y" {
-            let oc_content = format!(
-                r#"{{
-  "$schema": "https://opencode.ai/config.json",
-  "model": "openai/{model}",
-  "provider": {{
-    "openai": {{
-      "options": {{
-        "baseURL": "http://localhost:{port}/v1",
-        "apiKey": "{token}"
-      }}
-    }}
-  }},
-  "agent": {{
-    "aten-ia": {{
-      "description": "Agente local de aten-ia — conoce toda la codebase y arquitectura del proyecto. Usa el LLM local para responder preguntas sobre el código, RAG, persistencia, y más.",
-      "mode": "primary",
-      "model": "openai/{model}",
-      "instructions": ["AGENTS.md"]
-    }}
-  }},
-  "default_agent": "aten-ia"
-}}"#,
-                model = config.model.name,
-                port = config.api.port,
-                token = token
-            );
-
-            let global_path = std::env::var("HOME")
-                .map(|h| std::path::PathBuf::from(h).join(".config/opencode/opencode.json"))
-                .unwrap_or_else(|_| std::path::PathBuf::from(".opencode.json"));
-            if let Some(parent) = global_path.parent() {
-                std::fs::create_dir_all(parent).ok();
-            }
-            if memvid_agent_core::utils::atomic_write(&global_path, &oc_content).is_ok() {
-                println!(
-                    "  {} Configuración global de OpenCode escrita en {}",
-                    "✓".green(),
-                    global_path.display()
-                );
-            }
-
-            if let Ok(cwd) = std::env::current_dir() {
-                if let Some(parent) = cwd.parent() {
-                    let project_path = parent.join("opencode.json");
-                    if project_path.exists() || {
-                        let ans = read_line_prompt(&format!(
-                            "{} ¿Escribir configuración del proyecto en {}? (S/n): ",
-                            "•".dimmed(),
-                            project_path.display()
-                        ));
-                        ans.is_empty() || ans.to_lowercase() == "y"
-                    } {
-                        if memvid_agent_core::utils::atomic_write(&project_path, &oc_content)
-                            .is_ok()
-                        {
-                            println!(
-                                "  {} Configuración del proyecto de OpenCode escrita en {}",
-                                "✓".green(),
-                                project_path.display()
-                            );
-                        }
-                    }
-                }
-            }
-
-            println!(
-                "  {} Reinicia opencode después de actualizar la configuración",
-                "↳".dimmed()
-            );
-        }
+        println!(
+            "  {} OpenCode: usa un proveedor OpenAI-compatible en http://localhost:{}/v1 con ese token.",
+            "↳".dimmed(),
+            config.api.port
+        );
     }
 
     config.save()?;

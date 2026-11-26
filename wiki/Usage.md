@@ -162,24 +162,17 @@ Notas:
 
 ## Configurar OpenCode
 
-`/token` escribe automáticamente la configuración global (`~/.config/opencode/opencode.json`) y, opcionalmente, la del proyecto (`<padre-del-cwd>/opencode.json`):
+`/token` **no escribe archivos**: muestra la URL base y el token para que los
+configures manualmente.
 
-```json
-{
-  "$schema": "https://opencode.ai/config.json",
-  "model": "openai/Qwen2.5-0.5B-Instruct",
-  "provider": {
-    "openai": {
-      "options": {
-        "baseURL": "http://localhost:8787/v1",
-        "apiKey": "<token>"
-      }
-    }
-  }
-}
+```
+URL base: http://127.0.0.1:8787/v1
+Token: <token>
 ```
 
-Reinicia OpenCode después de generarla. (Ejemplo simplificado: el archivo real incluye además un agente `aten-ia`, `default_agent` e `instructions: ["AGENTS.md"]`.)
+En OpenCode, crea un proveedor OpenAI-compatible con esa `baseURL` y `apiKey`
+según la documentación de tu versión. No reutilices un `opencode.json` generado
+por versiones anteriores de aten-ia; revísalo o elimínalo.
 
 ## Configurar VS Code (Continue)
 

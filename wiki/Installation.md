@@ -103,7 +103,7 @@ Si no existe `config.json` en el directorio de trabajo, se inicia un asistente q
 1. **Directorio de datos** — por defecto `~/.aten-ia` (o `memvid_data` si no hay `$HOME`).
 2. **Modelo** — una de las 21 entradas del catálogo.
 3. **Documentación de un lenguaje** — opcional.
-4. **Servidor API** — puerto, token generado y configuración de OpenCode.
+4. **Servidor API** — puerto y token (sin escribir configuraciones de terceros).
 
 El modelo se descarga automáticamente de HuggingFace si no está en disco.
 

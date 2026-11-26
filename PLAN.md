@@ -125,6 +125,7 @@ Estados: ✅ hecho, 🚧 en curso, ⏳ pendiente, ⚠️ requiere decisión.
 - [x] ✅ `--purge-data`: desinstalación de datos de usuario con plan, confirmación y protecciones.
 - [x] ✅ `postrm` del paquete para directorios de sistema y aviso de datos de usuario.
 - [x] ✅ `scripts/uninstall-deb.sh` y documentación de rutas residuales.
+- [x] ✅ `/token` ya no escribe `opencode.json`: muestra URL base y token para configuración manual.
 
 ## Registro de verificación
 
@@ -146,5 +147,6 @@ Estados: ✅ hecho, 🚧 en curso, ⏳ pendiente, ⚠️ requiere decisión.
 | 2026-11-26 | UI en español, logs silenciados y fix doble descarga | ✅ 559 tests, 0 fallos |
 | 2026-11-26 | Instalador/desinstalador y `--purge-data` | ✅ 562 tests, 0 fallos |
 | 2026-11-26 | `.deb`: instalación, purge y postrm en contenedor | ✅ sin restos |
+| 2026-11-26 | `/token` sin escritura de configuraciones de terceros | ✅ 562 tests |
 | 2026-11-25 | Límite de conexiones HTTP y progreso `/batch` | ✅ build + tests |
 | 2026-11-26 | `.deb` portable 0.3.12 | ✅ Ubuntu 20.04/22.04, Debian 11/12 |

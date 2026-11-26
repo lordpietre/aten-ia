@@ -25,7 +25,7 @@ Inferencia 100% local: no requiere GPU, API keys ni servicios externos. Solo nec
 | **Aprendizaje de lenguajes** | `/learn <lang>` descarga e indexa documentación de programación; `/unlearn` la elimina |
 | **Fine-tuning** | Full fine-tune del modelo activo sobre los docs aprendidos, con estimación previa de RAM y tiempo |
 | **API OpenAI-compatible** | `/v1/chat/completions` (SSE y parámetros por petición), `/v1/models`, `/health`, autenticación Bearer |
-| **Integración con clientes** | `/token` genera configuración para OpenCode y muestra la de VS Code (Continue) |
+| **Integración con clientes** | `/token` muestra URL y token para configurar OpenCode, VS Code u otros clientes |
 | **Gestión de estado** | FileLock contra instancias concurrentes, flush de sesión cada 5 interacciones y apagado graceful (SIGINT/SIGTERM) |
 
 ---
@@ -84,7 +84,7 @@ Si no existe `config.json`, se lanza un asistente interactivo que configura:
 1. Directorio de datos (por defecto `~/.aten-ia`, o `memvid_data` si `$HOME` no existe).
 2. Modelo inicial del catálogo (21 opciones).
 3. Documentación de un lenguaje (opcional).
-4. Servidor API: puerto, token generado y configuración de OpenCode (global y de proyecto).
+4. Servidor API: puerto y token (se muestra para configurarlo manualmente).
 
 Al terminar, el modelo se descarga automáticamente con barra de progreso si aún no está en disco (por defecto `Qwen2.5-0.5B-Instruct`, ~350 MB).
 
@@ -154,7 +154,7 @@ Los comandos aceptan mayúsculas en muchos casos (`/MODELS`, `/MODEL`, `/SEARCH`
 
 | Comando | Descripción |
 |---|---|
-| `/token` | Habilita la API, genera token si falta, arranca el servidor y ofrece configurar OpenCode/VS Code |
+| `/token` | Habilita la API, genera token si falta, arranca el servidor y muestra URL/token para clientes |
 
 > Nota: `/token` genera un token si falta y escucha en `api.host` (**127.0.0.1** por defecto). Para acceder desde la red, cambia `api.host` a `0.0.0.0` y usa TLS/reverse proxy: el token viaja en claro por HTTP.
 
@@ -199,12 +199,19 @@ curl http://localhost:8787/v1/chat/completions \
   -d '{"messages":[{"role":"user","content":"hola"}],"stream":true}'
 ```
 
-### Clientes
+### Conectar clientes
 
-`/token` ofrece instrucciones y, en el caso de OpenCode, escribe la configuración:
+`/token` **no escribe archivos de configuración**. Muestra la URL base y el token:
 
-- **OpenCode:** `~/.config/opencode/opencode.json` y, opcionalmente, `<padre-del-cwd>/opencode.json`. El proveedor se configura como `openai` con `baseURL: http://localhost:<puerto>/v1`.
-- **VS Code (Continue):** muestra el bloque `openai-compatible` con `api_base` y `api_key`.
+```
+URL base: http://127.0.0.1:8787/v1
+Token: <token>
+Cabecera: Authorization: Bearer <token>
+```
+
+- **OpenCode:** añade un proveedor OpenAI-compatible con `baseURL`/`apiKey` según la documentación de tu versión. Si ya tenías un `opencode.json` generado por una versión anterior, revísalo o elimínalo.
+- **VS Code (Continue):** usa `apiBase: http://127.0.0.1:8787/v1` y `apiKey: <token>`.
+- **Otros clientes:** cualquier cliente OpenAI-compatible sirve; comprueba con el `curl` de arriba.
 
 ---
 
