@@ -209,9 +209,62 @@ Token: <token>
 Cabecera: Authorization: Bearer <token>
 ```
 
-- **OpenCode:** añade un proveedor OpenAI-compatible con `baseURL`/`apiKey` según la documentación de tu versión. Si ya tenías un `opencode.json` generado por una versión anterior, revísalo o elimínalo.
-- **VS Code (Continue):** usa `apiBase: http://127.0.0.1:8787/v1` y `apiKey: <token>`.
-- **Otros clientes:** cualquier cliente OpenAI-compatible sirve; comprueba con el `curl` de arriba.
+#### OpenCode 2.4.2
+
+Usa la configuración V2 con `providers` (plural). Crea o edita
+`~/.config/opencode/opencode.json` manualmente:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "aten-ia/qwen2.5-1.5b",
+  "providers": {
+    "aten-ia": {
+      "name": "aten-ia",
+      "env": ["ATEN_API_KEY"],
+      "package": "@opencode/ai/providers/openai-compatible",
+      "settings": {
+        "baseURL": "http://127.0.0.1:8787/v1"
+      },
+      "models": {
+        "qwen2.5-1.5b": {
+          "name": "Qwen2.5 1.5B",
+          "modelID": "Qwen2.5-1.5B-Instruct"
+        }
+      }
+    }
+  }
+}
+```
+
+Exporta el token en el entorno de OpenCode (o conéctalo desde `/connect`):
+
+```bash
+export ATEN_API_KEY="<token>"
+opencode
+```
+
+El servicio de OpenCode debe reiniciarse si ya estaba abierto antes de exportar
+la variable:
+
+```bash
+opencode service restart
+```
+
+Comprueba la API antes de abrir OpenCode:
+
+```bash
+curl http://127.0.0.1:8787/v1/models \
+  -H "Authorization: Bearer $ATEN_API_KEY"
+```
+
+#### VS Code (Continue)
+
+Usa `apiBase: http://127.0.0.1:8787/v1` y `apiKey: <token>`.
+
+#### Otros clientes
+
+Cualquier cliente OpenAI-compatible sirve; comprueba con el `curl` de arriba.
 
 ---
 

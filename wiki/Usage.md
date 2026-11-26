@@ -160,19 +160,39 @@ Notas:
 - `usage.prompt_tokens` es real; `completion_tokens` se estima (chars/4).
 - Límites: cuerpo 10 MB, cabeceras 64 KB, timeout 120 s.
 
-## Configurar OpenCode
+## Configurar OpenCode 2.4.2
 
-`/token` **no escribe archivos**: muestra la URL base y el token para que los
-configures manualmente.
+`/token` **no escribe archivos**: muestra la URL base y el token. Crea o edita
+`~/.config/opencode/opencode.json` manualmente con la configuración V2:
 
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "aten-ia/qwen2.5-1.5b",
+  "providers": {
+    "aten-ia": {
+      "name": "aten-ia",
+      "env": ["ATEN_API_KEY"],
+      "package": "@opencode/ai/providers/openai-compatible",
+      "settings": { "baseURL": "http://127.0.0.1:8787/v1" },
+      "models": {
+        "qwen2.5-1.5b": {
+          "name": "Qwen2.5 1.5B",
+          "modelID": "Qwen2.5-1.5B-Instruct"
+        }
+      }
+    }
+  }
+}
 ```
-URL base: http://127.0.0.1:8787/v1
-Token: <token>
+
+```bash
+export ATEN_API_KEY="<token>"
+opencode service restart   # si ya estaba abierto
+opencode
 ```
 
-En OpenCode, crea un proveedor OpenAI-compatible con esa `baseURL` y `apiKey`
-según la documentación de tu versión. No reutilices un `opencode.json` generado
-por versiones anteriores de aten-ia; revísalo o elimínalo.
+La API debe seguir arrancada con `/token`.
 
 ## Configurar VS Code (Continue)
 
