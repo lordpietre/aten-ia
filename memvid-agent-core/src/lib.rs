@@ -14,6 +14,7 @@ pub mod memvid;
 pub mod models;
 pub mod models_catalog;
 pub mod prompt;
+pub mod purge;
 pub mod queue;
 pub mod retrieval;
 pub mod selfcheck;

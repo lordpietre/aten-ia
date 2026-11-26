@@ -68,6 +68,7 @@ STAGE="$(mktemp -d)"
 trap 'rm -rf "$STAGE"' EXIT
 
 install -Dm755 "$BINARY" "$STAGE/usr/bin/aten-ia"
+install -Dm755 scripts/uninstall-deb.sh "$STAGE/usr/bin/aten-ia-uninstall"
 install -Dm644 man/aten-ia.1 "$STAGE/usr/share/man/man1/aten-ia.1"
 gzip -9n "$STAGE/usr/share/man/man1/aten-ia.1"
 
@@ -109,6 +110,29 @@ Description: Agente de IA local con memoria persistente, RAG y API OpenAI
  HTTP compatible con OpenAI. Incluye RAG por palabras clave e ingesta de
  PDF, EPUB, HTML, Markdown, URLs y feeds RSS/Atom.
 EOF
+
+cat > "$STAGE/DEBIAN/postrm" <<'EOF'
+#!/bin/sh
+set -e
+case "$1" in
+  purge)
+    # Directorios de sistema (la app actual usa el HOME del usuario).
+    rm -rf /etc/aten-ia /var/lib/aten-ia /var/cache/aten-ia
+    if [ -n "${SUDO_USER:-}" ]; then
+      HOME_DIR="$(getent passwd "$SUDO_USER" 2>/dev/null | cut -d: -f6 || true)"
+      if [ -n "$HOME_DIR" ]; then
+        echo "aten-ia: los datos de usuario NO se borran desde el paquete:"
+        echo "  $HOME_DIR/.aten-ia"
+        echo "  $HOME_DIR/models"
+        echo "  $HOME_DIR/config.json"
+        echo "  Antes de desinstalar: aten-ia --purge-data"
+      fi
+    fi
+    ;;
+esac
+exit 0
+EOF
+chmod 755 "$STAGE/DEBIAN/postrm"
 
 (
     cd "$STAGE"

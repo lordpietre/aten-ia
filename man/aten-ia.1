@@ -4,7 +4,8 @@
 aten-ia \- agente de IA local con memoria persistente, RAG y API compatible con OpenAI
 .SH SYNOPSIS
 .B aten-ia
-.RB [ \-\-version | \-V | \-\-self-test | \-\-verify ]
+.RB [ \-\-version | \-V | \-\-self-test | \-\-verify |
+.BR \-\-purge-data " [" \-\-yes ] ]
 .SH DESCRIPTION
 .B aten-ia
 es un agente conversacional de línea de comandos que ejecuta modelos GGUF en CPU
@@ -26,8 +27,15 @@ Muestra la versión del binario y termina.
 Ejecuta la verificación interna (config, persistencia, RAG, chunking, extractor,
 feeds, cola, prompts, catálogo y fine-tune) sin cargar modelo ni usar red.
 Devuelve 0 si todo pasa.
+.TP
+.B \-\-purge-data [\-\-yes]
+Muestra y elimina los datos de usuario creados por aten-ia en el directorio
+actual o en el HOME: configuración, directorio de datos, modelo configurado y
+modelos ajustados. Sin
+.B \-\-yes
+pide escribir ELIMINAR. No elimina configuraciones compartidas de OpenCode.
 .PP
-El binario no interpreta otros argumentos: toda la configuración se realiza en
+La configuración se realiza en
 .B config.json
 o con las variables de entorno descritas más abajo.
 .SH "PRIMER ARRANQUE"
@@ -306,6 +314,9 @@ Caché del catálogo de lenguajes.
 .TP
 .B ~/.aten-ia/.lock
 PID de la instancia activa; impide ejecuciones concurrentes.
+.TP
+.B /usr/bin/aten-ia-uninstall
+Desinstalador de datos de usuario y del paquete (si se instaló desde .deb).
 .SH EXAMPLES
 Iniciar el REPL:
 .PP
@@ -351,6 +362,18 @@ Reducir la KV-cache de valores para ahorrar memoria:
 /kv f16 turbo3
 .EE
 .RE
+.SH "DESINSTALACIÓN"
+Antes de purgar el paquete, elimina los datos de usuario:
+.PP
+.RS 4
+.EX
+aten-ia --purge-data
+sudo apt purge aten-ia
+.EE
+.RE
+.PP
+El paquete solo elimina sus archivos de sistema; los datos del HOME no se
+borran desde los scripts de mantenimiento de Debian.
 .SH "EXIT STATUS"
 .TP
 .B 0

@@ -15,6 +15,7 @@ Single Rust binary+lib crate (`aten-ia`) in `memvid-agent-core/` — local LLM i
 | System deps (build) | `build-essential cmake libssl-dev clang libclang-dev` |
 | System deps (+ packaging) | …also `fakeroot`, `dpkg-deb` |
 | Package `.deb` (after portable build) | `./scripts/package-deb.sh` |
+| Uninstall + purge user data | `./scripts/uninstall-deb.sh` |
 
 CI order: `build → test → fmt → clippy --lib` (`.github/workflows/ci.yml`).
 CI runs `cargo test -- --test-threads=1` to avoid `MODEL_PATH` env-var race between tests.
@@ -34,7 +35,7 @@ Override download repo: `LLAMA_LIBS_REPO=user/repo`.
 
 - **Entrypoints**: `src/main.rs` (binary REPL), `src/lib.rs` (library, used by tests + api.rs)
 - **Crate names**: binary = `aten-ia`, lib = `memvid_agent_core` (for `use` statements)
-- **Module decls** in `lib.rs` — 24 modules covering all subsystems
+- **Module decls** in `lib.rs` — 25 modules covering all subsystems
 - **Model catalog**: `src/models_catalog.json` — 21 GGUF Q4_K_M models, loaded at runtime
 - **Fine-tuning**: `src/finetune.rs` — `/finetune <lang>` builds a corpus from `/learn` knowledge, estimates RAM (~16 B/param AdamW full fine-tune + ~1.5 GB overhead) + time, then runs `llama-finetune` (`LLAMA_FINETUNE_BIN`/`config.finetune.binary_path`/`PATH`) or writes a portable run script. aten-ia never builds the finetune binary itself.
 - **Config**: `config.json` — version 1, fields with serde defaults; first-run wizard creates if absent. `config.json` is git-ignored; `config.example.json` is the versioned template.
@@ -81,7 +82,7 @@ Use `/debug` command in REPL to see RAG retrieval debug info after each query:
 
 ## Testing
 
-~559 unit + integration tests. Integration tests use `tempfile::tempdir()` + `LlamaContext::null()` — no GGUF model required:
+~562 unit + integration tests. Integration tests use `tempfile::tempdir()` + `LlamaContext::null()` — no GGUF model required:
 - `tests/functional.rs`
 - `tests/writer_integration.rs`
 - `tests/kv_cache_and_history.rs`

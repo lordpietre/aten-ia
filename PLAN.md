@@ -122,6 +122,9 @@ Estados: ✅ hecho, 🚧 en curso, ⏳ pendiente, ⚠️ requiere decisión.
 - [x] ✅ Logs de dependencias (tantivy/memvid) silenciados por defecto; `ATEN_LOG` para depurar.
 - [x] ✅ Corregida la doble descarga: `with_extension` convertía `qwen2.5-1.5b` en `qwen2.5-1`; ahora hay `model_path()` canónico.
 - [x] ✅ Limpiado el duplicado de 941 MB y corregido `~/config.json` al nombre correcto.
+- [x] ✅ `--purge-data`: desinstalación de datos de usuario con plan, confirmación y protecciones.
+- [x] ✅ `postrm` del paquete para directorios de sistema y aviso de datos de usuario.
+- [x] ✅ `scripts/uninstall-deb.sh` y documentación de rutas residuales.
 
 ## Registro de verificación
 
@@ -141,5 +144,7 @@ Estados: ✅ hecho, 🚧 en curso, ⏳ pendiente, ⚠️ requiere decisión.
 | 2026-11-25 | `cargo audit` + `.cargo/audit.toml` | ✅ 0 vulnerabilidades, 6 warnings |
 | 2026-11-25 | API: parámetros por petición y `usage` | ✅ 558 tests, 0 fallos |
 | 2026-11-26 | UI en español, logs silenciados y fix doble descarga | ✅ 559 tests, 0 fallos |
+| 2026-11-26 | Instalador/desinstalador y `--purge-data` | ✅ 562 tests, 0 fallos |
+| 2026-11-26 | `.deb`: instalación, purge y postrm en contenedor | ✅ sin restos |
 | 2026-11-25 | Límite de conexiones HTTP y progreso `/batch` | ✅ build + tests |
 | 2026-11-26 | `.deb` portable 0.3.12 | ✅ Ubuntu 20.04/22.04, Debian 11/12 |

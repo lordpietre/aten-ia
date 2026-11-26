@@ -327,7 +327,7 @@ API HTTP (api.rs) ────────────┘         │
 
 **Scoring RAG** (keyword, sin embeddings): coincidencia en fuente ×20, palabra exacta en contenido ×50, coincidencia parcial ×30 normalizada por densidad, e ID ×5.
 
-### Módulos (24)
+### Módulos (25)
 
 ```
 memvid-agent-core/src/
@@ -349,6 +349,7 @@ memvid-agent-core/src/
   models.rs            — Descarga del modelo activo
   models_catalog.rs    — Catálogo de 21 modelos GGUF
   prompt.rs            — Plantillas ChatML/Llama3/Mistral/Raw
+  purge.rs             — Limpieza de datos de usuario (`--purge-data`)
   queue.rs             — Cola de URLs persistente
   retrieval.rs         — Índice de conocimiento y chunking de texto
   selfcheck.rs         — Verificación de runtime (`--self-test`)
@@ -396,6 +397,7 @@ El paquete `.deb` instala:
 | Ruta | Contenido |
 |---|---|
 | `/usr/bin/aten-ia` | Binario portable |
+| `/usr/bin/aten-ia-uninstall` | Desinstalador de datos + paquete |
 | `/usr/share/man/man1/aten-ia.1.gz` | Página de manual |
 | `/usr/share/doc/aten-ia/` | README, AGENTS, SECURITY, copyright y changelog |
 
@@ -433,7 +435,7 @@ También existe un `snapcraft.yaml` que empaqueta el binario ya compilado.
 
 ```bash
 cd memvid-agent-core
-cargo test --locked -- --test-threads=1   # ~559 tests (unitarios + integración)
+cargo test --locked -- --test-threads=1   # ~562 tests (unitarios + integración)
 cargo test --locked --lib -- --test-threads=1
 cargo fmt --all -- --check
 cargo clippy --locked --lib
@@ -452,6 +454,40 @@ Incluye `metadata --locked`, `fmt`, `clippy`, todos los tests, `--version`, `--s
 Documentación adicional: [`SDD.md`](SDD.md) (especificación y sistema de verificación), [`PORTABILITY_SPEC.md`](PORTABILITY_SPEC.md).
 
 ---
+
+## Desinstalación
+
+El paquete `.deb` elimina sus archivos de sistema (`/usr/bin`, manual y docs) con
+`apt purge`, pero **no borra datos de usuario desde los scripts del paquete**
+(política de Debian). Para una desinstalación completa, primero limpia los datos
+del usuario y después purga el paquete:
+
+```bash
+aten-ia --purge-data      # muestra el plan y pide escribir ELIMINAR
+sudo apt purge aten-ia
+```
+
+O usa el script incluido:
+
+```bash
+aten-ia-uninstall        # instalado con el paquete
+# o, desde el repositorio:
+./scripts/uninstall-deb.sh
+```
+
+`--purge-data` elimina, solo si están dentro del directorio actual o del HOME:
+
+| Ruta | Contenido |
+|---|---|
+| `./config.json` | Configuración y token de API |
+| `<data_dir>` (por defecto `~/.aten-ia`) | Conversaciones, conocimiento, índice, cola, tombstones y `.lock` |
+| `<modelo>.gguf` configurado | Modelo descargado |
+| `./models/finetuned/` | Modelos ajustados |
+| `./models/` | Solo si queda vacío |
+
+**No elimina** los archivos compartidos de OpenCode (`~/.config/opencode/opencode.json`
+o `./opencode.json` del proyecto); los muestra para que los revises. Usa
+`--yes` en entornos no interactivos.
 
 ## Limitaciones conocidas
 

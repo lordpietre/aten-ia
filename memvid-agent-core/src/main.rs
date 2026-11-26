@@ -26,6 +26,12 @@ fn main() -> Result<()> {
                 memvid_agent_core::selfcheck::run()?;
                 return Ok(());
             }
+            "--purge-data" => {
+                let yes = args.iter().any(|a| a == "--yes");
+                let cwd = std::env::current_dir()?;
+                memvid_agent_core::purge::run(&cwd, yes)?;
+                return Ok(());
+            }
             _ => {}
         }
     }

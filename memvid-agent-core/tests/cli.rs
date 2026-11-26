@@ -58,3 +58,34 @@ fn verify_alias_behaves_like_self_test() {
     );
     assert!(String::from_utf8_lossy(&out.stdout).contains("todo correcto"));
 }
+
+#[test]
+fn purge_data_removes_config_data_model_and_empty_models_dir() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(dir.path().join("data")).unwrap();
+    std::fs::create_dir_all(dir.path().join("models")).unwrap();
+    std::fs::write(dir.path().join("data/index.jsonl"), "{}").unwrap();
+    std::fs::write(dir.path().join("models/test.gguf"), b"fake").unwrap();
+    std::fs::write(
+        dir.path().join("config.json"),
+        r#"{"data_dir":"data","model":{"path":"models/test.gguf"}}"#,
+    )
+    .unwrap();
+
+    let out = Command::new(bin())
+        .args(["--purge-data", "--yes"])
+        .current_dir(dir.path())
+        .output()
+        .expect("failed to run purge");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        out.status.success(),
+        "purge failed\nstdout:\n{stdout}\nstderr:\n{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(!dir.path().join("config.json").exists());
+    assert!(!dir.path().join("data").exists());
+    assert!(!dir.path().join("models/test.gguf").exists());
+    assert!(!dir.path().join("models").exists());
+    assert!(stdout.contains("Limpieza completada"));
+}

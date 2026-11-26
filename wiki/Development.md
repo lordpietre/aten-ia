@@ -83,7 +83,7 @@ cargo run  --locked -- --self-test              # verificación de uso sin model
 ../scripts/ci/verify.sh                         # suite completa
 ```
 
-- **~559 tests** entre unitarios e integración.
+- **~562 tests** entre unitarios e integración.
 - Los tests de integración (`tests/functional.rs`, `tests/writer_integration.rs`, `tests/kv_cache_and_history.rs`) usan `tempfile::tempdir()` y `LlamaContext::null()`: **no requieren GGUF**.
 - `--test-threads=1` es obligatorio: varios tests mutan `MODEL_PATH` y comparten estado global del proceso.
 

@@ -31,6 +31,7 @@ El paquete instala:
 | Ruta | Contenido |
 |---|---|
 | `/usr/bin/aten-ia` | Binario |
+| `/usr/bin/aten-ia-uninstall` | Desinstalador completo |
 | `/usr/share/man/man1/aten-ia.1.gz` | Página de manual |
 | `/usr/share/doc/aten-ia/` | README y AGENTS |
 
@@ -107,6 +108,22 @@ Si no existe `config.json` en el directorio de trabajo, se inicia un asistente q
 El modelo se descarga automáticamente de HuggingFace si no está en disco.
 
 > El repositorio incluye `memvid-agent-core/config.example.json` con `data_dir: "memvid_data"`. Cópialo a `config.json` o bórralo para repetir el asistente. `config.json` está en `.gitignore` porque puede contener el token de la API.
+
+## Desinstalación
+
+El paquete no borra los datos de usuario desde `postrm` (política de Debian).
+Para una eliminación completa:
+
+```bash
+aten-ia --purge-data      # pide escribir ELIMINAR
+sudo apt purge aten-ia
+# o:
+aten-ia-uninstall
+```
+
+Elimina `config.json`, el directorio de datos, el modelo configurado y los
+modelos ajustados. No elimina los archivos compartidos de OpenCode; los muestra
+para revisarlos.
 
 ## Variables de entorno
 
