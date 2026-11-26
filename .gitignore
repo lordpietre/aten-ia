@@ -12,3 +12,4 @@ memvid-agent-core/config.json
 *.deb
 *.snap
 debian/
+dist/

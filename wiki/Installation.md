@@ -3,7 +3,7 @@
 ## Requisitos
 
 - **Rust** >= 1.89.0 (edition 2024, fijado por `rust-toolchain.toml`)
-- **Dependencias de build:** `cmake libssl-dev clang libclang-dev libgomp-dev`
+- **Dependencias de build:** `build-essential cmake libssl-dev clang libclang-dev`
 - **Empaquetado `.deb`:** `fakeroot`
 - Opcional: Docker, solo para el build portable reproducible
 
@@ -87,7 +87,11 @@ cargo run -- --version    # aten-ia 0.3.12
 ```bash
 ./scripts/build-portable.sh
 ./scripts/validate-compat.sh dist/aten-ia
+./scripts/package-deb.sh
 ```
+
+Genera `dist/aten-ia_<versión>_<arch>.deb` con binario, manual y documentación.
+Solo depende de `libc6` y `libgcc-s1`.
 
 Requiere Docker. Compila en Ubuntu 20.04 con `ATEN_PORTABLE=1`, enlazando `libstdc++` y `libgomp` estáticamente.
 

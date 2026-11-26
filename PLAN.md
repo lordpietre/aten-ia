@@ -85,7 +85,8 @@ Estados: ✅ hecho, 🚧 en curso, ⏳ pendiente, ⚠️ requiere decisión.
 - [ ] ⏳ SBOM y firma de releases.
 - [ ] ⏳ `CHANGELOG.md` y notas de release.
 - [x] ✅ `.deb` sin `libssl3`; dependencia real `libc6 >= 2.31` y herramientas en `Suggests`.
-- [ ] ⏳ Probar instalación en la distro más antigua soportada.
+- [x] ✅ Script `scripts/package-deb.sh` con validación y self-test del binario empaquetado.
+- [x] ✅ `.deb` probado con instalación real en Ubuntu 20.04/22.04 y Debian 11/12.
 - [ ] ⚠️ Decidir si el snap se construye en CI o se retira.
 
 ## 6. Fase 5 — Evolución (opcional)
@@ -131,3 +132,4 @@ Estados: ✅ hecho, 🚧 en curso, ⏳ pendiente, ⚠️ requiere decisión.
 | 2026-11-25 | `cargo audit` + `.cargo/audit.toml` | ✅ 0 vulnerabilidades, 6 warnings |
 | 2026-11-25 | API: parámetros por petición y `usage` | ✅ 558 tests, 0 fallos |
 | 2026-11-25 | Límite de conexiones HTTP y progreso `/batch` | ✅ build + tests |
+| 2026-11-26 | `.deb` portable 0.3.12 | ✅ Ubuntu 20.04/22.04, Debian 11/12 |

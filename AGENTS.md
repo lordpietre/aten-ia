@@ -12,8 +12,9 @@ Single Rust binary+lib crate (`aten-ia`) in `memvid-agent-core/` — local LLM i
 | All tests (no GGUF needed) | `cargo test --locked -- --test-threads=1` |
 | Format check | `cargo fmt --all -- --check` |
 | Lint (lib only — CI uses `--lib`) | `cargo clippy --locked --lib` |
-| System deps (build) | `cmake libssl-dev clang libclang-dev libgomp-dev` |
-| System deps (+ packaging) | …also `fakeroot` |
+| System deps (build) | `build-essential cmake libssl-dev clang libclang-dev` |
+| System deps (+ packaging) | …also `fakeroot`, `dpkg-deb` |
+| Package `.deb` (after portable build) | `./scripts/package-deb.sh` |
 
 CI order: `build → test → fmt → clippy --lib` (`.github/workflows/ci.yml`).
 CI runs `cargo test -- --test-threads=1` to avoid `MODEL_PATH` env-var race between tests.

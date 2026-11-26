@@ -355,6 +355,7 @@ cargo run --locked -- --self-test
 scripts/ci/verify.sh             Suite completa
 scripts/ci/check-docs.sh         Documentación + man
 scripts/ci/check_docs.py         Enlaces, secretos, config
+scripts/package-deb.sh           Empaquetado .deb + self-test
 memvid-agent-core/src/selfcheck.rs   Checks de runtime
 memvid-agent-core/tests/cli.rs       Flags del binario
 memvid-agent-core/tests/network_ingest.rs  Fetch/feed/lote locales

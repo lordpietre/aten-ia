@@ -50,7 +50,7 @@ Inferencia 100% local: no requiere GPU, API keys ni servicios externos. Solo nec
 ## Requisitos
 
 - **Rust** >= 1.89.0 (edition 2024, fijado en `rust-toolchain.toml`)
-- **Dependencias de build:** `cmake libssl-dev clang libclang-dev libgomp-dev`
+- **Dependencias de build:** `build-essential cmake libssl-dev clang libclang-dev`
 - **Dependencias de empaquetado:** añadir `fakeroot`
 - Opcional: Docker (solo para el build portable reproducible)
 
@@ -386,7 +386,20 @@ Después de `/learn <lang>`, se puede afinar el modelo activo con esos mismos do
 ```bash
 ./scripts/build-portable.sh
 ./scripts/validate-compat.sh dist/aten-ia
+./scripts/package-deb.sh
+# -> dist/aten-ia_0.3.12_amd64.deb (+ .sha256)
 ```
+
+El paquete `.deb` instala:
+
+| Ruta | Contenido |
+|---|---|
+| `/usr/bin/aten-ia` | Binario portable |
+| `/usr/share/man/man1/aten-ia.1.gz` | Página de manual |
+| `/usr/share/doc/aten-ia/` | README, AGENTS, SECURITY, copyright y changelog |
+
+Dependencias: `libc6` (según el GLIBC máximo detectado) y `libgcc-s1`. Las
+herramientas de compilación quedan en `Suggests`.
 
 Usa Docker (`docker/Dockerfile.build`) con **Ubuntu 20.04** y compila con `ATEN_PORTABLE=1`, enlazando `libstdc++` y `libgomp` estáticamente. El binario resultante requiere como máximo **GLIBC_2.31** y solo depende de bibliotecas base del sistema (`libc`, `libm`, `libgcc_s`, `libpthread`, `libdl` y, en algunos casos, `librt`).
 

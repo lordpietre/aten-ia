@@ -10,3 +10,4 @@ memvid-agent-core/config.json
 *.md
 !README.md
 !AGENTS.md
+dist/
